@@ -436,7 +436,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
     <li><a href="#pricing">Pricing</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
-  <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="nav-cta">Join Beta Free</a>
+  <a href="signup.html" class="nav-cta">Join Beta Free</a>
 </nav>
 
 <!-- HERO -->
@@ -448,7 +448,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
     <h1>Your health,<br><em>finally understood.</em></h1>
     <p class="hero-sub">Join the Healix beta and get full Premium access — completely free while we're in testing. All we ask for is your email and honest feedback.</p>
     <div class="hero-acts">
-      <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="btn-p">Join Beta — Get Premium Free</a>
+      <a href="signup.html" class="btn-p">Join Beta — Get Premium Free</a>
       <button class="btn-g">See how it works ↓</button>
     </div>
   </div>
@@ -634,7 +634,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
           <li class="off"><span class="ck">–</span>Cross-source correlations</li>
           <li class="off"><span class="ck">–</span>Daily AI briefing</li>
         </ul>
-        <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="pbtn">Join Beta — Get Premium Free</a>
+        <a href="signup.html" class="pbtn">Join Beta — Get Premium Free</a>
       </div>
       <div class="pc feat">
         <div class="pbadge">Most Popular</div>
@@ -651,7 +651,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
           <li><span class="ck">✓</span>Trend alerts &amp; anomaly detection</li>
           <li><span class="ck">✓</span>Priority support</li>
         </ul>
-        <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="pbtn">Start 14-day Free Trial</a>
+        <a href="signup.html" class="pbtn">Start 14-day Free Trial</a>
       </div>
       <div class="pc">
         <div class="ptier">Clinical</div>
@@ -885,7 +885,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
     <p class="sl" style="margin-bottom:20px">Limited beta spots</p>
     <h2>Get Premium free.<br><em>Just bring feedback.</em></h2>
     <p>Enter your email and we'll send you a TestFlight link instantly. Full Premium access, no credit card, no commitment.</p>
-    <form class="cta-form" name="beta-signups" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="https://testflight.apple.com/join/q7qk2b25">
+    <form class="cta-form" name="beta-signups" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="signup.html">
       <input type="hidden" name="form-name" value="beta-signups">
       <input type="hidden" name="bot-field">
       <input type="email" name="email" placeholder="Your email address" required>
@@ -1093,11 +1093,11 @@ document.getElementById('ta').addEventListener('click',function(){
 
     var rb=document.getElementById('hq-rec-block');
     if(tier==='free'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Free Plan</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Get your health data unified and your first AI insights — no credit card, no pressure.</div><a href="https://testflight.apple.com/join/q7qk2b25" class="hq-cta-btn">Join the Beta — Free Access</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Free Plan</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Get your health data unified and your first AI insights — no credit card, no pressure.</div><a href="signup.html" class="hq-cta-btn">Join the Beta — Free Access</a></div>';
     } else if(tier==='premium'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Premium — $19/month</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">AI health insights, full wearable integration, weekly intelligence reports.</div><a href="https://testflight.apple.com/join/q7qk2b25" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Premium — $19/month</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">AI health insights, full wearable integration, weekly intelligence reports.</div><a href="signup.html" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
     } else {
-      rb.innerHTML='<div class="hq-rec hq-rec-featured" style="margin-bottom:12px"><div class="hq-rec-tier">Clinical — Waitlist</div><div class="hq-rec-headline">Get notified when Clinical launches.</div><div class="hq-rec-desc">Leave your email and you will be first to know.</div><form class="hq-email-form" id="hq-wl-form"><input class="hq-email-input" type="email" placeholder="your@email.com" required><button class="hq-email-submit" type="submit">Notify Me</button></form><div class="hq-email-thanks" id="hq-wl-thanks" style="display:none">You are on the list!</div></div><div class="hq-rec"><div class="hq-rec-tier">In the meantime — Premium at $19/month</div><div class="hq-rec-headline">More than enough until Clinical arrives.</div><a href="https://testflight.apple.com/join/q7qk2b25" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured" style="margin-bottom:12px"><div class="hq-rec-tier">Clinical — Waitlist</div><div class="hq-rec-headline">Get notified when Clinical launches.</div><div class="hq-rec-desc">Leave your email and you will be first to know.</div><form class="hq-email-form" id="hq-wl-form"><input class="hq-email-input" type="email" placeholder="your@email.com" required><button class="hq-email-submit" type="submit">Notify Me</button></form><div class="hq-email-thanks" id="hq-wl-thanks" style="display:none">You are on the list!</div></div><div class="hq-rec"><div class="hq-rec-tier">In the meantime — Premium at $19/month</div><div class="hq-rec-headline">More than enough until Clinical arrives.</div><a href="signup.html" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
       setTimeout(function(){
         var f=document.getElementById('hq-wl-form');
         if(f){ f.addEventListener('submit',function(e){ e.preventDefault(); f.style.display='none'; document.getElementById('hq-wl-thanks').style.display='block'; }); }
