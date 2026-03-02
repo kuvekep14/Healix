@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Healix — Check Your Email</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --cream: #F5F0E8;
+  --cream-dim: rgba(245,240,232,0.5);
+  --dark: #0B0B0B;
+  --dark-2: #0F0F0F;
+  --dark-3: #141414;
+  --gold: #B8975A;
+  --gold-light: #D4B483;
+  --gold-faint: rgba(184,151,90,0.08);
+  --gold-border: rgba(184,151,90,0.18);
+  --muted: rgba(245,240,232,0.3);
+  --F: 'Cormorant Garamond', serif;
+  --B: 'DM Sans', sans-serif;
+}
+html, body { height: 100%; }
+body {
+  font-family: var(--B); background: var(--dark); color: var(--cream);
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+
+/* BG */
+.bg {
+  position: fixed; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 60%, rgba(184,151,90,.07), transparent 65%),
+    radial-gradient(ellipse 40% 35% at 15% 80%, rgba(184,151,90,.04), transparent 55%),
+    radial-gradient(ellipse 35% 30% at 85% 20%, rgba(184,151,90,.03), transparent 50%);
+}
+.bg-lines {
+  position: fixed; inset: 0; z-index: 0; opacity: .018;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 79px, var(--gold) 80px),
+    repeating-linear-gradient(90deg, transparent, transparent 79px, var(--gold) 80px);
+}
+
+/* NAV */
+nav {
+  position: relative; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 28px 48px; border-bottom: 1px solid var(--gold-border);
+}
+.logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.logo-mark { width: 28px; height: 28px; border: 1px solid var(--gold); display: grid; place-items: center; font-size: 11px; color: var(--gold); }
+.logo-text { font-family: var(--F); font-size: 18px; font-weight: 300; letter-spacing: .25em; color: var(--cream); }
+
+/* MAIN */
+main {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 60px 24px; position: relative; z-index: 1;
+}
+.card {
+  max-width: 520px; width: 100%;
+  background: var(--dark-2); border: 1px solid var(--gold-border);
+  padding: 64px 56px; text-align: center;
+  animation: fadeUp .6s ease forwards;
+}
+@keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+.envelope {
+  width: 72px; height: 72px; border: 1px solid var(--gold-border);
+  display: grid; place-items: center; margin: 0 auto 32px;
+  font-size: 30px; background: var(--gold-faint);
+  animation: pulse 3s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(184,151,90,0); border-color: var(--gold-border); }
+  50% { box-shadow: 0 0 0 8px rgba(184,151,90,0); border-color: rgba(184,151,90,.4); }
+}
+
+.card-eyebrow { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+.card-title { font-family: var(--F); font-size: clamp(32px, 5vw, 52px); font-weight: 300; line-height: 1.05; margin-bottom: 16px; }
+.card-title em { font-style: italic; color: var(--gold); }
+.card-body { font-size: 15px; color: var(--cream-dim); line-height: 1.75; margin-bottom: 12px; }
+.card-email { font-size: 14px; color: var(--cream); font-weight: 500; margin-bottom: 36px; letter-spacing: .02em; }
+
+.card-divider { height: 1px; background: var(--gold-border); margin: 36px 0; }
+
+/* Steps */
+.steps { text-align: left; display: flex; flex-direction: column; gap: 18px; margin-bottom: 36px; }
+.step { display: flex; gap: 16px; align-items: flex-start; }
+.step-num { width: 22px; height: 22px; border: 1px solid var(--gold-border); display: grid; place-items: center; font-size: 10px; color: var(--gold); flex-shrink: 0; font-family: var(--F); margin-top: 1px; }
+.step-text { font-size: 13px; color: var(--cream-dim); line-height: 1.6; }
+.step-text strong { color: var(--cream); font-weight: 500; }
+
+/* Resend */
+.resend-wrap { margin-bottom: 28px; }
+.resend-btn {
+  background: none; border: 1px solid var(--gold-border); color: var(--cream-dim);
+  font-family: var(--B); font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+  padding: 12px 28px; cursor: pointer; transition: border-color .2s, color .2s, background .2s;
+}
+.resend-btn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-faint); }
+.resend-btn:disabled { opacity: .4; cursor: not-allowed; }
+.resend-countdown { font-size: 11px; color: var(--muted); margin-top: 10px; }
+
+.back-link { font-size: 13px; color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; transition: color .2s; }
+.back-link:hover { color: var(--cream-dim); }
+
+/* Alert */
+.form-alert { padding: 12px 16px; border: 1px solid; font-size: 13px; line-height: 1.5; margin-bottom: 20px; display: none; text-align: left; }
+.form-alert.show { display: block; }
+.form-alert.success { border-color: rgba(111,207,138,.4); background: rgba(111,207,138,.06); color: #6fcf8a; }
+.form-alert.error { border-color: rgba(224,112,112,.4); background: rgba(224,112,112,.06); color: #e07070; }
+
+@media (max-width: 600px) {
+  nav { padding: 20px 24px; }
+  .card { padding: 40px 28px; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg"></div>
+<div class="bg-lines"></div>
+
+<nav>
+  <a href="index.html" class="logo">
+    <div class="logo-mark">H</div>
+    <span class="logo-text">HEALIX</span>
+  </a>
+</nav>
+
+<main>
+  <div class="card">
+    <div class="envelope">✉</div>
+    <div class="card-eyebrow">One more step</div>
+    <h1 class="card-title">Check your<br><em>inbox</em></h1>
+    <p class="card-body">We sent a confirmation link to</p>
+    <p class="card-email" id="email-display">your email address</p>
+
+    <div class="form-alert" id="form-alert"></div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Open the email from <strong>noreply@tryhealix.com</strong></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Click <strong>Confirm your account</strong> to verify your email</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">You'll be taken straight into <strong>Healix</strong> — ready to go</div>
+      </div>
+    </div>
+
+    <div class="card-divider"></div>
+
+    <div class="resend-wrap">
+      <button class="resend-btn" id="resend-btn" onclick="resendEmail()">Resend confirmation email</button>
+      <div class="resend-countdown" id="resend-countdown"></div>
+    </div>
+
+    <a href="signup.html" class="back-link">← Back to sign up</a>
+  </div>
+</main>
+
+<script>
+// ── SUPABASE CONFIG ──
+// TODO: Replace with your actual Supabase project URL and anon key
+var SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+var SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+
+// Show the email address they signed up with
+var pendingEmail = localStorage.getItem('healix_pending_email');
+if (pendingEmail) {
+  document.getElementById('email-display').textContent = pendingEmail;
+}
+
+function showAlert(msg, type) {
+  var el = document.getElementById('form-alert');
+  el.textContent = msg;
+  el.className = 'form-alert show ' + (type || 'error');
+}
+
+// Resend with cooldown
+var resendCooldown = 0;
+var cooldownInterval = null;
+
+function resendEmail() {
+  if (!pendingEmail) {
+    showAlert('No email address found. Please sign up again.');
+    return;
+  }
+  var btn = document.getElementById('resend-btn');
+  btn.disabled = true;
+
+  fetch(SUPABASE_URL + '/auth/v1/resend', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ type: 'signup', email: pendingEmail })
+  }).then(function() {
+    showAlert('Confirmation email resent! Check your inbox (and spam folder).', 'success');
+    startCooldown(60);
+  }).catch(function() {
+    showAlert('Could not resend email. Please try again in a moment.');
+    btn.disabled = false;
+  });
+}
+
+function startCooldown(seconds) {
+  resendCooldown = seconds;
+  var countdown = document.getElementById('resend-countdown');
+  if (cooldownInterval) clearInterval(cooldownInterval);
+  cooldownInterval = setInterval(function() {
+    resendCooldown--;
+    if (resendCooldown <= 0) {
+      clearInterval(cooldownInterval);
+      document.getElementById('resend-btn').disabled = false;
+      countdown.textContent = '';
+    } else {
+      countdown.textContent = 'You can resend in ' + resendCooldown + 's';
+    }
+  }, 1000);
+}
+
+// Handle the confirmation redirect from Supabase
+// Supabase appends #access_token=... to the URL after email confirmation
+var hash = window.location.hash;
+if (hash && hash.includes('access_token')) {
+  var params = new URLSearchParams(hash.replace('#', '?'));
+  var accessToken = params.get('access_token');
+  var refreshToken = params.get('refresh_token');
+  if (accessToken) {
+    localStorage.setItem('healix_session', JSON.stringify({
+      access_token: accessToken,
+      refresh_token: refreshToken
+    }));
+    localStorage.removeItem('healix_pending_email');
+    window.location.href = 'chat.html';
+  }
+}
+</script>
+</body>
+</html>

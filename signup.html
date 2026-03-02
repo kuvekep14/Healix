@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Healix — Create Account</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --cream: #F5F0E8;
+  --cream-dim: rgba(245,240,232,0.5);
+  --dark: #0B0B0B;
+  --dark-2: #0F0F0F;
+  --dark-3: #141414;
+  --gold: #B8975A;
+  --gold-light: #D4B483;
+  --gold-faint: rgba(184,151,90,0.08);
+  --gold-border: rgba(184,151,90,0.18);
+  --muted: rgba(245,240,232,0.3);
+  --error: #e07070;
+  --F: 'Cormorant Garamond', serif;
+  --B: 'DM Sans', sans-serif;
+}
+html, body { height: 100%; }
+body {
+  font-family: var(--B); background: var(--dark); color: var(--cream);
+  display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh;
+}
+
+/* LEFT */
+.left {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 48px; border-right: 1px solid var(--gold-border);
+}
+.left-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 30% 70%, rgba(184,151,90,.07), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 20%, rgba(184,151,90,.04), transparent 50%);
+}
+.left-lines {
+  position: absolute; inset: 0; z-index: 0; opacity: .018;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 79px, var(--gold) 80px),
+    repeating-linear-gradient(90deg, transparent, transparent 79px, var(--gold) 80px);
+}
+.left-content { position: relative; z-index: 1; }
+.logo { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.logo-mark { width: 30px; height: 30px; border: 1px solid var(--gold); display: grid; place-items: center; font-size: 12px; color: var(--gold); }
+.logo-text { font-family: var(--F); font-size: 20px; font-weight: 300; letter-spacing: .25em; color: var(--cream); }
+.left-bottom { position: relative; z-index: 1; }
+.left-steps { display: flex; flex-direction: column; gap: 24px; margin-bottom: 40px; }
+.left-step { display: flex; gap: 18px; align-items: flex-start; }
+.left-step-num { font-family: var(--F); font-size: 13px; color: var(--gold); flex-shrink: 0; width: 20px; padding-top: 2px; }
+.left-step-title { font-family: var(--F); font-size: 18px; font-weight: 400; margin-bottom: 4px; }
+.left-step-desc { font-size: 12px; color: var(--cream-dim); line-height: 1.6; }
+.left-quote { font-family: var(--F); font-size: clamp(28px, 3vw, 44px); font-weight: 300; line-height: 1.1; }
+.left-quote em { font-style: italic; color: var(--gold); }
+
+/* RIGHT */
+.right {
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px; background: var(--dark-2); overflow-y: auto;
+}
+.form-wrap { width: 100%; max-width: 400px; padding: 20px 0; }
+.form-eyebrow { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+.form-eyebrow::before { content: ''; display: block; width: 24px; height: 1px; background: var(--gold); }
+.form-title { font-family: var(--F); font-size: 42px; font-weight: 300; line-height: 1.05; margin-bottom: 8px; }
+.form-title em { font-style: italic; color: var(--gold); }
+.form-sub { font-size: 14px; color: var(--cream-dim); margin-bottom: 36px; line-height: 1.6; }
+
+.field { margin-bottom: 16px; }
+.field-label { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; display: block; }
+.field-input {
+  width: 100%; background: var(--dark-3); border: 1px solid var(--gold-border);
+  color: var(--cream); font-family: var(--B); font-size: 14px;
+  padding: 14px 18px; outline: none; transition: border-color .2s;
+}
+.field-input::placeholder { color: var(--muted); }
+.field-input:focus { border-color: rgba(184,151,90,.5); }
+.field-input.error { border-color: var(--error); }
+.field-error { font-size: 11px; color: var(--error); margin-top: 6px; display: none; }
+.field-error.show { display: block; }
+.field-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* Password strength */
+.pwd-strength { margin-top: 8px; }
+.pwd-bar-track { height: 2px; background: var(--gold-border); margin-bottom: 6px; }
+.pwd-bar-fill { height: 100%; width: 0%; transition: width .3s, background .3s; }
+.pwd-label { font-size: 10px; letter-spacing: .1em; color: var(--muted); }
+
+/* Terms */
+.terms-wrap { display: flex; gap: 12px; align-items: flex-start; margin: 20px 0; cursor: pointer; }
+.terms-check { width: 16px; height: 16px; border: 1px solid var(--gold-border); flex-shrink: 0; margin-top: 2px; position: relative; transition: border-color .2s, background .2s; }
+.terms-check.checked { background: var(--gold); border-color: var(--gold); }
+.terms-check.checked::after { content: '✓'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; color: var(--dark); }
+.terms-text { font-size: 12px; color: var(--cream-dim); line-height: 1.6; }
+.terms-text a { color: var(--gold); text-decoration: none; }
+.terms-text a:hover { color: var(--gold-light); }
+
+.submit-btn {
+  width: 100%; padding: 16px; background: var(--gold); border: none;
+  color: var(--dark); font-family: var(--B); font-size: 11px; font-weight: 500;
+  letter-spacing: .2em; text-transform: uppercase; cursor: pointer;
+  transition: background .25s, transform .2s, box-shadow .25s;
+  position: relative;
+}
+.submit-btn:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 10px 36px rgba(184,151,90,.25); }
+.submit-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+.submit-btn .btn-spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(11,11,11,.3); border-top-color: var(--dark); border-radius: 50%; animation: spin .6s linear infinite; margin: 0 auto; }
+.submit-btn.loading .btn-text { display: none; }
+.submit-btn.loading .btn-spinner { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.form-alert { padding: 14px 18px; border: 1px solid; font-size: 13px; line-height: 1.5; margin-bottom: 20px; display: none; }
+.form-alert.show { display: block; }
+.form-alert.error { border-color: rgba(224,112,112,.4); background: rgba(224,112,112,.06); color: #e07070; }
+.form-alert.success { border-color: rgba(111,207,138,.4); background: rgba(111,207,138,.06); color: #6fcf8a; }
+
+.divider { display: flex; align-items: center; gap: 14px; margin: 24px 0; }
+.divider-line { flex: 1; height: 1px; background: var(--gold-border); }
+.divider-text { font-size: 11px; color: var(--muted); letter-spacing: .1em; }
+
+.switch-link { text-align: center; font-size: 13px; color: var(--cream-dim); margin-top: 20px; }
+.switch-link a { color: var(--gold); text-decoration: none; }
+.switch-link a:hover { color: var(--gold-light); }
+
+.form-wrap > * { opacity: 0; animation: slideUp .5s ease forwards; }
+.form-wrap > *:nth-child(1) { animation-delay: .05s; }
+.form-wrap > *:nth-child(2) { animation-delay: .1s; }
+.form-wrap > *:nth-child(3) { animation-delay: .15s; }
+.form-wrap > *:nth-child(4) { animation-delay: .2s; }
+.form-wrap > *:nth-child(5) { animation-delay: .25s; }
+.form-wrap > *:nth-child(6) { animation-delay: .3s; }
+.form-wrap > *:nth-child(7) { animation-delay: .35s; }
+.form-wrap > *:nth-child(8) { animation-delay: .4s; }
+.form-wrap > *:nth-child(9) { animation-delay: .45s; }
+@keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 768px) {
+  body { grid-template-columns: 1fr; }
+  .left { display: none; }
+  .right { padding: 40px 24px; align-items: flex-start; padding-top: 80px; }
+}
+</style>
+</head>
+<body>
+
+<!-- LEFT -->
+<div class="left">
+  <div class="left-bg"></div>
+  <div class="left-lines"></div>
+  <div class="left-content">
+    <a href="index.html" class="logo">
+      <div class="logo-mark">H</div>
+      <span class="logo-text">HEALIX</span>
+    </a>
+  </div>
+  <div class="left-bottom">
+    <div class="left-steps">
+      <div class="left-step">
+        <div class="left-step-num">01</div>
+        <div>
+          <div class="left-step-title">Create your account</div>
+          <div class="left-step-desc">Takes under a minute. No credit card required.</div>
+        </div>
+      </div>
+      <div class="left-step">
+        <div class="left-step-num">02</div>
+        <div>
+          <div class="left-step-title">Connect your devices</div>
+          <div class="left-step-desc">Apple Health, Oura, Garmin and more — all in one place.</div>
+        </div>
+      </div>
+      <div class="left-step">
+        <div class="left-step-num">03</div>
+        <div>
+          <div class="left-step-title">Understand your health</div>
+          <div class="left-step-desc">Ask questions, upload bloodwork, get real answers.</div>
+        </div>
+      </div>
+    </div>
+    <p class="left-quote">Built for people who<br>take their health <em>seriously.</em></p>
+  </div>
+</div>
+
+<!-- RIGHT -->
+<div class="right">
+  <div class="form-wrap">
+    <div class="form-eyebrow">Get started free</div>
+    <h1 class="form-title">Create your<br><em>account</em></h1>
+    <p class="form-sub">Full Premium access during beta. No credit card needed.</p>
+
+    <div class="form-alert" id="form-alert"></div>
+
+    <div class="field">
+      <label class="field-label" for="name">Full name</label>
+      <input class="field-input" type="text" id="name" placeholder="Alex Johnson" autocomplete="name">
+      <div class="field-error" id="name-error">Please enter your name.</div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="email">Email address</label>
+      <input class="field-input" type="email" id="email" placeholder="you@example.com" autocomplete="email">
+      <div class="field-error" id="email-error">Please enter a valid email address.</div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="password">Password</label>
+      <input class="field-input" type="password" id="password" placeholder="Min. 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)">
+      <div class="pwd-strength">
+        <div class="pwd-bar-track"><div class="pwd-bar-fill" id="pwd-bar"></div></div>
+        <div class="pwd-label" id="pwd-label">—</div>
+      </div>
+      <div class="field-error" id="password-error">Password must be at least 8 characters.</div>
+    </div>
+
+    <div class="terms-wrap" onclick="toggleTerms()">
+      <div class="terms-check" id="terms-check"></div>
+      <p class="terms-text">I agree to the <a href="#" onclick="event.stopPropagation()">Terms of Service</a> and <a href="#" onclick="event.stopPropagation()">Privacy Policy</a>. I understand Healix is a wellness tool, not a medical device.</p>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" onclick="handleSignup()">
+      <span class="btn-text">Create Account</span>
+      <div class="btn-spinner"></div>
+    </button>
+
+    <div class="divider">
+      <div class="divider-line"></div>
+      <span class="divider-text">or</span>
+      <div class="divider-line"></div>
+    </div>
+
+    <p class="switch-link">Already have an account? <a href="login.html">Sign in →</a></p>
+  </div>
+</div>
+
+<script>
+// ── SUPABASE CONFIG ──
+// TODO: Replace with your actual Supabase project URL and anon key
+var SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+var SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+
+function supabaseRequest(endpoint, method, body) {
+  return fetch(SUPABASE_URL + endpoint, {
+    method: method || 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+    },
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function(r) { return r.json(); });
+}
+
+// Password strength
+function checkStrength(val) {
+  var bar = document.getElementById('pwd-bar');
+  var label = document.getElementById('pwd-label');
+  if (!val) { bar.style.width='0%'; label.textContent='—'; label.style.color='var(--muted)'; return; }
+  var score = 0;
+  if (val.length >= 8) score++;
+  if (val.length >= 12) score++;
+  if (/[A-Z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^A-Za-z0-9]/.test(val)) score++;
+  var levels = [
+    { w:'20%', color:'#e07070', text:'Too short' },
+    { w:'40%', color:'#e0a070', text:'Weak' },
+    { w:'60%', color:'#e0c870', text:'Fair' },
+    { w:'80%', color:'#a8d870', text:'Good' },
+    { w:'100%', color:'#6fcf8a', text:'Strong' }
+  ];
+  var l = levels[Math.min(score, 4)];
+  bar.style.width = l.w;
+  bar.style.background = l.color;
+  label.textContent = l.text;
+  label.style.color = l.color;
+}
+
+// Terms toggle
+var termsAccepted = false;
+function toggleTerms() {
+  termsAccepted = !termsAccepted;
+  document.getElementById('terms-check').classList.toggle('checked', termsAccepted);
+}
+
+function showAlert(msg, type) {
+  var el = document.getElementById('form-alert');
+  el.textContent = msg;
+  el.className = 'form-alert show ' + (type || 'error');
+}
+function hideAlert() { document.getElementById('form-alert').className = 'form-alert'; }
+
+function setLoading(loading) {
+  var btn = document.getElementById('submit-btn');
+  btn.classList.toggle('loading', loading);
+  btn.disabled = loading;
+}
+
+function validateEmail(val) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val); }
+
+function handleSignup() {
+  hideAlert();
+  var name = document.getElementById('name').value.trim();
+  var email = document.getElementById('email').value.trim();
+  var password = document.getElementById('password').value;
+  var valid = true;
+
+  // Clear errors
+  ['name','email','password'].forEach(function(f) {
+    document.getElementById(f).classList.remove('error');
+    document.getElementById(f+'-error').classList.remove('show');
+  });
+
+  if (!name) {
+    document.getElementById('name').classList.add('error');
+    document.getElementById('name-error').classList.add('show');
+    valid = false;
+  }
+  if (!validateEmail(email)) {
+    document.getElementById('email').classList.add('error');
+    document.getElementById('email-error').classList.add('show');
+    valid = false;
+  }
+  if (password.length < 8) {
+    document.getElementById('password').classList.add('error');
+    document.getElementById('password-error').classList.add('show');
+    valid = false;
+  }
+  if (!termsAccepted) {
+    showAlert('Please accept the Terms of Service to continue.');
+    valid = false;
+  }
+  if (!valid) return;
+
+  setLoading(true);
+
+  supabaseRequest('/auth/v1/signup', 'POST', {
+    email: email,
+    password: password,
+    data: { full_name: name }
+  }).then(function(data) {
+    setLoading(false);
+    if (data.error || data.error_description) {
+      showAlert(data.error_description || data.error || 'Something went wrong. Please try again.');
+    } else if (data.id || (data.user && data.user.id)) {
+      // Success — redirect to confirm page
+      localStorage.setItem('healix_pending_email', email);
+      window.location.href = 'confirm.html';
+    } else {
+      showAlert('Something went wrong. Please try again.');
+    }
+  }).catch(function() {
+    setLoading(false);
+    showAlert('Unable to connect. Please check your connection and try again.');
+  });
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') handleSignup();
+});
+</script>
+</body>
+</html>
