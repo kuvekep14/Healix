@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Healix — Your Health, Unified</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --cream: #F5F0E8;
+  --cream-dim: rgba(245,240,232,0.55);
+  --dark: #0B0B0B;
+  --dark-2: #0F0F0F;
+  --dark-3: #141414;
+  --gold: #B8975A;
+  --gold-light: #D4B483;
+  --gold-faint: rgba(184,151,90,0.08);
+  --gold-border: rgba(184,151,90,0.18);
+  --muted: rgba(245,240,232,0.35);
+  --F: 'Cormorant Garamond', serif;
+  --B: 'DM Sans', sans-serif;
+}
+html { scroll-behavior: smooth; }
+body { font-family: var(--B); background: var(--dark); color: var(--cream); overflow-x: hidden; }
+
+
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 26px 64px;
+  background: linear-gradient(to bottom, rgba(11,11,11,.97), transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid transparent;
+  transition: border-color .4s;
+}
+nav.s { border-bottom-color: var(--gold-border); }
+.logo {
+  font-family: var(--F); font-size: 22px; font-weight: 300; letter-spacing: .25em;
+  color: var(--cream); text-decoration: none; display: flex; align-items: center; gap: 10px;
+}
+.logo-mark { width: 28px; height: 28px; border: 1px solid var(--gold); display: grid; place-items: center; font-size: 13px; color: var(--gold); }
+.nav-links { display: flex; gap: 44px; list-style: none; }
+.nav-links a { font-size: 12px; letter-spacing: .12em; color: var(--cream-dim); text-decoration: none; text-transform: uppercase; transition: color .3s; position: relative; }
+.nav-links a::after { content: ''; position: absolute; bottom: -4px; left: 0; right: 0; height: 1px; background: var(--gold); transform: scaleX(0); transition: transform .3s; transform-origin: left; }
+.nav-links a:hover { color: var(--cream); }
+.nav-links a:hover::after { transform: scaleX(1); }
+.nav-cta { font-size: 11px; font-weight: 500; letter-spacing: .15em; text-transform: uppercase; color: var(--dark); background: var(--gold); padding: 13px 30px; border: none; cursor: pointer; transition: background .3s, transform .2s; }
+.nav-cta:hover { background: var(--gold-light); transform: translateY(-1px); }
+
+/* HERO */
+.hero { min-height: 100vh; display: grid; place-items: center; text-align: center; padding: 160px 60px 100px; position: relative; overflow: hidden; }
+.hbg { position: absolute; inset: 0;
+  background: radial-gradient(ellipse 70% 55% at 50% 65%, rgba(184,151,90,.09), transparent 65%),
+    radial-gradient(ellipse 40% 35% at 15% 85%, rgba(184,151,90,.05), transparent 55%),
+    radial-gradient(ellipse 35% 30% at 85% 20%, rgba(184,151,90,.04), transparent 50%); }
+.hlines { position: absolute; inset: 0; opacity: .025;
+  background: repeating-linear-gradient(0deg, transparent, transparent 79px, var(--gold) 80px),
+    repeating-linear-gradient(90deg, transparent, transparent 79px, var(--gold) 80px); }
+.hero-content { position: relative; z-index: 2; }
+.eyebrow { display: inline-flex; align-items: center; gap: 12px; font-size: 11px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 36px; border: 1px solid var(--gold-border); padding: 10px 20px; opacity: 0; animation: fU .7s .1s forwards; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: lp 2s infinite; }
+@keyframes lp { 0%,100% { box-shadow: 0 0 0 0 rgba(184,151,90,.6); } 50% { box-shadow: 0 0 0 5px rgba(184,151,90,0); } }
+.hero h1 { font-family: var(--F); font-size: clamp(56px,9vw,116px); font-weight: 300; line-height: .95; margin-bottom: 36px; opacity: 0; animation: fU .9s .25s forwards; }
+.hero h1 em { font-style: italic; color: var(--gold); }
+.hero-sub { font-size: 17px; font-weight: 300; line-height: 1.75; color: var(--cream-dim); max-width: 500px; margin: 0 auto 56px; opacity: 0; animation: fU .9s .45s forwards; }
+.hero-acts { display: flex; gap: 20px; align-items: center; justify-content: center; opacity: 0; animation: fU .9s .6s forwards; }
+.btn-p { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: var(--gold); color: var(--dark); padding: 18px 48px; border: none; cursor: pointer; transition: all .3s; }
+.btn-p:hover { background: var(--gold-light); transform: translateY(-2px); box-shadow: 0 12px 40px rgba(184,151,90,.25); }
+.btn-g { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--cream-dim); background: none; padding: 18px 32px; border: 1px solid var(--gold-border); cursor: pointer; transition: all .3s; }
+.btn-g:hover { color: var(--cream); border-color: rgba(245,240,232,.4); }
+.scroll-hint { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0; animation: fadeIn 1s 1.4s forwards; }
+.scroll-line { width: 1px; height: 48px; background: linear-gradient(to bottom, var(--gold), transparent); animation: sd 2s 1.5s infinite; }
+.scroll-lbl { font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
+@keyframes sd { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform: scaleY(1); transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+/* STATS */
+.stats { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--gold-border); border-bottom: 1px solid var(--gold-border); }
+.stat { padding: 52px 44px; border-right: 1px solid var(--gold-border); text-align: center; transition: background .4s; position: relative; overflow: hidden; }
+.stat:last-child { border-right: none; }
+.stat:hover { background: var(--gold-faint); }
+.stat::before { content: attr(data-n); position: absolute; bottom: -10px; right: 12px; font-family: var(--F); font-size: 100px; font-weight: 300; color: rgba(184,151,90,.04); line-height: 1; pointer-events: none; }
+.stat-n { font-family: var(--F); font-size: 56px; font-weight: 300; color: var(--gold); line-height: 1; margin-bottom: 12px; }
+.stat-l { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
+
+/* SHARED */
+.wrap { max-width: 1160px; margin: 0 auto; }
+.sl { font-size: 10px; letter-spacing: .35em; text-transform: uppercase; color: var(--gold); margin-bottom: 18px; }
+.st { font-family: var(--F); font-size: clamp(36px,5vw,66px); font-weight: 300; line-height: 1.05; }
+.st em { font-style: italic; color: var(--gold); }
+
+/* HOW */
+.how { padding: 140px 64px; background: var(--dark-2); }
+.steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-top: 80px; }
+.sc { background: var(--dark-2); padding: 60px 48px; position: relative; overflow: hidden; transition: background .4s; }
+.sc:hover { background: #121212; }
+.sc::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, var(--gold-faint), transparent); opacity: 0; transition: opacity .4s; }
+.sc:hover::after { opacity: 1; }
+.si { font-family: var(--F); font-size: 96px; font-weight: 300; color: rgba(184,151,90,.1); line-height: 1; margin-bottom: 32px; }
+.sc h3 { font-family: var(--F); font-size: 30px; font-weight: 400; margin-bottom: 18px; line-height: 1.2; }
+.sc p { font-size: 14px; line-height: 1.8; color: var(--cream-dim); }
+.sc-tag { display: inline-block; margin-top: 28px; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold-border); padding: 6px 14px; }
+
+/* INTEGRATIONS */
+.integ { padding: 140px 64px; }
+.integ-head { text-align: center; margin-bottom: 80px; }
+.integ-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-bottom: 64px; }
+.ic { background: var(--dark); padding: 44px 36px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; transition: background .35s; position: relative; }
+.ic:hover { background: var(--dark-3); }
+.ic-icon { width: 64px; height: 64px; border: 1px solid var(--gold-border); display: grid; place-items: center; font-size: 26px; transition: border-color .3s, background .3s; }
+.ic:hover .ic-icon { border-color: var(--gold); background: var(--gold-faint); }
+.ic-name { font-family: var(--F); font-size: 20px; font-weight: 400; }
+.ic-type { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ic-badge { position: absolute; top: 16px; right: 16px; font-size: 9px; letter-spacing: .15em; text-transform: uppercase; padding: 4px 10px; border: 1px solid var(--gold-border); color: var(--gold); }
+.integ-more { text-align: center; font-size: 13px; color: var(--muted); }
+.integ-more span { color: var(--gold); }
+.mq-wrap { overflow: hidden; border-top: 1px solid var(--gold-border); border-bottom: 1px solid var(--gold-border); padding: 20px 0; margin-top: 64px; }
+.mq-track { display: flex; gap: 60px; animation: mq 22s linear infinite; white-space: nowrap; }
+.mq-item { font-family: var(--F); font-size: 22px; font-weight: 300; font-style: italic; color: rgba(184,151,90,.28); flex-shrink: 0; }
+.mq-item.lit { color: var(--gold); font-style: normal; }
+@keyframes mq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* INSIGHTS */
+.ins { padding: 140px 64px; background: var(--dark-2); }
+.ins-layout { display: grid; grid-template-columns: 1.1fr 1fr; gap: 80px; align-items: center; }
+.mockup { background: #0E0E0E; border: 1px solid var(--gold-border); padding: 32px; position: relative; }
+.mockup::before { content: ''; position: absolute; inset: -1px; background: linear-gradient(135deg, rgba(184,151,90,.15), transparent 60%); pointer-events: none; }
+.m-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 24px; border-bottom: 1px solid var(--gold-border); margin-bottom: 28px; }
+.m-title { font-family: var(--F); font-size: 18px; font-weight: 300; letter-spacing: .08em; }
+.m-date { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.m-scores { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
+.m-score { background: rgba(255,255,255,.025); border: 1px solid var(--gold-border); padding: 18px 16px; text-align: center; }
+.m-s-lbl { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.m-s-val { font-family: var(--F); font-size: 32px; font-weight: 300; line-height: 1; }
+.m-s-del { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.m-chart { margin-bottom: 20px; }
+.m-c-lbl { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
+.bars { display: flex; align-items: flex-end; gap: 6px; height: 64px; }
+.bar { flex: 1; background: rgba(184,151,90,.15); border-top: 1px solid rgba(184,151,90,.3); transition: background .3s; }
+.bar:hover { background: rgba(184,151,90,.3); }
+.bar.a { background: rgba(184,151,90,.5); border-top-color: var(--gold); }
+.daylbls { display: flex; gap: 6px; margin-top: 8px; }
+.dlbl { flex: 1; text-align: center; font-size: 9px; color: var(--muted); }
+.m-insight { background: rgba(184,151,90,.06); border: 1px solid rgba(184,151,90,.2); padding: 20px 22px; display: flex; gap: 16px; }
+.m-i-ico { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
+.m-i-title { font-size: 13px; font-weight: 500; margin-bottom: 5px; }
+.m-i-body { font-size: 12px; line-height: 1.65; color: var(--cream-dim); }
+.m-tags { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.m-tag { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--gold-border); padding: 5px 12px; color: var(--cream-dim); }
+.feats { margin-top: 52px; display: flex; flex-direction: column; gap: 36px; }
+.feat { display: flex; gap: 28px; }
+.feat-n { font-family: var(--F); font-size: 14px; color: var(--gold); padding-top: 4px; flex-shrink: 0; width: 28px; }
+.feat h4 { font-family: var(--F); font-size: 24px; font-weight: 400; margin-bottom: 10px; line-height: 1.2; }
+.feat p { font-size: 14px; line-height: 1.75; color: var(--cream-dim); }
+
+/* TESTIMONIALS */
+.testi { padding: 140px 64px; }
+.testi-head { text-align: center; margin-bottom: 72px; }
+.testi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); }
+.tc { background: var(--dark); padding: 52px 44px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; transition: background .35s; }
+.tc:hover { background: var(--dark-3); }
+.tc-q { font-family: var(--F); font-size: 20px; font-weight: 300; font-style: italic; line-height: 1.55; }
+.tc-q::before { content: '\201C'; color: var(--gold); font-size: 48px; line-height: 0; vertical-align: -18px; margin-right: 4px; font-style: normal; }
+.tc-stars { color: var(--gold); font-size: 12px; letter-spacing: 2px; margin-bottom: 14px; }
+.tc-name { font-size: 13px; font-weight: 500; letter-spacing: .05em; margin-bottom: 4px; }
+.tc-role { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+
+/* TEAM */
+.team { padding: 140px 64px; background: var(--dark-2); }
+.team-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-top: 80px; }
+.team-c { background: var(--dark-2); padding: 48px 36px; text-align: center; transition: background .35s; }
+.team-c:hover { background: var(--dark-3); }
+.avatar { width: 80px; height: 80px; border: 1px solid var(--gold-border); border-radius: 50%; margin: 0 auto 24px; display: grid; place-items: center; font-family: var(--F); font-size: 26px; font-weight: 300; color: var(--gold); background: var(--gold-faint); transition: border-color .3s; }
+.team-c:hover .avatar { border-color: var(--gold); }
+.t-name { font-family: var(--F); font-size: 22px; font-weight: 400; margin-bottom: 6px; }
+.t-role { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+.t-bio { font-size: 13px; line-height: 1.7; color: var(--cream-dim); }
+.t-soc { display: flex; justify-content: center; gap: 12px; margin-top: 20px; }
+.t-soc a { width: 30px; height: 30px; border: 1px solid var(--gold-border); display: grid; place-items: center; font-size: 12px; color: var(--muted); text-decoration: none; transition: border-color .3s, color .3s; }
+.t-soc a:hover { border-color: var(--gold); color: var(--gold); }
+
+/* PRICING */
+.pricing { padding: 140px 64px; }
+.pricing-head { text-align: center; margin-bottom: 80px; }
+.ptoggle { display: inline-flex; border: 1px solid var(--gold-border); margin-top: 28px; overflow: hidden; }
+.tog { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 12px 28px; background: none; border: none; color: var(--muted); cursor: pointer; transition: all .25s; }
+.tog.on { background: var(--gold); color: var(--dark); }
+.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-bottom: 48px; }
+.pc { background: var(--dark); padding: 56px 48px; position: relative; transition: background .35s; }
+.pc:hover { background: var(--dark-3); }
+.pc.feat { background: var(--dark-3); border-left: 1px solid var(--gold); border-right: 1px solid var(--gold); }
+.pbadge { position: absolute; top: -1px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--dark); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; padding: 6px 18px; white-space: nowrap; }
+.ptier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 24px; }
+.pprice { font-family: var(--F); font-size: 64px; font-weight: 300; line-height: 1; margin-bottom: 6px; }
+.pprice sup { font-size: 24px; vertical-align: super; }
+.pcad { font-size: 13px; color: var(--muted); margin-bottom: 40px; }
+.pdiv { border: none; border-top: 1px solid var(--gold-border); margin-bottom: 32px; }
+.pfeats { list-style: none; display: flex; flex-direction: column; gap: 16px; margin-bottom: 44px; }
+.pfeats li { font-size: 14px; color: var(--cream-dim); display: flex; gap: 14px; align-items: flex-start; }
+.pfeats li .ck { color: var(--gold); flex-shrink: 0; font-size: 12px; margin-top: 1px; }
+.pfeats li.off { color: var(--muted); }
+.pfeats li.off .ck { color: var(--muted); }
+.pbtn { width: 100%; padding: 16px; font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; border: 1px solid var(--gold); background: none; color: var(--gold); cursor: pointer; transition: all .3s; }
+.pbtn:hover, .pc.feat .pbtn { background: var(--gold); color: var(--dark); }
+.pnote { text-align: center; font-size: 13px; color: var(--muted); }
+.pnote span { color: var(--cream-dim); }
+
+/* FAQ */
+.faq { padding: 140px 64px; background: var(--dark-2); }
+.faq-layout { display: grid; grid-template-columns: 1fr 1.6fr; gap: 100px; align-items: start; }
+.faq-sticky { position: sticky; top: 120px; }
+.faq-list { display: flex; flex-direction: column; }
+.fi { border-bottom: 1px solid var(--gold-border); overflow: hidden; }
+.fq { width: 100%; background: none; border: none; padding: 28px 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; font-family: var(--F); font-size: 22px; font-weight: 400; color: var(--cream); text-align: left; cursor: pointer; transition: color .3s; }
+.fq:hover { color: var(--gold-light); }
+.ficon { width: 28px; height: 28px; border: 1px solid var(--gold-border); display: grid; place-items: center; font-size: 16px; color: var(--gold); flex-shrink: 0; transition: transform .35s, border-color .3s; }
+.fi.open .ficon { transform: rotate(45deg); border-color: var(--gold); }
+.fa { max-height: 0; overflow: hidden; transition: max-height .4s ease, padding .3s; font-size: 15px; line-height: 1.75; color: var(--cream-dim); }
+.fi.open .fa { max-height: 300px; padding-bottom: 28px; }
+
+/* CTA */
+.cta { padding: 160px 64px; text-align: center; position: relative; overflow: hidden; border-top: 1px solid var(--gold-border); }
+.cta::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 70% at 50% 50%, rgba(184,151,90,.07), transparent 70%); }
+.cta::after { content: 'HEALIX'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-family: var(--F); font-size: 220px; font-weight: 300; color: rgba(184,151,90,.03); letter-spacing: .1em; pointer-events: none; white-space: nowrap; }
+.cta-in { position: relative; z-index: 1; }
+.cta h2 { font-family: var(--F); font-size: clamp(48px,7vw,96px); font-weight: 300; line-height: 1.0; margin-bottom: 28px; }
+.cta h2 em { font-style: italic; color: var(--gold); }
+.cta p { font-size: 17px; color: var(--cream-dim); margin-bottom: 56px; max-width: 480px; margin-left: auto; margin-right: auto; }
+.cta-form { display: flex; max-width: 480px; margin: 0 auto; }
+.cta-in input { flex: 1; padding: 18px 24px; background: rgba(255,255,255,.05); border: 1px solid var(--gold-border); border-right: none; color: var(--cream); font-family: var(--B); font-size: 14px; outline: none; transition: border-color .3s; }
+.cta-in input::placeholder { color: var(--muted); }
+.cta-in input:focus { border-color: var(--gold); }
+.cta-sub { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: var(--gold); color: var(--dark); border: none; padding: 18px 32px; cursor: pointer; transition: background .3s; white-space: nowrap; }
+.cta-sub:hover { background: var(--gold-light); }
+.cta-priv { font-size: 11px; color: var(--muted); margin-top: 16px; }
+
+/* FOOTER */
+footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
+.ft { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 60px; margin-bottom: 60px; }
+.fb-logo { font-family: var(--F); font-size: 22px; font-weight: 300; letter-spacing: .2em; color: var(--cream); margin-bottom: 18px; }
+.fb-tag { font-size: 14px; color: var(--cream-dim); line-height: 1.7; max-width: 240px; }
+.fc h5 { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 24px; }
+.fc ul { list-style: none; display: flex; flex-direction: column; gap: 14px; }
+.fc a { font-size: 14px; color: var(--cream-dim); text-decoration: none; transition: color .3s; }
+.fc a:hover { color: var(--cream); }
+.fb-bot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--gold-border); padding-top: 28px; }
+.fb-copy { font-size: 12px; color: var(--muted); letter-spacing: .05em; }
+.fb-legal { display: flex; gap: 28px; }
+.fb-legal a { font-size: 12px; color: var(--muted); text-decoration: none; transition: color .3s; }
+.fb-legal a:hover { color: var(--cream-dim); }
+
+/* ANIMATIONS */
+@keyframes fU { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.reveal { opacity: 1; transform: translateY(0); transition: opacity .85s cubic-bezier(.16,1,.3,1), transform .85s cubic-bezier(.16,1,.3,1); }
+.reveal.v { opacity: 1; transform: translateY(0); }
+.d1 { transition-delay: .1s; }
+.d2 { transition-delay: .2s; }
+.d3 { transition-delay: .3s; }
+
+/* QUIZ */
+#healix-quiz { width: 100%; font-family: var(--B); }
+.hq-header { text-align: center; margin-bottom: 56px; }
+.hq-eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: .35em; text-transform: uppercase; color: var(--gold); border: 1px solid var(--gold-border); padding: 9px 20px; margin-bottom: 24px; }
+.hq-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); animation: hqdot 2s infinite; }
+@keyframes hqdot { 0%,100% { box-shadow: 0 0 0 0 rgba(184,151,90,.6); } 50% { box-shadow: 0 0 0 5px rgba(184,151,90,0); } }
+.hq-title { font-family: var(--F); font-size: clamp(36px,5.5vw,62px); font-weight: 300; line-height: 1.05; margin-bottom: 18px; }
+.hq-title em { font-style: italic; color: var(--gold); }
+.hq-sub { font-size: 15px; font-weight: 300; line-height: 1.75; color: var(--cream-dim); max-width: 460px; margin: 0 auto; }
+.hq-card { background: var(--dark-2); border: 1px solid var(--gold-border); }
+.hq-card::before { display: none; }
+.hq-progress-wrap { padding: 36px 52px 0; position: relative; z-index: 10; }
+.hq-progress-meta { display: flex; justify-content: space-between; margin-bottom: 14px; }
+.hq-progress-label { font-size: 10px; letter-spacing: .28em; text-transform: uppercase; color: var(--gold); }
+.hq-progress-frac { font-size: 10px; letter-spacing: .1em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hq-bar-track { height: 1px; background: var(--gold-border); position: relative; }
+.hq-bar-fill { position: absolute; top: 0; left: 0; bottom: 0; background: linear-gradient(to right, var(--gold), var(--gold-light)); transition: width .5s cubic-bezier(.4,0,.2,1); width: 0%; }
+.hq-bar-pip { position: absolute; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); transform: translate(-50%,-50%); transition: left .5s cubic-bezier(.4,0,.2,1); left: 0%; box-shadow: 0 0 10px rgba(184,151,90,.55); }
+.hq-pane { display: none; padding: 44px 52px 36px; }
+.hq-pane.hq-active { display: block; }
+.hq-pane.hq-visible { opacity: 1; transform: translateX(0); }
+.hq-q-ghost { position: absolute; top: 20px; right: 40px; font-family: var(--F); font-size: 110px; font-weight: 300; color: rgba(184,151,90,.055); line-height: 1; pointer-events: none; user-select: none; }
+.hq-q-text { font-family: var(--F); font-size: clamp(22px,3.2vw,30px); font-weight: 300; line-height: 1.25; margin-bottom: 8px; padding-right: 80px; }
+.hq-q-hint { font-size: 12px; color: var(--muted); letter-spacing: .04em; margin-bottom: 32px; }
+.hq-choices { display: flex; flex-direction: column; gap: 8px; }
+.hq-choice { background: none; border: 1px solid var(--gold-border); color: var(--cream); font-family: var(--B); padding: 16px 20px; cursor: pointer; text-align: left; transition: border-color .22s, background .22s, transform .18s; display: flex; align-items: center; gap: 16px; width: 100%; position: relative; z-index: 10; }
+.hq-choice:hover { border-color: rgba(184,151,90,.45); background: var(--gold-faint); transform: translateX(3px); }
+.hq-choice.hq-sel { border-color: var(--gold); background: rgba(184,151,90,.11); }
+.hq-choice.hq-sel .hq-bullet { background: var(--gold); border-color: var(--gold); }
+.hq-choice.hq-sel .hq-bullet::after { opacity: 1; }
+.hq-bullet { width: 16px; height: 16px; border: 1px solid var(--gold-border); border-radius: 50%; flex-shrink: 0; position: relative; transition: background .2s, border-color .2s; }
+.hq-bullet::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--dark-2); opacity: 0; transition: opacity .2s; }
+.hq-choice-key { font-size: 11px; letter-spacing: .12em; color: var(--gold); flex-shrink: 0; width: 16px; font-family: var(--F); }
+.hq-choice-text { font-size: 14px; line-height: 1.45; }
+.hq-choices-multi { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hq-choice-multi { background: none; border: 1px solid var(--gold-border); color: var(--cream); font-family: var(--B); padding: 15px 18px; cursor: pointer; text-align: left; transition: border-color .22s, background .22s; display: flex; align-items: center; gap: 12px; width: 100%; position: relative; z-index: 10; }
+.hq-choice-multi:hover { border-color: rgba(184,151,90,.45); background: var(--gold-faint); }
+.hq-choice-multi.hq-sel { border-color: var(--gold); background: rgba(184,151,90,.11); }
+.hq-choice-multi.hq-sel .hq-checkbox { background: var(--gold); border-color: var(--gold); }
+.hq-choice-multi.hq-sel .hq-checkbox::after { opacity: 1; }
+.hq-checkbox { width: 15px; height: 15px; border: 1px solid var(--gold-border); flex-shrink: 0; position: relative; transition: background .2s, border-color .2s; }
+.hq-checkbox::after { content: '✓'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; color: var(--dark); opacity: 0; transition: opacity .2s; }
+.hq-choice-multi-text { font-size: 13px; line-height: 1.4; }
+.hq-nav { display: flex; align-items: center; justify-content: space-between; padding: 8px 52px 44px; position: relative; z-index: 10; }
+.hq-btn-back { background: none; border: 1px solid var(--gold-border); color: var(--muted); font-family: var(--B); font-size: 11px; letter-spacing: .15em; text-transform: uppercase; padding: 12px 24px; cursor: pointer; transition: border-color .22s, color .22s; }
+.hq-btn-back:hover { border-color: rgba(245,240,232,.3); color: var(--cream-dim); }
+.hq-btn-back:disabled { opacity: 0; pointer-events: none; }
+.hq-btn-next { background: var(--gold); border: none; color: var(--dark); font-family: var(--B); font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; padding: 14px 44px; cursor: pointer; transition: background .22s, transform .18s, box-shadow .22s, opacity .22s; opacity: .35; }
+.hq-btn-next.hq-ready { opacity: 1; }
+.hq-btn-next.hq-ready:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 10px 32px rgba(184,151,90,.28); }
+#hq-result { display: none; padding: 56px 52px 60px; position: relative; z-index: 2; animation: hqfadeup .55s ease forwards; }
+@keyframes hqfadeup { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+.hq-result-tag { font-size: 10px; letter-spacing: .35em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 28px; }
+.hq-plan-badge { display: inline-flex; align-items: center; gap: 10px; border: 1px solid var(--gold-border); padding: 10px 22px; margin-bottom: 32px; }
+.hq-plan-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+.hq-plan-badge-text { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); }
+.hq-summary-title { font-family: var(--F); font-size: clamp(28px,4vw,44px); font-weight: 300; line-height: 1.1; margin-bottom: 20px; }
+.hq-summary-title em { font-style: italic; color: var(--gold); }
+.hq-summary-body { font-size: 15px; line-height: 1.85; color: var(--cream-dim); max-width: 580px; margin-bottom: 40px; }
+.hq-summary-body strong { color: var(--cream); font-weight: 500; }
+.hq-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 44px; }
+.hq-chip { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--gold-border); padding: 7px 14px; color: var(--cream-dim); }
+.hq-chip span { color: var(--gold); margin-right: 6px; }
+.hq-divider { border: none; border-top: 1px solid var(--gold-border); margin-bottom: 40px; }
+.hq-rec { background: var(--dark-3); border: 1px solid var(--gold-border); padding: 36px 40px; margin-bottom: 12px; }
+.hq-rec.hq-rec-featured { border-color: var(--gold); }
+.hq-rec-tier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
+.hq-rec-headline { font-family: var(--F); font-size: 26px; font-weight: 300; margin-bottom: 10px; line-height: 1.2; }
+.hq-rec-desc { font-size: 14px; line-height: 1.75; color: var(--cream-dim); margin-bottom: 28px; }
+.hq-email-form { display: flex; gap: 0; margin-bottom: 16px; }
+.hq-email-input { flex: 1; background: rgba(255,255,255,.04); border: 1px solid var(--gold-border); border-right: none; color: var(--cream); font-family: var(--B); font-size: 14px; padding: 14px 18px; outline: none; transition: border-color .22s; }
+.hq-email-input::placeholder { color: var(--muted); }
+.hq-email-input:focus { border-color: rgba(184,151,90,.5); }
+.hq-email-submit { background: var(--gold); border: none; color: var(--dark); font-family: var(--B); font-size: 11px; font-weight: 500; letter-spacing: .15em; text-transform: uppercase; padding: 14px 28px; cursor: pointer; white-space: nowrap; transition: background .22s; flex-shrink: 0; }
+.hq-email-submit:hover { background: var(--gold-light); }
+.hq-email-thanks { display: none; font-size: 13px; color: var(--gold); letter-spacing: .05em; padding: 12px 0; }
+.hq-rec-note { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.hq-cta-btn { display: block; text-align: center; background: var(--gold); color: var(--dark); font-family: var(--B); font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; padding: 17px 52px; text-decoration: none; border: none; cursor: pointer; transition: background .22s, transform .18s, box-shadow .22s; }
+.hq-cta-btn:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 10px 36px rgba(184,151,90,.25); }
+.hq-result-actions { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.hq-retry-btn { background: none; border: none; font-family: var(--B); font-size: 12px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; transition: color .2s; }
+.hq-retry-btn:hover { color: var(--cream-dim); }
+.quiz-section { padding: 140px 64px; background: var(--dark); }
+.quiz-section .wrap { max-width: 800px; }
+@media (max-width: 768px) {
+  /* NAV */
+  nav { padding: 20px 24px; }
+  .nav-links { display: none; }
+
+  /* HERO */
+  .hero { padding: 120px 24px 80px; }
+
+  /* STATS */
+  .stats { grid-template-columns: 1fr 1fr; }
+  .stat { padding: 32px 20px; border-right: none; border-bottom: 1px solid var(--gold-border); }
+  .stat:nth-child(odd) { border-right: 1px solid var(--gold-border); }
+  .stat:last-child { border-bottom: none; }
+  .stat:nth-child(3) { border-bottom: 1px solid var(--gold-border); }
+
+  /* HOW */
+  .how { padding: 80px 24px; }
+  .steps { grid-template-columns: 1fr; }
+  .sc { padding: 40px 28px; }
+
+  /* INTEGRATIONS */
+  .integ { padding: 80px 24px; }
+  .integ-grid { grid-template-columns: 1fr 1fr; }
+  .ic { padding: 28px 20px; }
+
+  /* INSIGHTS */
+  .ins { padding: 80px 24px; }
+  .ins-layout { grid-template-columns: 1fr; gap: 48px; }
+
+  /* TESTIMONIALS */
+  .testi { padding: 80px 24px; }
+  .testi-grid { grid-template-columns: 1fr; }
+
+  /* TEAM */
+  .team { padding: 80px 24px; }
+  .team-grid { grid-template-columns: 1fr 1fr; }
+
+  /* PRICING */
+  .pricing { padding: 80px 24px; }
+  .pcards { grid-template-columns: 1fr; }
+  .pc.feat { border-left: none; border-right: none; border-top: 1px solid var(--gold); border-bottom: 1px solid var(--gold); }
+  .pc { padding: 40px 28px; }
+
+  /* FAQ */
+  .faq { padding: 80px 24px; }
+  .faq-layout { grid-template-columns: 1fr; gap: 48px; }
+  .faq-sticky { position: static; }
+
+  /* CTA */
+  .cta { padding: 100px 24px; }
+  .cta-form { flex-direction: column; }
+  .cta-in input { border-right: 1px solid var(--gold-border); border-bottom: none; }
+  .cta-sub { width: 100%; text-align: center; }
+  .cta::after { font-size: 80px; }
+
+  /* FOOTER */
+  footer { padding: 48px 24px 32px; }
+  .ft { grid-template-columns: 1fr; gap: 36px; }
+  .fb-bot { flex-direction: column; gap: 16px; text-align: center; }
+  .fb-legal { flex-wrap: wrap; justify-content: center; }
+
+  /* QUIZ */
+  .quiz-section { padding: 80px 24px; }
+  .hq-progress-wrap, .hq-pane, .hq-nav, #hq-result { padding-left: 24px; padding-right: 24px; }
+  .hq-choices-multi { grid-template-columns: 1fr; }
+  .hq-q-text { padding-right: 0; }
+  .hq-q-ghost { display: none; }
+  .hq-email-form { flex-direction: column; }
+  .hq-email-input { border-right: 1px solid var(--gold-border); border-bottom: none; }
+  .hq-rec { padding: 28px 24px; }
+
+  /* MOCKUP */
+  .m-scores { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+@media (max-width: 400px) {
+  .team-grid { grid-template-columns: 1fr; }
+  .integ-grid { grid-template-columns: 1fr; }
+  .m-scores { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+
+<nav id="nav">
+  <a href="#" class="logo"><div class="logo-mark">H</div>HEALIX</a>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#integ">Integrations</a></li>
+    <li><a href="#team">Team</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+  <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="nav-cta">Join Beta Free</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hbg"></div>
+  <div class="hlines"></div>
+  <div class="hero-content">
+    <div class="eyebrow"><span class="dot"></span> Beta now open — Premium free for all testers</div>
+    <h1>Your health,<br><em>finally understood.</em></h1>
+    <p class="hero-sub">Join the Healix beta and get full Premium access — completely free while we're in testing. All we ask for is your email and honest feedback.</p>
+    <div class="hero-acts">
+      <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="btn-p">Join Beta — Get Premium Free</a>
+      <button class="btn-g">See how it works ↓</button>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <div class="scroll-lbl">Scroll</div>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat" data-n="01"><div class="stat-n">12+</div><div class="stat-l">Device integrations</div></div>
+  <div class="stat" data-n="02"><div class="stat-n">98%</div><div class="stat-l">Data accuracy</div></div>
+  <div class="stat" data-n="03"><div class="stat-n">3×</div><div class="stat-l">Faster clarity</div></div>
+  <div class="stat" data-n="04"><div class="stat-n">Free</div><div class="stat-l">Premium during beta</div></div>
+</div>
+
+<!-- HOW -->
+<section class="how" id="how">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="sl">The Process</p>
+      <h2 class="st">Three steps to <em>complete</em> clarity</h2>
+    </div>
+    <div class="steps">
+      <div class="sc reveal">
+        <div class="si">01</div>
+        <h3>Connect your devices</h3>
+        <p>Link Apple Watch, Oura Ring, Garmin, Whoop, and 8+ more. Healix securely pulls every signal — sleep stages, HRV, SpO₂, activity — into one unified stream.</p>
+        <span class="sc-tag">Instant sync</span>
+      </div>
+      <div class="sc reveal d1">
+        <div class="si">02</div>
+        <h3>Enrich with context</h3>
+        <p>Add blood panels, nutrition logs, medication schedules, and daily notes. The fuller the picture, the more precise and personalized your insights become.</p>
+        <span class="sc-tag">AI-powered</span>
+      </div>
+      <div class="sc reveal d2">
+        <div class="si">03</div>
+        <h3>Receive your insights</h3>
+        <p>Healix surfaces invisible patterns across all your data sources. Get daily, evidence-based insights in plain language — no charts to decode, no jargon to Google.</p>
+        <span class="sc-tag">Daily briefing</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INTEGRATIONS -->
+<section class="integ" id="integ">
+  <div class="wrap">
+    <div class="integ-head reveal">
+      <p class="sl">Integrations</p>
+      <h2 class="st">Works with the devices<br>you already own</h2>
+    </div>
+    <div class="integ-grid reveal">
+      <div class="ic"><div class="ic-icon">⌚</div><div><div class="ic-name">Apple Watch</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">💍</div><div><div class="ic-name">Oura Ring</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">🏃</div><div><div class="ic-name">Garmin</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">💪</div><div><div class="ic-name">Whoop</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">🧬</div><div><div class="ic-name">Lab Results</div><div class="ic-type">Health data</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">🍎</div><div><div class="ic-name">Apple Health</div><div class="ic-type">Platform</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">🌡</div><div><div class="ic-name">Withings</div><div class="ic-type">Smart scale</div></div><div class="ic-badge">Beta</div></div>
+      <div class="ic"><div class="ic-icon">🛌</div><div><div class="ic-name">Eight Sleep</div><div class="ic-type">Sleep tech</div></div><div class="ic-badge">Soon</div></div>
+    </div>
+    <p class="integ-more reveal">Plus <span>4+ more integrations</span> in development — Google Fit, Fitbit, CGM devices &amp; more.</p>
+    <div class="mq-wrap">
+      <div class="mq-track">
+        <span class="mq-item">Sleep Quality</span><span class="mq-item lit"> · </span><span class="mq-item">Heart Rate Variability</span><span class="mq-item lit"> · </span><span class="mq-item">Recovery Score</span><span class="mq-item lit"> · </span><span class="mq-item">Blood Oxygen</span><span class="mq-item lit"> · </span><span class="mq-item">Cortisol Patterns</span><span class="mq-item lit"> · </span><span class="mq-item">Nutrition Correlation</span><span class="mq-item lit"> · </span><span class="mq-item">Inflammation Markers</span><span class="mq-item lit"> · </span><span class="mq-item">VO₂ Max</span><span class="mq-item lit"> · </span>
+        <span class="mq-item">Sleep Quality</span><span class="mq-item lit"> · </span><span class="mq-item">Heart Rate Variability</span><span class="mq-item lit"> · </span><span class="mq-item">Recovery Score</span><span class="mq-item lit"> · </span><span class="mq-item">Blood Oxygen</span><span class="mq-item lit"> · </span><span class="mq-item">Cortisol Patterns</span><span class="mq-item lit"> · </span><span class="mq-item">Nutrition Correlation</span><span class="mq-item lit"> · </span><span class="mq-item">Inflammation Markers</span><span class="mq-item lit"> · </span><span class="mq-item">VO₂ Max</span><span class="mq-item lit"> · </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSIGHTS / APP PREVIEW -->
+<section class="ins">
+  <div class="wrap">
+    <div class="ins-layout">
+      <div class="mockup reveal">
+        <div class="m-top">
+          <div class="m-title">Good morning, Alex</div>
+          <div class="m-date">Sat, 21 Feb</div>
+        </div>
+        <div class="m-scores">
+          <div class="m-score"><div class="m-s-lbl">Recovery</div><div class="m-s-val">87</div><div class="m-s-del">↑ +12</div></div>
+          <div class="m-score"><div class="m-s-lbl">HRV</div><div class="m-s-val">62<span style="font-size:14px;color:var(--muted)">ms</span></div><div class="m-s-del">↑ +8ms</div></div>
+          <div class="m-score"><div class="m-s-lbl">Sleep</div><div class="m-s-val">7.4<span style="font-size:14px;color:var(--muted)">h</span></div><div class="m-s-del">↓ −0.3h</div></div>
+        </div>
+        <div class="m-chart">
+          <div class="m-c-lbl">HRV — last 7 days</div>
+          <div class="bars">
+            <div class="bar" style="height:55%"></div><div class="bar" style="height:62%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:58%"></div><div class="bar" style="height:80%"></div><div class="bar a" style="height:90%"></div>
+          </div>
+          <div class="daylbls"><div class="dlbl">S</div><div class="dlbl">M</div><div class="dlbl">T</div><div class="dlbl">W</div><div class="dlbl">T</div><div class="dlbl">F</div><div class="dlbl" style="color:var(--gold)">S</div></div>
+        </div>
+        <div class="m-insight">
+          <div class="m-i-ico">✦</div>
+          <div>
+            <div class="m-i-title">Today's Key Insight</div>
+            <div class="m-i-body">Your HRV peaked after 3 consecutive nights of 7h+ sleep. Reducing evening alcohol by 1 drink correlated with a 14% improvement in deep sleep this week.</div>
+          </div>
+        </div>
+        <div class="m-tags">
+          <div class="m-tag">Sleep ↑</div><div class="m-tag">Stress ↓</div><div class="m-tag">Nutrition link</div><div class="m-tag">Trend detected</div>
+        </div>
+      </div>
+      <div class="reveal d1">
+        <p class="sl">Intelligence</p>
+        <h2 class="st">Insights your wearable <em>alone</em> can't offer</h2>
+        <div class="feats">
+          <div class="feat"><div class="feat-n">01</div><div><h4>Cross-source pattern detection</h4><p>Healix finds correlations across all your data — like how your nutrition impacts sleep three days later, or how stress markers ripple through recovery.</p></div></div>
+          <div class="feat"><div class="feat-n">02</div><div><h4>Plain-language daily briefings</h4><p>No charts to decode. Every morning, Healix delivers a health brief in clear English — with actionable guidance built in.</p></div></div>
+          <div class="feat"><div class="feat-n">03</div><div><h4>Longitudinal memory</h4><p>Healix builds a model of you over months and years. It knows your baselines, your patterns, and flags anything that deviates — before you feel it.</p></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIALS -->
+<section class="testi">
+  <div class="wrap">
+    <div class="testi-head reveal">
+      <p class="sl">What members say</p>
+      <h2 class="st">Trusted by those who take<br>their health seriously</h2>
+    </div>
+    <div class="testi-grid reveal">
+      <div class="tc">
+        <div><div class="tc-stars">★★★★★</div><div class="tc-q">For the first time, I understand why I feel the way I do. Healix connected dots I didn't even know existed.</div></div>
+        <div><div class="tc-name">Sarah M.</div><div class="tc-role">Endurance athlete · London</div></div>
+      </div>
+      <div class="tc">
+        <div><div class="tc-stars">★★★★★</div><div class="tc-q">I've tried every health app. Nothing comes close to the depth and clarity Healix provides. It genuinely changed how I approach my wellbeing.</div></div>
+        <div><div class="tc-name">James K.</div><div class="tc-role">Founder · San Francisco</div></div>
+      </div>
+      <div class="tc">
+        <div><div class="tc-stars">★★★★★</div><div class="tc-q">The correlation between my lab markers and wearable data surfaced patterns my doctor hadn't even noticed. A remarkable product.</div></div>
+        <div><div class="tc-name">Dr. Priya N.</div><div class="tc-role">Physician · New York</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TEAM -->
+<section class="team" id="team">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="sl">The Team</p>
+      <h2 class="st">Built by people who care<br><em>deeply</em> about health</h2>
+    </div>
+    <div class="team-grid">
+      <div class="team-c reveal"><div class="avatar">PK</div><div class="t-name">Paul Kuveke</div><div class="t-role">CEO &amp; Co-founder</div><div class="t-bio">Former health lead at Google. 10+ years in digital health and AI-driven diagnostics.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
+      <div class="team-c reveal d1"><div class="avatar">JS</div><div class="t-name">Jonathan Sells</div><div class="t-role">CTO &amp; Co-founder</div><div class="t-bio">PhD in computational biology, MIT. Previously ML infrastructure at Apple Health.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
+      <div class="team-c reveal d2"><div class="avatar">DR</div><div class="t-name">Dr. David Reyes</div><div class="t-role">Chief Medical Officer</div><div class="t-bio">Board-certified internist and longevity specialist with 15 years of clinical practice.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
+      <div class="team-c reveal d3"><div class="avatar">SF</div><div class="t-name">Sophie Farrell</div><div class="t-role">Head of Design</div><div class="t-bio">Previously at IDEO and Calm. Passionate about making complex health data feel human.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <div class="pricing-head reveal">
+      <p class="sl">Pricing</p>
+      <h2 class="st">Simple, transparent access</h2>
+      <div class="ptoggle">
+        <button class="tog on" id="tm">Monthly</button>
+        <button class="tog" id="ta">Annual &nbsp;<span style="color:var(--gold);font-size:10px">Save 30%</span></button>
+      </div>
+    </div>
+    <div class="pcards reveal">
+      <div class="pc">
+        <div class="ptier">Essential</div>
+        <div class="pprice"><sup>$</sup><span class="pv">0</span></div>
+        <div class="pcad">Free forever</div>
+        <hr class="pdiv">
+        <ul class="pfeats">
+          <li><span class="ck">✓</span>Up to 2 wearable integrations</li>
+          <li><span class="ck">✓</span>7-day data history</li>
+          <li><span class="ck">✓</span>Weekly insight summary</li>
+          <li><span class="ck">✓</span>Basic recovery tracking</li>
+          <li class="off"><span class="ck">–</span>Lab result analysis</li>
+          <li class="off"><span class="ck">–</span>Cross-source correlations</li>
+          <li class="off"><span class="ck">–</span>Daily AI briefing</li>
+        </ul>
+        <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="pbtn">Join Beta — Get Premium Free</a>
+      </div>
+      <div class="pc feat">
+        <div class="pbadge">Most Popular</div>
+        <div class="ptier">Premium</div>
+        <div class="pprice"><sup>$</sup><span class="pv">19</span></div>
+        <div class="pcad pcad-m">per month</div>
+        <hr class="pdiv">
+        <ul class="pfeats">
+          <li><span class="ck">✓</span>Unlimited integrations</li>
+          <li><span class="ck">✓</span>Full data history</li>
+          <li><span class="ck">✓</span>Daily AI-powered briefing</li>
+          <li><span class="ck">✓</span>Lab result analysis</li>
+          <li><span class="ck">✓</span>Cross-source correlations</li>
+          <li><span class="ck">✓</span>Trend alerts &amp; anomaly detection</li>
+          <li><span class="ck">✓</span>Priority support</li>
+        </ul>
+        <a href="https://testflight.apple.com/join/q7qk2b25" target="_blank" class="pbtn">Start 14-day Free Trial</a>
+      </div>
+      <div class="pc">
+        <div class="ptier">Clinical</div>
+        <div class="pprice"><sup>$</sup><span class="pv">49</span></div>
+        <div class="pcad pcad-c">per month</div>
+        <hr class="pdiv">
+        <ul class="pfeats">
+          <li><span class="ck">✓</span>Everything in Premium</li>
+          <li><span class="ck">✓</span>Physician-reviewed insights</li>
+          <li><span class="ck">✓</span>Exportable health reports</li>
+          <li><span class="ck">✓</span>EHR integration</li>
+          <li><span class="ck">✓</span>Dedicated health concierge</li>
+          <li><span class="ck">✓</span>Family plan (up to 4)</li>
+          <li><span class="ck">✓</span>API access</li>
+        </ul>
+        <a href="/cdn-cgi/l/email-protection#5929382c351934303634382b323c2b773a3634662a2c3b333c3a2d64113c383530217c6b691a353037303a38357c6b69093538377c6b691c37282c302b20" class="pbtn">Contact Sales</a>
+      </div>
+    </div>
+    <p class="pnote reveal"><span>All plans include a 14-day free trial.</span> No credit card required. Cancel anytime.</p>
+  </div>
+</section>
+
+<!-- QUIZ -->
+<section class="quiz-section" id="quiz">
+  <div class="wrap" style="margin:0 auto">
+    <div id="healix-quiz">
+
+      <div class="hq-header">
+        <div class="hq-eyebrow"><span class="hq-dot"></span>2 minutes · 8 questions</div>
+        <h2 class="hq-title">Find out if Healix<br>is right for <em>you</em></h2>
+        <p class="hq-sub">No fluff. We'll tell you exactly where to start — or whether to bother at all.</p>
+      </div>
+
+      <div class="hq-card">
+
+        <div class="hq-progress-wrap" id="hq-pw">
+          <div class="hq-progress-meta">
+            <span class="hq-progress-label">Building your profile</span>
+            <span class="hq-progress-frac" id="hq-frac">1 of 8</span>
+          </div>
+          <div class="hq-bar-track">
+            <div class="hq-bar-fill" id="hq-fill"></div>
+            <div class="hq-bar-pip"  id="hq-pip"></div>
+          </div>
+        </div>
+
+        <!-- Q1 -->
+        <div class="hq-pane hq-active" id="hq-q0">
+          <div class="hq-q-ghost">01</div>
+          <p class="hq-q-text">How much effort will you tolerate before you ghost the app?</p>
+          <p class="hq-q-hint">Be honest. The algorithm deserves truth.</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="1"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">10 seconds/day — I will not be domesticated</span></button>
+            <button class="hq-choice" data-val="2"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">1 minute/day — I'll tap buttons, no essays</span></button>
+            <button class="hq-choice" data-val="3"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">3 minutes/day — quick check-in + meal photo is fine</span></button>
+            <button class="hq-choice" data-val="4"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">10 minutes/day — give me the full cockpit</span></button>
+          </div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="hq-pane" id="hq-q1">
+          <div class="hq-q-ghost">02</div>
+          <p class="hq-q-text">When an app asks "did you drink / eat junk / skip the workout"… you usually:</p>
+          <p class="hq-q-hint">Still no wrong answers. Mostly.</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="4"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Confess immediately — the algorithm deserves truth</span></button>
+            <button class="hq-choice" data-val="3"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Tell the truth-ish — I round down to protect my ego</span></button>
+            <button class="hq-choice" data-val="2" data-cap="free"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Lie — I'm here for vibes, not consequences</span></button>
+            <button class="hq-choice" data-val="1" data-cap="free"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Skip the question — I refuse to be perceived</span></button>
+          </div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="hq-pane" id="hq-q2">
+          <div class="hq-q-ghost">03</div>
+          <p class="hq-q-text">How often do you see a medical provider — doctor, labs, therapy, PT, etc.?</p>
+          <p class="hq-q-hint">Any type of provider counts</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="1"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Only if I'm dying</span></button>
+            <button class="hq-choice" data-val="2"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Once a year</span></button>
+            <button class="hq-choice" data-val="3"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">2–4 times/year</span></button>
+            <button class="hq-choice" data-val="4"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Regularly — ongoing care or frequent check-ins</span></button>
+          </div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="hq-pane" id="hq-q3">
+          <div class="hq-q-ghost">04</div>
+          <p class="hq-q-text">Your health knowledge level is:</p>
+          <p class="hq-q-hint">Self-assessment. We won't quiz you.</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="1"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Golden retriever — tell me what button to press</span></button>
+            <button class="hq-choice" data-val="2"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Competent adult — I know basics; I want structure</span></button>
+            <button class="hq-choice" data-val="3"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Biohacker adjacent — I read studies and argue online</span></button>
+            <button class="hq-choice" data-val="4"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Final boss — if you oversimplify, I will revolt</span></button>
+          </div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="hq-pane" id="hq-q4">
+          <div class="hq-q-ghost">05</div>
+          <p class="hq-q-text">What do you want more energy for?</p>
+          <p class="hq-q-hint">Pick one</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="energy-steady"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Steady all-day energy — no crashes</span></button>
+            <button class="hq-choice" data-val="energy-sleep"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Better sleep / mornings</span></button>
+            <button class="hq-choice" data-val="energy-workout"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Workout performance / body comp</span></button>
+            <button class="hq-choice" data-val="energy-focus"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Focus / productivity</span></button>
+            <button class="hq-choice" data-val="energy-mood"><span class="hq-bullet"></span><span class="hq-choice-key">E</span><span class="hq-choice-text">Mood / emotional stability</span></button>
+            <button class="hq-choice" data-val="energy-parenting"><span class="hq-bullet"></span><span class="hq-choice-key">F</span><span class="hq-choice-text">Parenting stamina — not dying at 4pm</span></button>
+          </div>
+        </div>
+
+        <!-- Q6 multi-select -->
+        <div class="hq-pane" id="hq-q5">
+          <div class="hq-q-ghost">06</div>
+          <p class="hq-q-text">Non-negotiables.</p>
+          <p class="hq-q-hint">Pick as many as you like — we'll work around them, not against them</p>
+          <div class="hq-choices-multi">
+            <button class="hq-choice-multi" data-val="no-caffeine"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">I'm not giving up caffeine</span></button>
+            <button class="hq-choice-multi" data-val="no-alcohol"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">I'm not giving up alcohol</span></button>
+            <button class="hq-choice-multi" data-val="no-tracking"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">I'm not tracking calories / macros</span></button>
+            <button class="hq-choice-multi" data-val="no-cooking"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">I'm not cooking more</span></button>
+            <button class="hq-choice-multi" data-val="no-workout"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">I'm not working out more</span></button>
+            <button class="hq-choice-multi" data-val="sleep-constrained"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">My sleep is constrained — baby / shift work / travel / insomnia</span></button>
+          </div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="hq-pane" id="hq-q6">
+          <div class="hq-q-ghost">07</div>
+          <p class="hq-q-text">What are you currently tracking with?</p>
+          <p class="hq-q-hint">Pick whatever you actually own and use</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="wearable-none"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Nothing yet</span></button>
+            <button class="hq-choice" data-val="wearable-apple"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Apple Watch / iPhone Health</span></button>
+            <button class="hq-choice" data-val="wearable-oura"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Oura Ring</span></button>
+            <button class="hq-choice" data-val="wearable-garmin"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Garmin / Polar / Suunto</span></button>
+            <button class="hq-choice" data-val="wearable-whoop"><span class="hq-bullet"></span><span class="hq-choice-key">E</span><span class="hq-choice-text">Whoop</span></button>
+            <button class="hq-choice" data-val="wearable-multi"><span class="hq-bullet"></span><span class="hq-choice-key">F</span><span class="hq-choice-text">Multiple devices</span></button>
+          </div>
+        </div>
+
+        <!-- Q8 -->
+        <div class="hq-pane" id="hq-q7">
+          <div class="hq-q-ghost">08</div>
+          <p class="hq-q-text">Final question: what made you look this up today?</p>
+          <p class="hq-q-hint">No wrong answers here</p>
+          <div class="hq-choices">
+            <button class="hq-choice" data-val="why-wall"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">I hit a wall — something has to change</span></button>
+            <button class="hq-choice" data-val="why-diagnosis"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">I got a diagnosis or a result that concerned me</span></button>
+            <button class="hq-choice" data-val="why-proactive"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">I want to get ahead of problems before they start</span></button>
+            <button class="hq-choice" data-val="why-better"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">I just want to feel better day to day</span></button>
+            <button class="hq-choice" data-val="why-curious"><span class="hq-bullet"></span><span class="hq-choice-key">E</span><span class="hq-choice-text">Someone recommended it / I was curious</span></button>
+          </div>
+        </div>
+
+        <!-- Result -->
+        <div id="hq-result">
+          <span class="hq-result-tag">Your Healix Profile</span>
+          <div class="hq-plan-badge"><span class="hq-plan-badge-dot"></span><span class="hq-plan-badge-text" id="hq-badge-text"></span></div>
+          <h3 class="hq-summary-title" id="hq-summary-title"></h3>
+          <p class="hq-summary-body" id="hq-summary-body"></p>
+          <div class="hq-chips" id="hq-chips"></div>
+          <hr class="hq-divider">
+          <div id="hq-rec-block"></div>
+          <div class="hq-result-actions">
+            <button class="hq-retry-btn" id="hq-retry">Retake the quiz</button>
+          </div>
+        </div>
+
+        <!-- Nav -->
+        <div class="hq-nav" id="hq-nav">
+          <button class="hq-btn-back" id="hq-back" disabled>← Back</button>
+          <button class="hq-btn-next" id="hq-next">Continue →</button>
+        </div>
+
+      </div><!-- /hq-card -->
+    </div><!-- /healix-quiz -->
+  </div>
+</section>
+
+<!-- Netlify form stub for clinical waitlist -->
+<form name="clinical-waitlist" netlify netlify-honeypot="bot-field" hidden>
+  <input type="email" name="email">
+  <input name="bot-field">
+</form>
+
+<!-- FAQ -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <div class="faq-layout">
+      <div class="faq-sticky reveal">
+        <p class="sl">FAQ</p>
+        <h2 class="st">Questions,<br><em>answered.</em></h2>
+        <p style="font-size:14px;color:var(--cream-dim);line-height:1.75;margin-top:24px;max-width:280px">Still have questions? Reach us at <span style="color:var(--gold)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d0b8b5bcbcbf90b8b5b1bcb9a8feb3bfbd">[email&#160;protected]</a></span> — we typically reply within a few hours.</p>
+      </div>
+      <div class="faq-list reveal d1">
+        <div class="fi open">
+          <button class="fq" onclick="tFaq(this)">How does Healix protect my health data?<div class="ficon">+</div></button>
+          <div class="fa">Your data is encrypted end-to-end, stored on HIPAA-compliant infrastructure, and never sold to third parties. You retain full ownership and can export or delete it at any time. We use read-only OAuth connections — we never store your device credentials.</div>
+        </div>
+        <div class="fi">
+          <button class="fq" onclick="tFaq(this)">Which devices are supported?<div class="ficon">+</div></button>
+          <div class="fa">We support Apple Watch, Oura Ring, Garmin, Whoop, Withings, and Apple Health. Google Fit, Fitbit, and continuous glucose monitors are in beta. We add new integrations monthly based on member demand.</div>
+        </div>
+        <div class="fi">
+          <button class="fq" onclick="tFaq(this)">Is Healix a medical device?<div class="ficon">+</div></button>
+          <div class="fa">Healix is a personal health intelligence platform, not a medical device. Our insights are for informational and wellness purposes and should not replace professional medical advice, diagnosis, or treatment. Always consult your physician for medical decisions.</div>
+        </div>
+        <div class="fi">
+          <button class="fq" onclick="tFaq(this)">How long does setup take?<div class="ficon">+</div></button>
+          <div class="fa">Most members are set up in under 5 minutes. Connect your first device via OAuth, grant permissions, and Healix immediately begins syncing historical data (up to 1 year). Your first insight briefing arrives within 24 hours.</div>
+        </div>
+        <div class="fi">
+          <button class="fq" onclick="tFaq(this)">Can I share data with my doctor?<div class="ficon">+</div></button>
+          <div class="fa">Yes — Premium and Clinical members can generate exportable PDF health reports. Clinical members also get EHR integration for seamless sharing with healthcare providers.</div>
+        </div>
+        <div class="fi">
+          <button class="fq" onclick="tFaq(this)">What happens after the free trial?<div class="ficon">+</div></button>
+          <div class="fa">After your 14-day trial, your account automatically moves to the free Essential tier — you're never charged without explicitly providing payment details. No credit card required to start.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta">
+  <div class="cta-in reveal">
+    <p class="sl" style="margin-bottom:20px">Limited beta spots</p>
+    <h2>Get Premium free.<br><em>Just bring feedback.</em></h2>
+    <p>Enter your email and we'll send you a TestFlight link instantly. Full Premium access, no credit card, no commitment.</p>
+    <form class="cta-form" name="beta-signups" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="https://testflight.apple.com/join/q7qk2b25">
+      <input type="hidden" name="form-name" value="beta-signups">
+      <input type="hidden" name="bot-field">
+      <input type="email" name="email" placeholder="Your email address" required>
+      <button type="submit" class="cta-sub">Send Me the Link</button>
+    </form>
+    <p class="cta-priv">We'll send your TestFlight invite within minutes. No spam, ever.</p>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="ft">
+    <div><div class="fb-logo">HEALIX</div><p class="fb-tag">Your health, unified. Intelligence that helps you truly understand yourself.</p></div>
+    <div class="fc"><h5>Product</h5><ul><li><a href="#">Features</a></li><li><a href="#">Integrations</a></li><li><a href="#">Pricing</a></li><li><a href="#">Changelog</a></li></ul></div>
+    <div class="fc"><h5>Company</h5><ul><li><a href="#">About</a></li><li><a href="#">Team</a></li><li><a href="#">Blog</a></li><li><a href="#">Careers</a></li></ul></div>
+    <div class="fc"><h5>Support</h5><ul><li><a href="#">Help Centre</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li><li><a href="#">Contact</a></li></ul></div>
+  </div>
+  <div class="fb-bot">
+    <div class="fb-copy">© 2025 Healix Inc. All rights reserved.</div>
+    <div class="fb-legal"><a href="#">Privacy Policy</a><a href="#">Terms of Service</a><a href="#">HIPAA Compliance</a></div>
+  </div>
+</footer>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// Nav scroll
+window.addEventListener('scroll',()=>document.getElementById('nav').classList.toggle('s',scrollY>40));
+
+// Reveal
+const obs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('v');obs.unobserve(e.target);}}),{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+
+// FAQ
+function tFaq(btn){
+  const item=btn.closest('.fi'), open=item.classList.contains('open');
+  document.querySelectorAll('.fi').forEach(i=>i.classList.remove('open'));
+  if(!open) item.classList.add('open');
+}
+
+// Pricing toggle
+const pm={p:19,c:49}, pa={p:13,c:34};
+document.getElementById('tm').addEventListener('click',function(){
+  this.classList.add('on'); document.getElementById('ta').classList.remove('on');
+  document.querySelectorAll('.pv')[1].textContent=pm.p;
+  document.querySelectorAll('.pv')[2].textContent=pm.c;
+  document.querySelector('.pcad-m').textContent='per month';
+  document.querySelector('.pcad-c').textContent='per month';
+});
+document.getElementById('ta').addEventListener('click',function(){
+  this.classList.add('on'); document.getElementById('tm').classList.remove('on');
+  document.querySelectorAll('.pv')[1].textContent=pa.p;
+  document.querySelectorAll('.pv')[2].textContent=pa.c;
+  document.querySelector('.pcad-m').textContent='per year';
+  document.querySelector('.pcad-c').textContent='per year';
+});
+</script>
+
+<script>
+/* HEALIX QUIZ ENGINE */
+(function(){
+  var TOTAL=8, MULTI_Q=5;
+  var cur=0, answers=new Array(8).fill(null), multiSel=new Set(), hardCapFree=false;
+
+  var allPanes = [];
+  for(var i=0;i<TOTAL;i++){ allPanes.push(document.getElementById('hq-q'+i)); }
+
+  var nextBtn = document.getElementById('hq-next');
+  var backBtn = document.getElementById('hq-back');
+  var navEl   = document.getElementById('hq-nav');
+  var resultEl= document.getElementById('hq-result');
+  var fillEl  = document.getElementById('hq-fill');
+  var pipEl   = document.getElementById('hq-pip');
+  var fracEl  = document.getElementById('hq-frac');
+
+  // Hide all panes first
+  allPanes.forEach(function(p){ p.style.display='none'; });
+  // Show first
+  allPanes[0].style.display='block';
+  updateProgress();
+
+  function updateProgress(){
+    var pct=(cur/TOTAL)*100;
+    fillEl.style.width=pct+'%';
+    pipEl.style.left=pct+'%';
+    fracEl.textContent=(cur+1)+' of '+TOTAL;
+    backBtn.disabled=(cur===0);
+    var ready=(cur===MULTI_Q || answers[cur]!==null);
+    if(ready){ nextBtn.classList.add('hq-ready'); }
+    else { nextBtn.classList.remove('hq-ready'); }
+  }
+
+  function goTo(idx){
+    allPanes.forEach(function(p){ p.style.display='none'; });
+    allPanes[idx].style.display='block';
+    cur=idx;
+    updateProgress();
+  }
+
+  // Choice click handler - attached directly to each button
+  function attachChoiceHandlers(){
+    var choices = document.querySelectorAll('.hq-choice');
+    choices.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var paneId = btn.closest('.hq-pane').id;
+        var paneIdx = parseInt(paneId.replace('hq-q',''));
+        if(paneIdx !== cur) return;
+        // Deselect others in same pane
+        btn.closest('.hq-choices').querySelectorAll('.hq-choice').forEach(function(b){ b.classList.remove('hq-sel'); });
+        btn.classList.add('hq-sel');
+        answers[cur] = btn.getAttribute('data-val');
+        if(cur===1){ hardCapFree=(btn.getAttribute('data-cap')==='free'); }
+        nextBtn.classList.add('hq-ready');
+      });
+    });
+    var multiChoices = document.querySelectorAll('.hq-choice-multi');
+    multiChoices.forEach(function(btn){
+      btn.addEventListener('click', function(){
+        btn.classList.toggle('hq-sel');
+        var v=btn.getAttribute('data-val');
+        if(multiSel.has(v)){ multiSel.delete(v); } else { multiSel.add(v); }
+      });
+    });
+  }
+  attachChoiceHandlers();
+
+  nextBtn.addEventListener('click', function(){
+    if(cur!==MULTI_Q && answers[cur]===null) return;
+    if(cur < TOTAL-1){ goTo(cur+1); }
+    else { buildResult(); }
+  });
+
+  backBtn.addEventListener('click', function(){
+    if(cur>0){ goTo(cur-1); }
+  });
+
+  var EM={'energy-steady':'steady all-day energy','energy-sleep':'better sleep quality','energy-workout':'fitness and performance','energy-focus':'focus and clarity','energy-mood':'stress and emotional balance','energy-longevity':'long-term health and longevity','energy-parenting':'keeping up with life'};
+  var CM={'no-caffeine':'keeping caffeine','no-alcohol':'keeping alcohol','no-tracking':'skipping calorie tracking','no-cooking':'not cooking more','no-workout':'not adding workouts','sleep-constrained':'working around constrained sleep'};
+  var WM={'wearable-none':'No wearable yet','wearable-apple':'Apple Watch / iPhone Health','wearable-oura':'Oura Ring','wearable-garmin':'Garmin / Polar / Suunto','wearable-whoop':'Whoop','wearable-multi':'Multiple devices'};
+  var YM={'why-wall':'Hit a wall','why-diagnosis':'Recent diagnosis / result','why-proactive':'Getting ahead of problems','why-better':'Just want to feel better','why-curious':'Curious / recommended'};
+  function eL(v){return['','10 sec/day','1 min/day','3 min/day','10 min/day'][v]||'';}
+  function hL(v){return['','Skips questions','Vibes-only','Rounds down','Full confessor'][v]||'';}
+  function mL(v){return['','Rarely sees providers','Annual check-up','Sees providers 2-4x/yr','Regular ongoing care'][v]||'';}
+  function kL(v){return['','Golden retriever mode','Competent adult','Biohacker adjacent','Final boss'][v]||'';}
+
+  function calcTier(){
+    var q1=parseInt(answers[0])||0, q2=parseInt(answers[1])||0, q3=parseInt(answers[2])||0, q4=parseInt(answers[3])||0;
+    // If effort is 10sec or 1min/day, always free
+    if(q1 <= 2) return 'free';
+    // If dishonest/skips questions, always free
+    if(hardCapFree) return 'free';
+    var eng=q1+q2;
+    if(q3===4||(q4===4&&eng>=6)) return 'clinical';
+    if(eng>=4&&q4>=2) return 'premium';
+    return 'free';
+  }
+
+  function buildResult(){
+    var tier=calcTier();
+    var q1=parseInt(answers[0])||0, q2=parseInt(answers[1])||0, q3=parseInt(answers[2])||0, q4=parseInt(answers[3])||0;
+    var energy=EM[answers[4]]||'better health';
+    var wearable=WM[answers[6]]||'';
+    var why=YM[answers[7]]||'';
+    var noWear=(answers[6]==='wearable-none');
+    var cons=Array.from(multiSel).map(function(v){return CM[v];}).filter(Boolean);
+    var badge,title,body;
+
+    if(tier==='free'){
+      badge='Recommended: Free Plan';
+      if(hardCapFree||q2<=2){
+        title='Start simple. <em>No pressure.</em>';
+        body='You are here for <strong>'+energy+'</strong> and that is a completely valid place to start. <strong>Free gets you in the door</strong> with zero commitment. If it clicks, you will know.';
+      } else {
+        title='Low lift, <em>real results.</em>';
+        body='You want <strong>'+energy+'</strong> and you have got '+eL(q1)+' to give it. The free tier is built for exactly this.';
+      }
+    } else if(tier==='premium'){
+      badge='Recommended: Premium';
+      if(q4>=3){
+        title='You are going to <em>actually use this.</em>';
+        body=kL(q4)+' energy, '+eL(q1)+' to give, and you want <strong>'+energy+'</strong>. You are the profile Premium was built for.';
+      } else {
+        title='Ready when <em>you are.</em>';
+        body='You want <strong>'+energy+'</strong>, willing to put in '+eL(q1)+', and honest enough that your data will actually mean something.';
+      }
+    } else {
+      badge='Premium + Clinical Waitlist';
+      title='You are built for <em>Clinical.</em>';
+      body=kL(q4)+'-level knowledge, '+mL(q3).toLowerCase()+', and you want <strong>'+energy+'</strong>. <strong>We are not there yet</strong> but you will be first in line when we launch.';
+    }
+
+    if(cons.length>0) body+=' Constraints noted: <strong>'+cons.join(', ')+'</strong> — Healix will work around them.';
+    if(noWear) body+=' No wearable yet — Healix still works and you will see what is worth getting once inside.';
+
+    var chips=[
+      {l:'Effort',v:eL(q1)},{l:'Engagement',v:hL(q2)},{l:'Medical',v:mL(q3)},
+      {l:'Knowledge',v:kL(q4)},{l:'Goal',v:energy.charAt(0).toUpperCase()+energy.slice(1)},
+      {l:'Tracking',v:wearable},{l:'Why now',v:why}
+    ].filter(function(c){return c.v;});
+
+    document.getElementById('hq-badge-text').textContent=badge;
+    document.getElementById('hq-summary-title').innerHTML=title;
+    document.getElementById('hq-summary-body').innerHTML=body;
+    document.getElementById('hq-chips').innerHTML=chips.map(function(c){
+      return '<div class="hq-chip"><span>'+c.l+'</span>'+c.v+'</div>';
+    }).join('');
+
+    var rb=document.getElementById('hq-rec-block');
+    if(tier==='free'){
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Free Plan</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Get your health data unified and your first AI insights — no credit card, no pressure.</div><a href="https://testflight.apple.com/join/q7qk2b25" class="hq-cta-btn">Join the Beta — Free Access</a></div>';
+    } else if(tier==='premium'){
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Premium — $19/month</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">AI health insights, full wearable integration, weekly intelligence reports.</div><a href="https://testflight.apple.com/join/q7qk2b25" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
+    } else {
+      rb.innerHTML='<div class="hq-rec hq-rec-featured" style="margin-bottom:12px"><div class="hq-rec-tier">Clinical — Waitlist</div><div class="hq-rec-headline">Get notified when Clinical launches.</div><div class="hq-rec-desc">Leave your email and you will be first to know.</div><form class="hq-email-form" id="hq-wl-form"><input class="hq-email-input" type="email" placeholder="your@email.com" required><button class="hq-email-submit" type="submit">Notify Me</button></form><div class="hq-email-thanks" id="hq-wl-thanks" style="display:none">You are on the list!</div></div><div class="hq-rec"><div class="hq-rec-tier">In the meantime — Premium at $19/month</div><div class="hq-rec-headline">More than enough until Clinical arrives.</div><a href="https://testflight.apple.com/join/q7qk2b25" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
+      setTimeout(function(){
+        var f=document.getElementById('hq-wl-form');
+        if(f){ f.addEventListener('submit',function(e){ e.preventDefault(); f.style.display='none'; document.getElementById('hq-wl-thanks').style.display='block'; }); }
+      },100);
+    }
+
+    allPanes.forEach(function(p){ p.style.display='none'; });
+    navEl.style.display='none';
+    fillEl.style.width='100%';
+    pipEl.style.left='100%';
+    fracEl.textContent='Complete';
+    resultEl.style.display='block';
+  }
+
+  document.getElementById('hq-retry').addEventListener('click',function(){
+    answers.fill(null); multiSel.clear(); hardCapFree=false;
+    document.querySelectorAll('.hq-choice,.hq-choice-multi').forEach(function(b){ b.classList.remove('hq-sel'); });
+    resultEl.style.display='none';
+    navEl.style.display='';
+    nextBtn.classList.remove('hq-ready');
+    goTo(0);
+  });
+
+})();
+</script>
+</body>
+</html>
