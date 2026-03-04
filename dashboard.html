@@ -1338,7 +1338,6 @@ async function init() {
     document.getElementById('sb-name').textContent = name;
     document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
     document.getElementById('p-name').value = name;
-    loadDidYouKnow();
     document.getElementById('page-title').textContent = greet() + ', ' + firstName;
 
     loadDashboardData();
@@ -1657,12 +1656,15 @@ async function loadDashboardData() {
   }
 }
 
+function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; }
+function setHTML(id, val) { var e = document.getElementById(id); if (e) e.innerHTML = val; }
+function setClass(id, cls) { var e = document.getElementById(id); if (e) e.className = cls; }
+
 function renderHealthStats(byType, today) {
   // Sleep
   var sleepKeys = ['sleep_analysis'];
   var sleepData = [];
   sleepKeys.forEach(function(k) { if (byType[k]) sleepData = sleepData.concat(byType[k]); });
-  // Filter out null sleep values
   var validSleepData = sleepData.filter(function(r) { return r.value !== null && r.value !== undefined && !isNaN(parseFloat(r.value)); });
   if (validSleepData.length > 0) {
     var v = parseFloat(validSleepData[0].value);
@@ -1671,14 +1673,13 @@ function renderHealthStats(byType, today) {
     var avg = validSleepData.reduce(function(s, r) { var x=parseFloat(r.value); if(x>100)x=x/3600; return s+x; }, 0) / validSleepData.length;
     avg = Math.round(avg * 10) / 10;
     var diff = Math.round((v - avg) * 10) / 10;
-    document.getElementById('d-sleep').innerHTML = v + '<span class="stat-item-unit">h</span>';
-    var el = document.getElementById('d-sleep-d');
-    el.textContent = diff > 0 ? '↑ +' + diff + 'h vs avg' : diff < 0 ? '↓ ' + diff + 'h vs avg' : '— avg ' + avg + 'h';
-    el.className = 'stat-item-delta ' + (diff > 0 ? 'delta-up' : diff < 0 ? 'delta-down' : 'delta-neutral');
+    setHTML('d-sleep', v + '<span class="stat-item-unit">h</span>');
+    setEl('d-sleep-d', diff > 0 ? '↑ +' + diff + 'h vs avg' : diff < 0 ? '↓ ' + diff + 'h vs avg' : '— avg ' + avg + 'h');
+    setClass('d-sleep-d', 'stat-item-delta ' + (diff > 0 ? 'delta-up' : diff < 0 ? 'delta-down' : 'delta-neutral'));
   } else {
-    document.getElementById('d-sleep').innerHTML = '—<span class="stat-item-unit">h</span>';
-    document.getElementById('d-sleep-d').textContent = 'No data yet';
-    document.getElementById('d-sleep-d').className = 'stat-item-delta delta-neutral';
+    setHTML('d-sleep', '—<span class="stat-item-unit">h</span>');
+    setEl('d-sleep-d', 'No data yet');
+    setClass('d-sleep-d', 'stat-item-delta delta-neutral');
   }
 
   // Steps - unit: steps, sum all entries for today
@@ -1692,14 +1693,13 @@ function renderHealthStats(byType, today) {
       .filter(function(r) { return r.start_date; })
       .slice(0, 3)
       .reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0);
-    document.getElementById('d-steps').innerHTML = todaySteps >= 1000
+    setHTML('d-steps', todaySteps >= 1000
       ? (Math.round(todaySteps / 100) / 10) + '<span class="stat-item-unit">k</span>'
-      : Math.round(todaySteps).toString();
-    var stepsAvg = stepsData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / currentTimeframe;
+      : Math.round(todaySteps).toString());
+    var stepsAvg = stepsData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / Math.max(stepsData.length, 1);
     var sd = Math.round(((todaySteps - stepsAvg) / Math.max(stepsAvg, 1)) * 100);
-    var sel = document.getElementById('d-steps-d');
-    sel.textContent = sd > 5 ? '↑ +' + sd + '% vs avg' : sd < -5 ? '↓ ' + sd + '% vs avg' : '— avg pace';
-    sel.className = 'stat-item-delta ' + (sd > 5 ? 'delta-up' : sd < -5 ? 'delta-down' : 'delta-neutral');
+    setEl('d-steps-d', sd > 5 ? '↑ +' + sd + '% vs avg' : sd < -5 ? '↓ ' + sd + '% vs avg' : '— avg pace');
+    setClass('d-steps-d', 'stat-item-delta ' + (sd > 5 ? 'delta-up' : sd < -5 ? 'delta-down' : 'delta-neutral'));
     updateMiniChart('d-chart', stepsData, today);
   }
 
@@ -1710,11 +1710,10 @@ function renderHealthStats(byType, today) {
   if (hrData.length > 0) {
     var hr = Math.round(parseFloat(hrData[0].value));
     var hrAvg = Math.round(hrData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / hrData.length);
-    document.getElementById('d-hr').innerHTML = hr + '<span class="stat-item-unit">bpm</span>';
+    setHTML('d-hr', hr + '<span class="stat-item-unit">bpm</span>');
     var hd = hr - hrAvg;
-    var hel = document.getElementById('d-hr-d');
-    hel.textContent = Math.abs(hd) <= 2 ? '— avg ' + hrAvg : hd > 0 ? '↑ +' + hd + ' vs avg' : '↓ ' + hd + ' vs avg';
-    hel.className = 'stat-item-delta ' + (Math.abs(hd) <= 2 ? 'delta-neutral' : hd > 0 ? 'delta-down' : 'delta-up');
+    setEl('d-hr-d', Math.abs(hd) <= 2 ? '— avg ' + hrAvg : hd > 0 ? '↑ +' + hd + ' vs avg' : '↓ ' + hd + ' vs avg');
+    setClass('d-hr-d', 'stat-item-delta ' + (Math.abs(hd) <= 2 ? 'delta-neutral' : hd > 0 ? 'delta-down' : 'delta-up'));
   }
 
   // Active calories - unit: kcal, sum today entries
@@ -1729,12 +1728,11 @@ function renderHealthStats(byType, today) {
       .slice(0, 3)
       .reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0);
     tc = Math.round(tc);
-    document.getElementById('d-cal').innerHTML = tc + '<span class="stat-item-unit">kcal</span>';
-    var ca = Math.round(calData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / currentTimeframe);
+    setHTML('d-cal', tc + '<span class="stat-item-unit">kcal</span>');
+    var ca = Math.round(calData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / Math.max(calData.length, 1));
     var cd = Math.round(((tc - ca) / Math.max(ca, 1)) * 100);
-    var cel = document.getElementById('d-cal-d');
-    cel.textContent = Math.abs(cd) < 5 ? '— avg ' + ca : cd > 0 ? '↑ +' + cd + '% vs avg' : '↓ ' + cd + '% vs avg';
-    cel.className = 'stat-item-delta ' + (Math.abs(cd) < 5 ? 'delta-neutral' : cd > 0 ? 'delta-up' : 'delta-down');
+    setEl('d-cal-d', Math.abs(cd) < 5 ? '— avg ' + ca : cd > 0 ? '↑ +' + cd + '% vs avg' : '↓ ' + cd + '% vs avg');
+    setClass('d-cal-d', 'stat-item-delta ' + (Math.abs(cd) < 5 ? 'delta-neutral' : cd > 0 ? 'delta-up' : 'delta-down'));
   }
 }
 
@@ -1756,7 +1754,9 @@ function updateMiniChart(id, data, today) {
 }
 
 function renderDashMeals(meals, today) {
-  var todayMeals = meals; // already filtered by created_at in query
+  var el = document.getElementById('d-meals');
+  if (!el) return;
+  var todayMeals = meals;
   var el = document.getElementById('d-meals');
   var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
   if (todayMeals.length === 0) {
@@ -1985,6 +1985,7 @@ function renderMicronutrientsFromNutrients(nutrients) {
 
 function renderInsights(insights) {
   var el = document.getElementById('d-insights');
+  if (!el) return;
   el.innerHTML = insights.map(function(ins) {
     var riskClass = 'risk-' + (ins.risk_level || 'low');
     return '<div class="insight-item">'
@@ -2010,7 +2011,7 @@ async function loadWeightHistory() {
     if (data && !data.error && data.length > 0) {
       weightEntries = data;
       var latest = data[0];
-      document.getElementById('d-weight').innerHTML = parseFloat(latest.value).toFixed(1) + '<span class="weight-unit">' + (latest.unit || 'lbs') + '</span>';
+      setHTML('d-weight', parseFloat(latest.value).toFixed(1) + '<span class="weight-unit">' + (latest.unit || 'lbs') + '</span>');
       if (data.length > 1) {
         var prev = parseFloat(data[1].value), cur = parseFloat(latest.value);
         var diff = Math.round((cur - prev) * 10) / 10;
