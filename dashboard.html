@@ -1434,7 +1434,7 @@ function showPage(id, btn) {
     document.getElementById('page-title').textContent = id === 'dashboard' ? greet() + ', ' + firstName : pageTitles[id] || id;
   }
   // Load page data
-  if (id === 'meals') { updateMealsDateLabel(); loadMealsPage(); }
+  if (id === 'meals') { loadMealsPage(); }
   if (id === 'documents') loadDocumentsPage();
     if (id === 'strength') renderStrengthPage();
 }
@@ -2019,8 +2019,11 @@ function updateMealsDateLabel() {
   if (aggLabel) aggLabel.textContent = mealsView === 'week' ? 'This week' : 'This month';
 }
 
+var _mealsLoadTimer = null;
 async function loadMealsPage() {
   if (!currentUser) return;
+  // Debounce: cancel any pending load triggered within 50ms
+  if (_mealsLoadTimer) { clearTimeout(_mealsLoadTimer); _mealsLoadTimer = null; }
   updateMealsDateLabel();
   var range = getMealsDateRange();
   var today = localDateStr(mealsDate);
@@ -2043,6 +2046,22 @@ async function loadMealsPage() {
     }
     console.log('[Healix] meals fetched:', meals.length, 'mealsDate=', localDateStr(mealsDate));
     window._healixMeals = meals; // debug: call debugMealData(window._healixMeals[0]) in console
+    // Auto-log ALL nutrition fields from first meal that has data
+    var sampleMeal = meals.find(function(m) { return m.data; });
+    if (sampleMeal) {
+      var d = null;
+      try { d = typeof sampleMeal.data === 'string' ? JSON.parse(sampleMeal.data) : sampleMeal.data; } catch(e) {}
+      if (d && d.total_nutrition) {
+        Object.keys(d.total_nutrition).forEach(function(cat) {
+          var items = d.total_nutrition[cat];
+          if (Array.isArray(items)) {
+            console.log('[Healix] ' + cat + ':', items.map(function(x){ return x.name + '=' + x.value + (x.unit||''); }).join(', '));
+          }
+        });
+      } else {
+        console.log('[Healix] meal.data keys:', d ? Object.keys(d) : 'null');
+      }
+    }
 
     // Fetch nutrients
     var nutrients = [];
@@ -2065,12 +2084,22 @@ async function loadMealsPage() {
 
 function getNutrientFromData(mealData, name) {
   if (!mealData || !mealData.total_nutrition) return null;
+  var nameLower = name.toLowerCase();
   var categories = Object.values(mealData.total_nutrition);
+  // First pass: exact match
   for (var i = 0; i < categories.length; i++) {
     var cat = categories[i];
     if (!Array.isArray(cat)) continue;
     for (var j = 0; j < cat.length; j++) {
       if (cat[j].name === name) return parseFloat(cat[j].value || 0);
+    }
+  }
+  // Second pass: case-insensitive
+  for (var i = 0; i < categories.length; i++) {
+    var cat = categories[i];
+    if (!Array.isArray(cat)) continue;
+    for (var j = 0; j < cat.length; j++) {
+      if (cat[j].name && cat[j].name.toLowerCase() === nameLower) return parseFloat(cat[j].value || 0);
     }
   }
   return null;
@@ -2090,14 +2119,28 @@ function debugMealData(meal) {
   });
 }
 
+function getNutrientFirstMatch(mealData, names) {
+  // Try multiple possible field names, return first match
+  for (var i = 0; i < names.length; i++) {
+    var v = getNutrientFromData(mealData, names[i]);
+    if (v !== null && v > 0) return v;
+  }
+  // Last resort: try first match that returns non-null even if 0
+  for (var i = 0; i < names.length; i++) {
+    var v = getNutrientFromData(mealData, names[i]);
+    if (v !== null) return v;
+  }
+  return null;
+}
+
 function getMacrosFromMeal(m) {
   var data = null;
   try { data = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) {}
   return {
-    cal:  getNutrientFromData(data, 'Calories'),
-    prot: getNutrientFromData(data, 'Protein'),
-    carb: getNutrientFromData(data, 'Carbohydrates'),
-    fat:  getNutrientFromData(data, 'Total Fat')
+    cal:  getNutrientFirstMatch(data, ['Calories','Energy','Calorie','Total Calories']),
+    prot: getNutrientFirstMatch(data, ['Protein','Proteins','Total Protein']),
+    carb: getNutrientFirstMatch(data, ['Carbohydrates','Total Carbohydrate','Total Carbohydrates','Carbohydrate','Carbs','Net Carbs']),
+    fat:  getNutrientFirstMatch(data, ['Total Fat','Fat','Fats','Total Fats'])
   };
 }
 
