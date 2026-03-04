@@ -220,7 +220,7 @@ textarea::placeholder { color: var(--muted); }
   </div>
   <div class="topbar-right">
     <div class="topbar-chip">Beta</div>
-    <div class="topbar-avatar" title="Profile">A</div>
+    <div class="topbar-avatar" title="Profile" id="topbar-avatar">?</div>
   </div>
 </div>
 
@@ -235,36 +235,36 @@ textarea::placeholder { color: var(--muted); }
       <div class="sidebar-label">Today's Stats</div>
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-card-label">Recovery</div>
-          <div class="stat-card-val">87</div>
-          <div class="stat-card-delta up">↑ +12 vs yesterday</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-card-label">HRV</div>
-          <div class="stat-card-val">62<span style="font-size:14px;color:var(--muted)">ms</span></div>
-          <div class="stat-card-delta up">↑ +8ms</div>
-        </div>
-        <div class="stat-card">
           <div class="stat-card-label">Sleep</div>
-          <div class="stat-card-val">7.4<span style="font-size:13px;color:var(--muted)">h</span></div>
-          <div class="stat-card-delta down">↓ −0.3h</div>
+          <div class="stat-card-val" id="stat-sleep">—</div>
+          <div class="stat-card-delta" id="stat-sleep-delta">Loading...</div>
         </div>
         <div class="stat-card">
           <div class="stat-card-label">Steps</div>
-          <div class="stat-card-val">8.2<span style="font-size:13px;color:var(--muted)">k</span></div>
-          <div class="stat-card-delta neutral">— avg</div>
+          <div class="stat-card-val" id="stat-steps">—</div>
+          <div class="stat-card-delta" id="stat-steps-delta">Loading...</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Heart Rate</div>
+          <div class="stat-card-val" id="stat-hr">—</div>
+          <div class="stat-card-delta" id="stat-hr-delta">Loading...</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-label">Active Cal</div>
+          <div class="stat-card-val" id="stat-cal">—</div>
+          <div class="stat-card-delta" id="stat-cal-delta">Loading...</div>
         </div>
       </div>
-      <div class="mini-chart" title="HRV — last 7 days">
-        <div class="mini-bar" style="height:55%"></div>
-        <div class="mini-bar" style="height:62%"></div>
-        <div class="mini-bar" style="height:48%"></div>
-        <div class="mini-bar" style="height:70%"></div>
-        <div class="mini-bar" style="height:58%"></div>
-        <div class="mini-bar" style="height:80%"></div>
-        <div class="mini-bar today" style="height:90%"></div>
+      <div class="mini-chart" id="mini-chart" title="Steps — last 7 days">
+        <div class="mini-bar" style="height:20%"></div>
+        <div class="mini-bar" style="height:20%"></div>
+        <div class="mini-bar" style="height:20%"></div>
+        <div class="mini-bar" style="height:20%"></div>
+        <div class="mini-bar" style="height:20%"></div>
+        <div class="mini-bar" style="height:20%"></div>
+        <div class="mini-bar today" style="height:20%"></div>
       </div>
-      <div style="font-size:9px;color:var(--muted);margin-top:6px;letter-spacing:.1em">HRV — LAST 7 DAYS</div>
+      <div style="font-size:9px;color:var(--muted);margin-top:6px;letter-spacing:.1em" id="chart-label">STEPS — LAST 7 DAYS</div>
     </div>
 
     <!-- CONTEXT -->
@@ -294,40 +294,7 @@ textarea::placeholder { color: var(--muted); }
     <!-- MEAL LOG -->
     <div class="sidebar-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
       <div class="sidebar-label">Recent Meals</div>
-      <div class="meal-list">
-        <div class="meal-item">
-          <div class="meal-emoji">🥗</div>
-          <div class="meal-info">
-            <div class="meal-name">Grilled chicken salad</div>
-            <div class="meal-time">Lunch · 12:34pm</div>
-          </div>
-          <div class="meal-cals">480</div>
-        </div>
-        <div class="meal-item">
-          <div class="meal-emoji">🍳</div>
-          <div class="meal-info">
-            <div class="meal-name">Eggs & avocado toast</div>
-            <div class="meal-time">Breakfast · 8:12am</div>
-          </div>
-          <div class="meal-cals">390</div>
-        </div>
-        <div class="meal-item">
-          <div class="meal-emoji">🍎</div>
-          <div class="meal-info">
-            <div class="meal-name">Apple + almonds</div>
-            <div class="meal-time">Snack · Yesterday</div>
-          </div>
-          <div class="meal-cals">210</div>
-        </div>
-        <div class="meal-item">
-          <div class="meal-emoji">🍝</div>
-          <div class="meal-info">
-            <div class="meal-name">Pasta bolognese</div>
-            <div class="meal-time">Dinner · Yesterday</div>
-          </div>
-          <div class="meal-cals">720</div>
-        </div>
-      </div>
+      <div class="meal-list" id="meal-list"><div class="sidebar-empty">Loading meals...</div></div>
     </div>
 
   </aside>
@@ -339,7 +306,7 @@ textarea::placeholder { color: var(--muted); }
       <!-- Welcome screen -->
       <div class="chat-welcome" id="chat-welcome">
         <div class="welcome-icon">✦</div>
-        <h1 class="welcome-title">Good morning,<br><em>Alex.</em></h1>
+        <h1 class="welcome-title" id="welcome-title">Good morning,<br><em id="welcome-name">there.</em></h1>
         <p class="welcome-sub">Ask me anything about your health. I have context from your wearable data, meal logs, and any documents you've uploaded.</p>
         <div class="welcome-suggestions">
           <div class="suggestion" onclick="useSuggestion(this)">
@@ -382,6 +349,370 @@ textarea::placeholder { color: var(--muted); }
 </div>
 
 <script>
+// ── SUPABASE CONFIG ──
+var SUPABASE_URL =  + SUPABASE_URL + ;
+var SUPABASE_ANON_KEY =  + SUPABASE_ANON_KEY + ;
+
+function supabaseRequest(endpoint, method, body, token) {
+  return fetch(SUPABASE_URL + endpoint, {
+    method: method || 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY)
+    },
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function(r) { return r.json(); });
+}
+
+// ── AUTH CHECK ──
+var currentUser = null;
+var currentSession = null;
+
+function getSession() {
+  try {
+    var s = localStorage.getItem('healix_session');
+    return s ? JSON.parse(s) : null;
+  } catch(e) { return null; }
+}
+
+function getTimeGreeting() {
+  var h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function updateWelcomeName(name) {
+  var firstName = name ? name.split(' ')[0] : 'there';
+  var titleEl = document.getElementById('welcome-title');
+  var nameEl = document.getElementById('welcome-name');
+  var avatarEl = document.getElementById('topbar-avatar');
+  if (nameEl) nameEl.textContent = firstName + '.';
+  if (titleEl) titleEl.innerHTML = getTimeGreeting() + ',<br><em id="welcome-name">' + firstName + '.</em>';
+  if (avatarEl) avatarEl.textContent = firstName.charAt(0).toUpperCase();
+}
+
+async function loadUserProfile() {
+  var session = getSession();
+  if (!session || !session.access_token) {
+    // Not logged in — redirect to login
+    window.location.href = 'login.html';
+    return;
+  }
+  currentSession = session;
+
+  // Get user from Supabase auth
+  try {
+    var userData = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
+    if (userData && userData.id) {
+      currentUser = userData;
+      // Try to get full name from user metadata first
+      var name = userData.user_metadata && userData.user_metadata.full_name;
+      if (name) {
+        updateWelcomeName(name);
+      } else {
+        // Fall back to profiles table
+        var profile = await supabaseRequest(
+          '/rest/v1/profiles?auth_user_id=eq.' + userData.id + '&select=*&limit=1',
+          'GET', null, session.access_token
+        );
+        if (profile && profile[0]) {
+          updateWelcomeName(profile[0].email || profile[0].primary_goal || '');
+        } else {
+          // Use email as fallback
+          updateWelcomeName(userData.email ? userData.email.split('@')[0] : 'there');
+        }
+      }
+    } else {
+      // Invalid session
+      localStorage.removeItem('healix_session');
+      window.location.href = 'login.html';
+    }
+  } catch(e) {
+    console.error('Profile load error:', e);
+    updateWelcomeName('there');
+  }
+}
+
+// Load profile on page start
+loadUserProfile();
+
+// ── HEALTH DATA LOADING ──
+async function loadHealthData() {
+  var session = getSession();
+  if (!session || !session.access_token) return;
+  var token = session.access_token;
+
+  // Get date range — today and 7 days ago
+  var today = new Date();
+  var sevenDaysAgo = new Date(today);
+  sevenDaysAgo.setDate(today.getDate() - 7);
+  var todayStr = today.toISOString().split('T')[0];
+  var sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+  var yesterdayStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0];
+
+  try {
+    // Fetch last 7 days of health samples
+    var params = new URLSearchParams({
+      select: 'metric_type,start_date,end_date,value',
+      start_date: 'gte.' + sevenDaysAgoStr,
+      order: 'start_date.desc'
+    });
+
+    var data = await supabaseRequest(
+      '/rest/v1/apple_health_samples?' + params.toString(),
+      'GET', null, token
+    );
+
+    if (!data || data.error) {
+      console.error('Health data error:', data);
+      setStatFallback();
+      return;
+    }
+
+    // Group by metric_type
+    var byType = {};
+    data.forEach(function(row) {
+      if (!byType[row.metric_type]) byType[row.metric_type] = [];
+      byType[row.metric_type].push(row);
+    });
+
+    // ── SLEEP ──
+    var sleepData = byType['sleep'] || byType['HKCategoryTypeIdentifierSleepAnalysis'] || byType['sleep_analysis'] || [];
+    if (sleepData.length > 0) {
+      // Get most recent sleep value
+      var latestSleep = sleepData[0];
+      var sleepHours = parseFloat(latestSleep.value);
+      // If value is in seconds, convert to hours
+      if (sleepHours > 24) sleepHours = sleepHours / 3600;
+      sleepHours = Math.round(sleepHours * 10) / 10;
+
+      // Calculate 7-day avg
+      var sleepAvg = sleepData.reduce(function(sum, r) {
+        var v = parseFloat(r.value);
+        if (v > 24) v = v / 3600;
+        return sum + v;
+      }, 0) / sleepData.length;
+      sleepAvg = Math.round(sleepAvg * 10) / 10;
+
+      var sleepDiff = Math.round((sleepHours - sleepAvg) * 10) / 10;
+      document.getElementById('stat-sleep').innerHTML = sleepHours + '<span style="font-size:13px;color:var(--muted)">h</span>';
+      var sleepDeltaEl = document.getElementById('stat-sleep-delta');
+      if (Math.abs(sleepDiff) < 0.1) {
+        sleepDeltaEl.textContent = '— avg ' + sleepAvg + 'h';
+        sleepDeltaEl.className = 'stat-card-delta neutral';
+      } else if (sleepDiff > 0) {
+        sleepDeltaEl.textContent = '↑ +' + sleepDiff + 'h vs avg';
+        sleepDeltaEl.className = 'stat-card-delta up';
+      } else {
+        sleepDeltaEl.textContent = '↓ ' + sleepDiff + 'h vs avg';
+        sleepDeltaEl.className = 'stat-card-delta down';
+      }
+    } else {
+      document.getElementById('stat-sleep').textContent = '—';
+      document.getElementById('stat-sleep-delta').textContent = 'No data';
+    }
+
+    // ── STEPS ──
+    var stepsData = byType['steps'] || byType['HKQuantityTypeIdentifierStepCount'] || byType['step_count'] || [];
+    if (stepsData.length > 0) {
+      // Sum today's steps
+      var todaySteps = stepsData
+        .filter(function(r) { return r.start_date && r.start_date.startsWith(todayStr); })
+        .reduce(function(sum, r) { return sum + parseFloat(r.value || 0); }, 0);
+
+      // If no today data, use most recent day
+      if (todaySteps === 0 && stepsData.length > 0) {
+        var mostRecentDate = stepsData[0].start_date ? stepsData[0].start_date.split('T')[0] : '';
+        todaySteps = stepsData
+          .filter(function(r) { return r.start_date && r.start_date.startsWith(mostRecentDate); })
+          .reduce(function(sum, r) { return sum + parseFloat(r.value || 0); }, 0);
+      }
+
+      var stepsDisplay = todaySteps >= 1000
+        ? (Math.round(todaySteps / 100) / 10) + '<span style="font-size:13px;color:var(--muted)">k</span>'
+        : Math.round(todaySteps).toString();
+
+      document.getElementById('stat-steps').innerHTML = stepsDisplay;
+
+      // 7-day daily avg
+      var stepsAvg = stepsData.reduce(function(sum, r) { return sum + parseFloat(r.value || 0); }, 0) / 7;
+      var stepsDiff = Math.round(((todaySteps - stepsAvg) / stepsAvg) * 100);
+      var stepsDeltaEl = document.getElementById('stat-steps-delta');
+      if (Math.abs(stepsDiff) < 5) {
+        stepsDeltaEl.textContent = '— avg pace';
+        stepsDeltaEl.className = 'stat-card-delta neutral';
+      } else if (stepsDiff > 0) {
+        stepsDeltaEl.textContent = '↑ +' + stepsDiff + '% vs avg';
+        stepsDeltaEl.className = 'stat-card-delta up';
+      } else {
+        stepsDeltaEl.textContent = '↓ ' + stepsDiff + '% vs avg';
+        stepsDeltaEl.className = 'stat-card-delta down';
+      }
+
+      // Update mini chart with steps data
+      updateMiniChart(stepsData, 'STEPS');
+    } else {
+      document.getElementById('stat-steps').textContent = '—';
+      document.getElementById('stat-steps-delta').textContent = 'No data';
+    }
+
+    // ── HEART RATE ──
+    var hrData = byType['heart_rate'] || byType['HKQuantityTypeIdentifierHeartRate'] || byType['resting_heart_rate'] || [];
+    if (hrData.length > 0) {
+      var latestHR = Math.round(parseFloat(hrData[0].value));
+      var hrAvg = Math.round(hrData.reduce(function(sum, r) { return sum + parseFloat(r.value || 0); }, 0) / hrData.length);
+      var hrDiff = latestHR - hrAvg;
+
+      document.getElementById('stat-hr').innerHTML = latestHR + '<span style="font-size:13px;color:var(--muted)">bpm</span>';
+      var hrDeltaEl = document.getElementById('stat-hr-delta');
+      if (Math.abs(hrDiff) <= 2) {
+        hrDeltaEl.textContent = '— avg ' + hrAvg + 'bpm';
+        hrDeltaEl.className = 'stat-card-delta neutral';
+      } else if (hrDiff < 0) {
+        // Lower HR is generally better for resting
+        hrDeltaEl.textContent = '↓ ' + hrDiff + ' vs avg';
+        hrDeltaEl.className = 'stat-card-delta up';
+      } else {
+        hrDeltaEl.textContent = '↑ +' + hrDiff + ' vs avg';
+        hrDeltaEl.className = 'stat-card-delta down';
+      }
+    } else {
+      document.getElementById('stat-hr').textContent = '—';
+      document.getElementById('stat-hr-delta').textContent = 'No data';
+    }
+
+    // ── ACTIVE CALORIES ──
+    var calData = byType['active_energy'] || byType['HKQuantityTypeIdentifierActiveEnergyBurned'] || byType['active_calories'] || [];
+    if (calData.length > 0) {
+      var todayCal = calData
+        .filter(function(r) { return r.start_date && r.start_date.startsWith(todayStr); })
+        .reduce(function(sum, r) { return sum + parseFloat(r.value || 0); }, 0);
+      if (todayCal === 0) {
+        todayCal = parseFloat(calData[0].value || 0);
+      }
+      todayCal = Math.round(todayCal);
+      var calAvg = Math.round(calData.reduce(function(sum, r) { return sum + parseFloat(r.value || 0); }, 0) / 7);
+      var calDiff = Math.round(((todayCal - calAvg) / Math.max(calAvg, 1)) * 100);
+
+      document.getElementById('stat-cal').innerHTML = todayCal + '<span style="font-size:13px;color:var(--muted)">kcal</span>';
+      var calDeltaEl = document.getElementById('stat-cal-delta');
+      if (Math.abs(calDiff) < 5) {
+        calDeltaEl.textContent = '— avg ' + calAvg;
+        calDeltaEl.className = 'stat-card-delta neutral';
+      } else if (calDiff > 0) {
+        calDeltaEl.textContent = '↑ +' + calDiff + '% vs avg';
+        calDeltaEl.className = 'stat-card-delta up';
+      } else {
+        calDeltaEl.textContent = '↓ ' + calDiff + '% vs avg';
+        calDeltaEl.className = 'stat-card-delta down';
+      }
+    } else {
+      document.getElementById('stat-cal').textContent = '—';
+      document.getElementById('stat-cal-delta').textContent = 'No data';
+    }
+
+  } catch(e) {
+    console.error('Health data load error:', e);
+    setStatFallback();
+  }
+}
+
+function setStatFallback() {
+  ['sleep','steps','hr','cal'].forEach(function(id) {
+    var el = document.getElementById('stat-' + id);
+    var delta = document.getElementById('stat-' + id + '-delta');
+    if (el) el.textContent = '—';
+    if (delta) { delta.textContent = 'No data'; delta.className = 'stat-card-delta neutral'; }
+  });
+}
+
+function updateMiniChart(data, label) {
+  // Group by day and sum values
+  var dayMap = {};
+  data.forEach(function(r) {
+    var day = r.start_date ? r.start_date.split('T')[0] : null;
+    if (!day) return;
+    dayMap[day] = (dayMap[day] || 0) + parseFloat(r.value || 0);
+  });
+  var days = Object.keys(dayMap).sort().slice(-7);
+  var values = days.map(function(d) { return dayMap[d]; });
+  var maxVal = Math.max.apply(null, values) || 1;
+  var bars = document.querySelectorAll('#mini-chart .mini-bar');
+  var today = new Date().toISOString().split('T')[0];
+  bars.forEach(function(bar, i) {
+    var val = values[i] || 0;
+    var pct = Math.max(8, Math.round((val / maxVal) * 100));
+    bar.style.height = pct + '%';
+    bar.classList.toggle('today', days[i] === today);
+  });
+  var chartLabel = document.getElementById('chart-label');
+  if (chartLabel) chartLabel.textContent = label + ' — LAST 7 DAYS';
+}
+
+// ── MEAL DATA LOADING ──
+async function loadMealData() {
+  var session = getSession();
+  if (!session || !session.access_token) return;
+  var token = session.access_token;
+
+  var sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  try {
+    var params = new URLSearchParams({
+      select: 'id,name,meal_type,calories,logged_at,created_at',
+      order: 'logged_at.desc,created_at.desc',
+      limit: '5'
+    });
+
+    var meals = await supabaseRequest(
+      '/rest/v1/meals?' + params.toString(),
+      'GET', null, token
+    );
+
+    var list = document.getElementById('meal-list');
+    if (!list) return;
+
+    if (!meals || meals.error || meals.length === 0) {
+      list.innerHTML = '<div class="sidebar-empty">No meals logged yet</div>';
+      return;
+    }
+
+    var mealEmojis = { breakfast: '🍳', lunch: '🥗', dinner: '🍽', snack: '🍎', default: '🥘' };
+    var today = new Date().toDateString();
+    var yesterday = new Date(Date.now() - 86400000).toDateString();
+
+    list.innerHTML = meals.map(function(meal) {
+      var dt = new Date(meal.logged_at || meal.created_at);
+      var dateStr = dt.toDateString() === today ? 'Today'
+        : dt.toDateString() === yesterday ? 'Yesterday'
+        : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var timeStr = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      var emoji = mealEmojis[meal.meal_type] || mealEmojis.default;
+      var cals = meal.calories ? Math.round(meal.calories) : '—';
+      return '<div class="meal-item">'
+        + '<div class="meal-emoji">' + emoji + '</div>'
+        + '<div class="meal-info">'
+        + '<div class="meal-name">' + (meal.name || 'Meal') + '</div>'
+        + '<div class="meal-time">' + (meal.meal_type ? meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1) : '') + ' · ' + dateStr + ' ' + timeStr + '</div>'
+        + '</div>'
+        + '<div class="meal-cals">' + cals + '</div>'
+        + '</div>';
+    }).join('');
+  } catch(e) {
+    console.error('Meal load error:', e);
+    document.getElementById('meal-list').innerHTML = '<div class="sidebar-empty">Could not load meals</div>';
+  }
+}
+
+// Load health + meal data after auth
+setTimeout(function() {
+  loadHealthData();
+  loadMealData();
+}, 500);
+
 // ── CONTEXT CHIPS ──
 document.querySelectorAll('.ctx-chip').forEach(function(chip) {
   chip.addEventListener('click', function() {
