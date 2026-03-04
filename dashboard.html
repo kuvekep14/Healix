@@ -1246,16 +1246,33 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('Health load error:', e); }
 
-  // Meals
+  // Meals — fetch meal_logs + nutrients joined
   try {
-    var meals = await supabaseRequest(
-      '/rest/v1/meals?select=id,name,meal_type,calories,protein,carbohydrates,fat,logged_at,created_at&order=logged_at.desc,created_at.desc&limit=10',
+    var daysAgoMeal = new Date(); daysAgoMeal.setDate(daysAgoMeal.getDate() - currentTimeframe);
+    var mealLogs = await supabaseRequest(
+      '/rest/v1/meal_logs?select=id,meal_type,meal_time,meal_description,created_at&order=meal_time.desc,created_at.desc&limit=20',
       'GET', null, token
     );
-    if (meals && !meals.error) {
-      renderDashMeals(meals, today);
-      renderMacros(meals, today);
-      renderMicronutrients(meals, today);
+    if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
+      // Get nutrients for today's meals
+      var todayMealIds = mealLogs
+        .filter(function(m) {
+          var d = new Date(m.meal_time || m.created_at).toISOString().split('T')[0];
+          return d === today;
+        })
+        .map(function(m) { return m.id; });
+
+      var nutrients = [];
+      if (todayMealIds.length > 0) {
+        var nutrientData = await supabaseRequest(
+          '/rest/v1/meal_nutrient?meal_log_id=in.(' + todayMealIds.join(',') + ')&select=meal_log_id,category,name,value,unit',
+          'GET', null, token
+        );
+        if (nutrientData && !nutrientData.error) nutrients = nutrientData;
+      }
+      renderDashMeals(mealLogs, today);
+      renderMacrosFromNutrients(nutrients);
+      renderMicronutrientsFromNutrients(nutrients);
     }
   } catch(e) { console.error('Meal load error:', e); }
 
@@ -1274,14 +1291,15 @@ async function loadDashboardData() {
 
 function renderHealthStats(byType, today) {
   // Sleep
-  var sleepKeys = ['sleep', 'HKCategoryTypeIdentifierSleepAnalysis', 'sleep_analysis', 'asleep'];
+  var sleepKeys = ['sleep_analysis'];
   var sleepData = [];
   sleepKeys.forEach(function(k) { if (byType[k]) sleepData = sleepData.concat(byType[k]); });
   if (sleepData.length > 0) {
+    // sleep_analysis stored in seconds
     var v = parseFloat(sleepData[0].value);
-    if (v > 24) v = v / 3600;
+    if (v > 100) v = v / 3600; // convert seconds to hours
     v = Math.round(v * 10) / 10;
-    var avg = sleepData.reduce(function(s, r) { var x=parseFloat(r.value); if(x>24)x=x/3600; return s+x; }, 0) / sleepData.length;
+    var avg = sleepData.reduce(function(s, r) { var x=parseFloat(r.value); if(x>100)x=x/3600; return s+x; }, 0) / sleepData.length;
     avg = Math.round(avg * 10) / 10;
     var diff = Math.round((v - avg) * 10) / 10;
     document.getElementById('d-sleep').innerHTML = v + '<span class="stat-item-unit">h</span>';
@@ -1290,14 +1308,17 @@ function renderHealthStats(byType, today) {
     el.className = 'stat-item-delta ' + (diff > 0 ? 'delta-up' : diff < 0 ? 'delta-down' : 'delta-neutral');
   }
 
-  // Steps
-  var stepsKeys = ['steps', 'HKQuantityTypeIdentifierStepCount', 'step_count'];
+  // Steps - unit: steps, sum all entries for today
+  var stepsKeys = ['step_count'];
   var stepsData = [];
   stepsKeys.forEach(function(k) { if (byType[k]) stepsData = stepsData.concat(byType[k]); });
   if (stepsData.length > 0) {
     var todaySteps = stepsData.filter(function(r) { return r.start_date && r.start_date.startsWith(today); })
       .reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0);
-    if (todaySteps === 0) todaySteps = parseFloat(stepsData[0].value || 0);
+    if (todaySteps === 0) todaySteps = stepsData
+      .filter(function(r) { return r.start_date; })
+      .slice(0, 3)
+      .reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0);
     document.getElementById('d-steps').innerHTML = todaySteps >= 1000
       ? (Math.round(todaySteps / 100) / 10) + '<span class="stat-item-unit">k</span>'
       : Math.round(todaySteps).toString();
@@ -1310,7 +1331,7 @@ function renderHealthStats(byType, today) {
   }
 
   // HR
-  var hrKeys = ['heart_rate', 'HKQuantityTypeIdentifierHeartRate', 'resting_heart_rate'];
+  var hrKeys = ['resting_heart_rate', 'walking_heart_rate_average', 'heart_rate'];
   var hrData = [];
   hrKeys.forEach(function(k) { if (byType[k]) hrData = hrData.concat(byType[k]); });
   if (hrData.length > 0) {
@@ -1323,14 +1344,17 @@ function renderHealthStats(byType, today) {
     hel.className = 'stat-item-delta ' + (Math.abs(hd) <= 2 ? 'delta-neutral' : hd > 0 ? 'delta-down' : 'delta-up');
   }
 
-  // Active calories
-  var calKeys = ['active_energy', 'HKQuantityTypeIdentifierActiveEnergyBurned', 'active_calories'];
+  // Active calories - unit: kcal, sum today entries
+  var calKeys = ['active_energy_burned'];
   var calData = [];
   calKeys.forEach(function(k) { if (byType[k]) calData = calData.concat(byType[k]); });
   if (calData.length > 0) {
     var tc = calData.filter(function(r) { return r.start_date && r.start_date.startsWith(today); })
       .reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0);
-    if (tc === 0) tc = parseFloat(calData[0].value || 0);
+    if (tc === 0) tc = calData
+      .filter(function(r) { return r.start_date; })
+      .slice(0, 3)
+      .reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0);
     tc = Math.round(tc);
     document.getElementById('d-cal').innerHTML = tc + '<span class="stat-item-unit">kcal</span>';
     var ca = Math.round(calData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / currentTimeframe);
@@ -1360,7 +1384,7 @@ function updateMiniChart(id, data, today) {
 
 function renderDashMeals(meals, today) {
   var todayMeals = meals.filter(function(m) {
-    var d = new Date(m.logged_at || m.created_at).toISOString().split('T')[0];
+    var d = new Date(m.meal_time || m.created_at).toISOString().split('T')[0];
     return d === today;
   });
   var el = document.getElementById('d-meals');
@@ -1370,81 +1394,134 @@ function renderDashMeals(meals, today) {
     return;
   }
   el.innerHTML = todayMeals.slice(0, 4).map(function(m) {
-    var t = new Date(m.logged_at || m.created_at);
+    var t = new Date(m.meal_time || m.created_at);
+    var mealType = (m.meal_type || '').toLowerCase();
     return '<div class="meal-row">'
-      + '<div class="meal-emoji">' + (emojis[m.meal_type] || '🥘') + '</div>'
-      + '<div class="meal-info"><div class="meal-name">' + (m.name || 'Meal') + '</div>'
+      + '<div class="meal-emoji">' + (emojis[mealType] || '🥘') + '</div>'
+      + '<div class="meal-info"><div class="meal-name">' + (m.meal_description || 'Meal') + '</div>'
       + '<div class="meal-meta">' + (m.meal_type || '') + ' · ' + t.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}) + '</div></div>'
-      + '<div class="meal-cals">' + (m.calories ? Math.round(m.calories) : '—') + '</div>'
+      + '<div class="meal-cals">—</div>'
       + '</div>';
   }).join('');
 }
 
-function renderMacros(meals, today) {
-  var todayMeals = meals.filter(function(m) {
-    return new Date(m.logged_at || m.created_at).toISOString().split('T')[0] === today;
+function renderMacrosFromNutrients(nutrients) {
+  // Sum macros per meal first to avoid double-counting across categories
+  var macroByMeal = {};
+  nutrients.forEach(function(n) {
+    if (!macroByMeal[n.meal_log_id]) macroByMeal[n.meal_log_id] = {};
+    var key = n.name;
+    var val = parseFloat(n.value || 0);
+    // For macros, prefer Macronutrients category values
+    if (n.category === 'Macronutrients' || !macroByMeal[n.meal_log_id][key]) {
+      macroByMeal[n.meal_log_id][key] = val;
+    }
   });
-  var cal = 0, prot = 0, carbs = 0, fat = 0;
-  todayMeals.forEach(function(m) {
-    cal += parseFloat(m.calories || 0);
-    prot += parseFloat(m.protein || 0);
-    carbs += parseFloat(m.carbohydrates || m.carbs || 0);
-    fat += parseFloat(m.fat || 0);
+  var totals = {};
+  Object.values(macroByMeal).forEach(function(m) {
+    Object.keys(m).forEach(function(k) { totals[k] = (totals[k] || 0) + m[k]; });
   });
-  cal = Math.round(cal); prot = Math.round(prot); carbs = Math.round(carbs); fat = Math.round(fat);
+
+  var cal   = Math.round(totals['Calories'] || totals['Energy'] || 0);
+  var prot  = Math.round(totals['Protein'] || totals['Proteins'] || 0);
+  var carbs = Math.round(totals['Carbohydrates'] || totals['Total Carbohydrates'] || 0);
+  var fat   = Math.round(totals['Total Fat'] || totals['Fat'] || totals['Fats'] || 0);
   var total = prot + carbs + fat || 1;
-  document.getElementById('m-cal').textContent = cal || '—';
+
+  document.getElementById('m-cal').textContent     = cal || '—';
   document.getElementById('m-protein').textContent = prot || '—';
-  document.getElementById('m-carbs').textContent = carbs || '—';
-  document.getElementById('m-fat').textContent = fat || '—';
+  document.getElementById('m-carbs').textContent   = carbs || '—';
+  document.getElementById('m-fat').textContent     = fat || '—';
+
   document.getElementById('m-protein-pct').textContent = Math.round(prot/total*100) + '%';
-  document.getElementById('m-carbs-pct').textContent = Math.round(carbs/total*100) + '%';
-  document.getElementById('m-fat-pct').textContent = Math.round(fat/total*100) + '%';
+  document.getElementById('m-carbs-pct').textContent   = Math.round(carbs/total*100) + '%';
+  document.getElementById('m-fat-pct').textContent     = Math.round(fat/total*100) + '%';
   document.getElementById('m-protein-bar').style.width = Math.round(prot/total*100) + '%';
-  document.getElementById('m-carbs-bar').style.width = Math.round(carbs/total*100) + '%';
-  document.getElementById('m-fat-bar').style.width = Math.round(fat/total*100) + '%';
-  // Also update meals page
+  document.getElementById('m-carbs-bar').style.width   = Math.round(carbs/total*100) + '%';
+  document.getElementById('m-fat-bar').style.width     = Math.round(fat/total*100) + '%';
+
   document.getElementById('mp-cal').textContent = cal || '—';
   document.getElementById('mp-protein').innerHTML = (prot || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-carbs').innerHTML = (carbs || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-fat').innerHTML = (fat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-carbs').innerHTML   = (carbs || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-fat').innerHTML     = (fat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
 }
 
-function renderMicronutrients(meals, today) {
-  var todayMeals = meals.filter(function(m) {
-    return new Date(m.logged_at || m.created_at).toISOString().split('T')[0] === today;
+function renderMicronutrientsFromNutrients(nutrients) {
+  if (nutrients.length === 0) return;
+
+  // Canonical nutrient definitions with RDA
+  var rdas = {
+    'Vitamin C':         { rda: 90,   unit: 'mg',  display: 'Vitamin C' },
+    'Vitamin A':         { rda: 900,  unit: 'mcg', display: 'Vitamin A' },
+    'Vitamin E':         { rda: 15,   unit: 'mg',  display: 'Vitamin E' },
+    'Vitamin D':         { rda: 20,   unit: 'mcg', display: 'Vitamin D' },
+    'Vitamin K':         { rda: 120,  unit: 'mcg', display: 'Vitamin K' },
+    'Vitamin B12':       { rda: 2.4,  unit: 'mcg', display: 'Vitamin B12' },
+    'Vitamin B6':        { rda: 1.7,  unit: 'mg',  display: 'Vitamin B6' },
+    'Thiamin':           { rda: 1.2,  unit: 'mg',  display: 'Thiamin (B1)' },
+    'Riboflavin':        { rda: 1.3,  unit: 'mg',  display: 'Riboflavin (B2)' },
+    'Niacin':            { rda: 16,   unit: 'mg',  display: 'Niacin (B3)' },
+    'Folate':            { rda: 400,  unit: 'mcg', display: 'Folate' },
+    'Folic Acid':        { rda: 400,  unit: 'mcg', display: 'Folate' },
+    'Biotin':            { rda: 30,   unit: 'mcg', display: 'Biotin' },
+    'Calcium':           { rda: 1000, unit: 'mg',  display: 'Calcium' },
+    'Iron':              { rda: 18,   unit: 'mg',  display: 'Iron' },
+    'Magnesium':         { rda: 400,  unit: 'mg',  display: 'Magnesium' },
+    'Potassium':         { rda: 4700, unit: 'mg',  display: 'Potassium' },
+    'Zinc':              { rda: 11,   unit: 'mg',  display: 'Zinc' },
+    'Sodium':            { rda: 2300, unit: 'mg',  display: 'Sodium' },
+    'Phosphorus':        { rda: 700,  unit: 'mg',  display: 'Phosphorus' },
+    'Selenium':          { rda: 55,   unit: 'mcg', display: 'Selenium' },
+    'Copper':            { rda: 0.9,  unit: 'mg',  display: 'Copper' },
+    'Manganese':         { rda: 2.3,  unit: 'mg',  display: 'Manganese' },
+    'Chromium':          { rda: 35,   unit: 'mcg', display: 'Chromium' },
+    'Iodine':            { rda: 150,  unit: 'mcg', display: 'Iodine' },
+    'Omega-3':           { rda: 1.6,  unit: 'g',   display: 'Omega-3' },
+    'Choline':           { rda: 550,  unit: 'mg',  display: 'Choline' },
+    'Dietary Fiber':     { rda: 28,   unit: 'g',   display: 'Fiber' },
+    'Fiber':             { rda: 28,   unit: 'g',   display: 'Fiber' },
+    'Leucine':           { rda: 2.7,  unit: 'g',   display: 'Leucine' },
+    'Lysine':            { rda: 2.1,  unit: 'g',   display: 'Lysine' },
+    'Isoleucine':        { rda: 1.4,  unit: 'g',   display: 'Isoleucine' },
+    'Valine':            { rda: 1.8,  unit: 'g',   display: 'Valine' },
+    'Tryptophan':        { rda: 0.28, unit: 'g',   display: 'Tryptophan' },
+  };
+
+  // Deduplicate: only count each canonical nutrient once per meal
+  // Group nutrients by meal_log_id first, then sum
+  var mealTotals = {};
+  nutrients.forEach(function(n) {
+    if (!rdas[n.name]) return;
+    var display = rdas[n.name].display;
+    if (!mealTotals[n.meal_log_id]) mealTotals[n.meal_log_id] = {};
+    // Only take the highest value if same nutrient appears in multiple categories for same meal
+    var existing = mealTotals[n.meal_log_id][display] || 0;
+    var val = parseFloat(n.value || 0);
+    if (val > existing) mealTotals[n.meal_log_id][display] = val;
   });
-  if (todayMeals.length === 0) return;
 
-  // Key micros to display with daily RDA targets
-  var micros = [
-    { key: 'vitamin_c', label: 'Vitamin C', rda: 90, unit: 'mg' },
-    { key: 'vitamin_d', label: 'Vitamin D', rda: 20, unit: 'mcg' },
-    { key: 'iron', label: 'Iron', rda: 18, unit: 'mg' },
-    { key: 'calcium', label: 'Calcium', rda: 1000, unit: 'mg' },
-    { key: 'magnesium', label: 'Magnesium', rda: 400, unit: 'mg' },
-    { key: 'potassium', label: 'Potassium', rda: 4700, unit: 'mg' },
-    { key: 'zinc', label: 'Zinc', rda: 11, unit: 'mg' },
-    { key: 'fiber', label: 'Fiber', rda: 28, unit: 'g' },
-  ];
-
+  // Sum across meals
   var totals = {};
-  micros.forEach(function(m) { totals[m.key] = 0; });
-  todayMeals.forEach(function(meal) {
-    micros.forEach(function(m) {
-      totals[m.key] += parseFloat(meal[m.key] || 0);
+  Object.values(mealTotals).forEach(function(mealNutrients) {
+    Object.keys(mealNutrients).forEach(function(display) {
+      totals[display] = (totals[display] || 0) + mealNutrients[display];
     });
   });
 
-  var hasAnyData = micros.some(function(m) { return totals[m.key] > 0; });
-  if (!hasAnyData) return;
+  var keys = Object.keys(totals);
+  if (keys.length === 0) return;
+
+  // Build RDA lookup by display name
+  var rdaByDisplay = {};
+  Object.values(rdas).forEach(function(r) { rdaByDisplay[r.display] = r.rda; });
 
   var grid = document.getElementById('micro-grid');
-  grid.innerHTML = micros.map(function(m) {
-    var pct = Math.min(100, Math.round((totals[m.key] / m.rda) * 100));
+  grid.innerHTML = keys.map(function(name) {
+    var rda = rdaByDisplay[name] || 1;
+    var pct = Math.min(100, Math.round((totals[name] / rda) * 100));
     var cls = pct < 30 ? 'low' : pct >= 80 ? 'good' : '';
     return '<div class="micro-item">'
-      + '<div class="micro-label"><span>' + m.label + '</span><span class="micro-pct">' + pct + '%</span></div>'
+      + '<div class="micro-label"><span>' + name + '</span><span class="micro-pct">' + pct + '%</span></div>'
       + '<div class="micro-track"><div class="micro-fill ' + cls + '" style="width:' + pct + '%"></div></div>'
       + '</div>';
   }).join('');
@@ -1532,39 +1609,59 @@ async function saveWeight() {
 async function loadMealsPage() {
   if (!currentUser) return;
   var today = new Date().toISOString().split('T')[0];
-  var daysAgo = new Date(); daysAgo.setDate(daysAgo.getDate() - currentTimeframe);
+  var yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+  var yesterdayStr = yesterday.toISOString().split('T')[0];
   try {
     var meals = await supabaseRequest(
-      '/rest/v1/meals?select=*&order=logged_at.desc,created_at.desc&limit=30',
+      '/rest/v1/meal_logs?select=id,meal_type,meal_time,meal_description,created_at&order=meal_time.desc,created_at.desc&limit=30',
       'GET', null, currentSession.access_token
     );
-    if (meals && !meals.error) {
-      var list = document.getElementById('meals-list');
-      var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
-      var yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-      var yesterdayStr = yesterday.toISOString().split('T')[0];
-      if (meals.length === 0) {
-        list.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>';
-        return;
-      }
-      list.innerHTML = meals.map(function(m) {
-        var dt = new Date(m.logged_at || m.created_at);
-        var dayStr = dt.toISOString().split('T')[0];
-        var dateLabel = dayStr === today ? 'Today' : dayStr === yesterdayStr ? 'Yesterday' : dt.toLocaleDateString('en-US', {month:'short',day:'numeric'});
-        return '<div class="meal-card">'
-          + '<div class="meal-card-emoji">' + (emojis[m.meal_type] || '🥘') + '</div>'
-          + '<div class="meal-card-info">'
-          + '<div class="meal-card-name">' + (m.name || 'Meal') + '</div>'
-          + '<div class="meal-card-time">' + (m.meal_type ? m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1) : '') + ' · ' + dateLabel + ' ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
-          + '<div class="meal-card-macros">'
-          + (m.protein ? '<div class="meal-card-macro">P <span>' + Math.round(m.protein) + 'g</span></div>' : '')
-          + (m.carbohydrates || m.carbs ? '<div class="meal-card-macro">C <span>' + Math.round(m.carbohydrates || m.carbs) + 'g</span></div>' : '')
-          + (m.fat ? '<div class="meal-card-macro">F <span>' + Math.round(m.fat) + 'g</span></div>' : '')
-          + '</div></div>'
-          + '<div class="meal-card-cals">' + (m.calories ? Math.round(m.calories) : '—') + '</div>'
-          + '</div>';
-      }).join('');
+    if (!meals || meals.error || meals.length === 0) {
+      document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>';
+      return;
     }
+
+    // Fetch nutrients for all these meals
+    var ids = meals.map(function(m) { return m.id; }).join(',');
+    var nutrients = await supabaseRequest(
+      '/rest/v1/meal_nutrient?meal_log_id=in.(' + ids + ')&select=meal_log_id,name,value,unit',
+      'GET', null, currentSession.access_token
+    );
+
+    // Group nutrients by meal_log_id
+    var nutrientsByMeal = {};
+    if (nutrients && !nutrients.error) {
+      nutrients.forEach(function(n) {
+        if (!nutrientsByMeal[n.meal_log_id]) nutrientsByMeal[n.meal_log_id] = {};
+        nutrientsByMeal[n.meal_log_id][n.name] = parseFloat(n.value || 0);
+      });
+    }
+
+    var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
+    var list = document.getElementById('meals-list');
+    list.innerHTML = meals.map(function(m) {
+      var dt = new Date(m.meal_time || m.created_at);
+      var dayStr = dt.toISOString().split('T')[0];
+      var dateLabel = dayStr === today ? 'Today' : dayStr === yesterdayStr ? 'Yesterday' : dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+      var mealType = (m.meal_type || '').toLowerCase();
+      var n = nutrientsByMeal[m.id] || {};
+      var cal  = n['Calories'] ? Math.round(n['Calories']) : null;
+      var prot = n['Protein'] ? Math.round(n['Protein']) : null;
+      var carb = n['Carbohydrates'] ? Math.round(n['Carbohydrates']) : null;
+      var fat  = n['Total Fat'] ? Math.round(n['Total Fat']) : null;
+      return '<div class="meal-card">'
+        + '<div class="meal-card-emoji">' + (emojis[mealType] || '🥘') + '</div>'
+        + '<div class="meal-card-info">'
+        + '<div class="meal-card-name">' + (m.meal_description || 'Meal') + '</div>'
+        + '<div class="meal-card-time">' + (m.meal_type ? m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1) : '') + ' · ' + dateLabel + ' ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
+        + '<div class="meal-card-macros">'
+        + (prot !== null ? '<div class="meal-card-macro">P <span>' + prot + 'g</span></div>' : '')
+        + (carb !== null ? '<div class="meal-card-macro">C <span>' + carb + 'g</span></div>' : '')
+        + (fat  !== null ? '<div class="meal-card-macro">F <span>' + fat  + 'g</span></div>' : '')
+        + '</div></div>'
+        + '<div class="meal-card-cals">' + (cal || '—') + '</div>'
+        + '</div>';
+    }).join('');
   } catch(e) { console.error('Meals page error:', e); }
 }
 
@@ -1577,14 +1674,12 @@ async function saveMeal() {
   var fat = document.getElementById('ml-fat').value;
   if (!name) { alert('Please enter a meal name.'); return; }
   try {
-    await supabaseRequest('/rest/v1/meals', 'POST', {
-      user_id: currentUser.id, name: name, meal_type: type,
-      calories: cals ? parseFloat(cals) : null,
-      protein: prot ? parseFloat(prot) : null,
-      carbohydrates: carbs ? parseFloat(carbs) : null,
-      fat: fat ? parseFloat(fat) : null,
-      logged_at: new Date().toISOString()
+    var mealRes = await supabaseRequest('/rest/v1/meal_logs', 'POST', {
+      user_id: currentUser.id, meal_type: type,
+      meal_description: name, meal_time: new Date().toISOString()
     }, currentSession.access_token);
+    // Note: full nutrient logging happens via mobile app AI analysis
+    // Web manual entry stores basic meal info only
     closeModal('meal-modal');
     ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
     loadDashboardData();
@@ -2354,7 +2449,7 @@ function openBenchmark(metric) {
   var valEl = document.getElementById('d-' + (metric === 'heart_rate' ? 'hr' : metric === 'active_cal' ? 'cal' : metric));
   var rawVal = valEl ? parseFloat(valEl.textContent) : null;
   if (!rawVal) { rawVal = 0; }
-  if (metric === 'steps' && rawVal < 100) rawVal = rawVal * 1000; // convert k back
+  if (metric === 'steps' && rawVal < 500) rawVal = rawVal * 1000; // convert k display back to steps
 
   var age = null, sex = null;
   var dobEl = document.getElementById('p-dob');
