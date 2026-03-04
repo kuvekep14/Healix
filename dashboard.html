@@ -1305,8 +1305,12 @@ async function loadDashboardData() {
   // Meals — fetch meal_logs + nutrients joined
   try {
     var daysAgoMeal = new Date(); daysAgoMeal.setDate(daysAgoMeal.getDate() - currentTimeframe);
+    var dashDate = pageSelectedDate['dashboard'] || new Date();
+    var dashDateStr = dashDate.toISOString().split('T')[0];
+    var dashStart = dashDateStr + 'T00:00:00.000Z';
+    var dashEnd   = dashDateStr + 'T23:59:59.999Z';
     var mealLogs = await supabaseRequest(
-      '/rest/v1/meal_logs?select=id,meal_type,meal_time,meal_description,created_at&order=meal_time.desc,created_at.desc&limit=20',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + dashStart + '&meal_time=lte.' + dashEnd + '&order=meal_time.desc,created_at.desc&limit=20',
       'GET', null, token
     );
     if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
@@ -1682,18 +1686,17 @@ async function loadMealsPage() {
   updateDateNav('meals');
 
   // Build date filter - show selected day
-  var dayStart = today + 'T00:00:00.000Z';
-  var dayEnd   = today + 'T23:59:59.999Z';
+  var dayEnd = today + 'T23:59:59.999Z';
 
-  // For timeframe view, expand range
-  var daysBack = currentTimeframe > 1 ? currentTimeframe : 1;
+  // Build range: from (timeframe) days before selected date up to end of selected date
+  var daysBack = currentTimeframe;
   var rangeStart = new Date(selectedDate);
   rangeStart.setDate(rangeStart.getDate() - (daysBack - 1));
   var rangeStartStr = rangeStart.toISOString().split('T')[0] + 'T00:00:00.000Z';
 
   try {
     var meals = await supabaseRequest(
-      '/rest/v1/meal_logs?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + rangeStartStr + '&meal_time=lte.' + dayEnd + '&order=meal_time.desc,created_at.desc&limit=50',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + rangeStartStr + '&meal_time=lte.' + dayEnd + '&order=meal_time.desc,created_at.desc&limit=100',
       'GET', null, currentSession.access_token
     );
     if (!meals || meals.error || meals.length === 0) {
@@ -1754,7 +1757,7 @@ async function saveMeal() {
   var fat = document.getElementById('ml-fat').value;
   if (!name) { alert('Please enter a meal name.'); return; }
   try {
-    var mealRes = await supabaseRequest('/rest/v1/meal_logs', 'POST', {
+    var mealRes = await supabaseRequest('/rest/v1/meal_log', 'POST', {
       user_id: currentUser.id, meal_type: type,
       meal_description: name, meal_time: new Date().toISOString()
     }, currentSession.access_token);
