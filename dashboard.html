@@ -1268,7 +1268,7 @@ function showPage(id, btn) {
     document.getElementById('page-title').textContent = id === 'dashboard' ? greet() + ', ' + firstName : pageTitles[id] || id;
   }
   // Load page data
-  if (id === 'meals') { updateDateNav('meals'); loadMealsPage(); }
+  if (id === 'meals') { updateMealsDateLabel(); loadMealsPage(); }
   if (id === 'documents') loadDocumentsPage();
     if (id === 'strength') renderStrengthPage();
 }
@@ -1750,7 +1750,8 @@ function updateMealsDateLabel() {
 
   if (nextBtn) nextBtn.disabled = isToday;
   if (todayBtn) todayBtn.classList.toggle('active', isToday);
-  document.getElementById('agg-period-label').textContent = mealsView === 'week' ? 'This week' : 'This month';
+  var aggLabel = document.getElementById('agg-period-label');
+  if (aggLabel) aggLabel.textContent = mealsView === 'week' ? 'This week' : 'This month';
 }
 
 async function loadMealsPage() {
@@ -2963,8 +2964,8 @@ function updateDateNav(page) {
 
 function reloadPageData(page) {
   if (page === 'dashboard') loadDashboardData();
-  if (page === 'meals') loadMealsPage();
   if (page === 'strength') renderStrengthPage();
+  // meals has its own stepMealsDate/resetMealsDate functions
 }
 
 // ── INIT ──
