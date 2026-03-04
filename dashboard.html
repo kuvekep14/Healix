@@ -3039,7 +3039,12 @@ function updateDateNav(page) {
 function reloadPageData(page) {
   if (page === 'dashboard') loadDashboardData();
   if (page === 'strength') renderStrengthPage();
-  // meals has its own stepMealsDate/resetMealsDate functions
+  if (page === 'meals') {
+    // Sync mealsDate from the shared pageSelectedDate system, then reload
+    mealsDate = pageSelectedDate['meals'] || new Date();
+    updateMealsDateLabel();
+    loadMealsPage();
+  }
 }
 
 // ── INIT ──
