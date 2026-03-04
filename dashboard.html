@@ -785,20 +785,6 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 
         <!-- Driver cards -->
         <div class="vitality-drivers" id="va-drivers">
-          <div class="driver-card" id="drv-sleep" onclick="showPage('dashboard',null)">
-            <div class="driver-icon">◐</div>
-            <div class="driver-label">Sleep</div>
-            <div class="driver-val" id="drv-sleep-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-sleep-bar"></div></div>
-            <div class="driver-status" id="drv-sleep-status"></div>
-          </div>
-          <div class="driver-card" id="drv-activity" onclick="showPage('dashboard',null)">
-            <div class="driver-icon">◎</div>
-            <div class="driver-label">Activity</div>
-            <div class="driver-val" id="drv-activity-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-activity-bar"></div></div>
-            <div class="driver-status" id="drv-activity-status"></div>
-          </div>
           <div class="driver-card" id="drv-heart" onclick="showPage('dashboard',null)">
             <div class="driver-icon">◇</div>
             <div class="driver-label">Heart Rate</div>
@@ -806,19 +792,33 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
             <div class="driver-status" id="drv-heart-status"></div>
           </div>
-          <div class="driver-card" id="drv-nutrition" onclick="showPage('meals',null)">
-            <div class="driver-icon">◈</div>
-            <div class="driver-label">Nutrition</div>
-            <div class="driver-val" id="drv-nutrition-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-nutrition-bar"></div></div>
-            <div class="driver-status" id="drv-nutrition-status"></div>
-          </div>
           <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
             <div class="driver-icon">◉</div>
             <div class="driver-label">Weight</div>
             <div class="driver-val" id="drv-weight-val">—</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-weight-bar"></div></div>
             <div class="driver-status" id="drv-weight-status"></div>
+          </div>
+          <div class="driver-card" id="drv-strength" onclick="showPage('strength',null)">
+            <div class="driver-icon">◈</div>
+            <div class="driver-label">Strength</div>
+            <div class="driver-val" id="drv-strength-val">—</div>
+            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
+            <div class="driver-status" id="drv-strength-status"></div>
+          </div>
+          <div class="driver-card" id="drv-aerobic" onclick="showPage('dashboard',null)">
+            <div class="driver-icon">◎</div>
+            <div class="driver-label">Aerobic</div>
+            <div class="driver-val" id="drv-aerobic-val">—</div>
+            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
+            <div class="driver-status" id="drv-aerobic-status"></div>
+          </div>
+          <div class="driver-card" id="drv-bloodwork" onclick="showPage('documents',null)" style="opacity:0.6">
+            <div class="driver-icon">◐</div>
+            <div class="driver-label">Blood Work</div>
+            <div class="driver-val" id="drv-bloodwork-val" style="font-size:14px;color:var(--muted)">Not connected</div>
+            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
+            <div class="driver-status" id="drv-bloodwork-status" style="color:var(--muted)">Upload labs →</div>
           </div>
         </div>
 
@@ -1385,53 +1385,137 @@ function showPage(id, btn) {
 
 // ── LOAD DASHBOARD DATA ──
 // ── VITALITY AGE CALCULATION ──
+// Clinical model based on PhenoAge / cardiology research
+// Biomarkers only — habits are inputs, not outputs
+//
+// Weights (when all data present):
+//   Blood work:   40%  — most objective biological age signal
+//   Resting HR:   25%  — strongest single cardio mortality predictor
+//   Weight trend: 20%  — metabolic health proxy
+//   Strength:     10%  — functional capacity / muscle mass
+//   Aerobic:       5%  — VO2 proxy via active calories (placeholder until VO2 data)
+//
+// Until blood work connected, HR/weight/strength/aerobic redistribute proportionally.
+
+function scoreHR(hr) {
+  // Clinical resting HR ranges (AHA / cardiology guidelines)
+  // Elite athlete: <50, Excellent: 50-59, Good: 60-64, Average: 65-74, Poor: 75+
+  if (hr < 50)  return 100;
+  if (hr < 55)  return 90;
+  if (hr < 60)  return 78;
+  if (hr < 65)  return 63;
+  if (hr < 70)  return 50;
+  if (hr < 75)  return 37;
+  if (hr < 85)  return 22;
+  return 10;
+}
+
+function scoreWeightTrend(weightScore) {
+  // weightScore: 80 = stable/declining, 60 = neutral, 40 = gaining
+  // No free points — neutral is average, not good
+  if (weightScore >= 80) return 75;
+  if (weightScore >= 60) return 50;
+  return 25;
+}
+
+function scoreStrength(strengthData) {
+  // strengthData: { sessions7d, avgVolume } from workout logs
+  // 3+ sessions/week with progressive load = excellent
+  if (!strengthData) return null;
+  var s = strengthData.sessions7d || 0;
+  if (s >= 4) return 95;
+  if (s >= 3) return 80;
+  if (s >= 2) return 60;
+  if (s >= 1) return 40;
+  return 15;
+}
+
+function scoreAerobic(activeCal) {
+  // Active calories as VO2 proxy — rough but directional
+  // 600+ kcal/day active = excellent aerobic output
+  if (activeCal >= 700) return 100;
+  if (activeCal >= 500) return 80;
+  if (activeCal >= 350) return 62;
+  if (activeCal >= 200) return 44;
+  if (activeCal >= 100) return 28;
+  return 12;
+}
+
+function scoreBloodwork(bw) {
+  // bw: { glucose, hba1c, ldl, hdl, crp, creatinine } — parsed from documents
+  // Returns 0-100 composite or null if no data
+  if (!bw || Object.keys(bw).length === 0) return null;
+  var pts = [], max = [];
+  if (bw.glucose !== null) {
+    // Fasting glucose: <85 optimal, 85-99 normal, 100-125 pre-diabetic, 126+ diabetic
+    pts.push(bw.glucose < 85 ? 100 : bw.glucose < 100 ? 78 : bw.glucose < 126 ? 40 : 10);
+    max.push(100);
+  }
+  if (bw.hba1c !== null) {
+    pts.push(bw.hba1c < 5.2 ? 100 : bw.hba1c < 5.7 ? 80 : bw.hba1c < 6.5 ? 40 : 10);
+    max.push(100);
+  }
+  if (bw.ldl !== null) {
+    pts.push(bw.ldl < 100 ? 100 : bw.ldl < 130 ? 75 : bw.ldl < 160 ? 45 : 15);
+    max.push(100);
+  }
+  if (bw.hdl !== null) {
+    pts.push(bw.hdl >= 60 ? 100 : bw.hdl >= 40 ? 70 : 30);
+    max.push(100);
+  }
+  if (pts.length === 0) return null;
+  return Math.round(pts.reduce(function(a,b){return a+b;},0) / pts.length);
+}
+
 function calcVitalityAge(metrics) {
-  // metrics: { sleep, steps, hr, activeCal, nutritionScore, weightScore, realAge }
-  // Each dimension scores 0-100, then weighted avg adjusts from real age
   var realAge = metrics.realAge || 35;
   var scores = [];
 
-  // Sleep: 7-9h = 100, <5h or >10h = 20
-  if (metrics.sleep !== null) {
-    var s = metrics.sleep;
-    var ss = s >= 7 && s <= 9 ? 100 : s >= 6 && s < 7 ? 70 : s >= 5 && s < 6 ? 45 : s > 9 ? 65 : 20;
-    scores.push({ name: 'sleep', score: ss, weight: 0.25 });
+  // Blood work — 40% when available, redistributed when not
+  var bwScore = scoreBloodwork(metrics.bloodwork);
+  if (bwScore !== null) {
+    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.40 });
   }
-  // Steps: 10000 = 100, 0 = 0
-  if (metrics.steps !== null) {
-    var st = Math.min(metrics.steps, 15000);
-    scores.push({ name: 'steps', score: Math.round(st / 150), weight: 0.2 });
-  }
-  // HR: resting 50-65 = 100, >90 = 30
+
+  // Resting HR — 25% (or 42% without bloodwork)
   if (metrics.hr !== null) {
-    var hr = metrics.hr;
-    var hs = hr <= 60 ? 100 : hr <= 70 ? 85 : hr <= 80 ? 65 : hr <= 90 ? 45 : 25;
-    scores.push({ name: 'hr', score: hs, weight: 0.2 });
+    scores.push({ name: 'hr', label: 'Heart Rate', score: scoreHR(metrics.hr), weight: 0.25 });
   }
-  // Active calories: 500+ = 100
-  if (metrics.activeCal !== null) {
-    scores.push({ name: 'activity', score: Math.min(100, Math.round(metrics.activeCal / 5)), weight: 0.15 });
-  }
-  // Nutrition: passed in as 0-100
-  if (metrics.nutritionScore !== null) {
-    scores.push({ name: 'nutrition', score: metrics.nutritionScore, weight: 0.15 });
-  }
-  // Weight trend: passed in 0-100
+
+  // Weight trend — 20% (or 33% without bloodwork)
   if (metrics.weightScore !== null) {
-    scores.push({ name: 'weight', score: metrics.weightScore, weight: 0.05 });
+    scores.push({ name: 'weight', label: 'Weight', score: scoreWeightTrend(metrics.weightScore), weight: 0.20 });
+  }
+
+  // Strength — 10% (or 17% without bloodwork)
+  var strScore = scoreStrength(metrics.strengthData);
+  if (strScore !== null) {
+    scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.10 });
+  }
+
+  // Aerobic — 5% (or 8% without bloodwork)
+  if (metrics.activeCal !== null) {
+    scores.push({ name: 'aerobic', label: 'Aerobic', score: scoreAerobic(metrics.activeCal), weight: 0.05 });
   }
 
   if (scores.length === 0) return null;
 
-  // Normalise weights
+  // Normalise weights for missing dimensions
   var totalW = scores.reduce(function(s, d) { return s + d.weight; }, 0);
   var composite = scores.reduce(function(s, d) { return s + (d.score * d.weight / totalW); }, 0);
+  composite = Math.round(composite);
 
-  // Map composite 0-100 → age adjustment ±15 years from real age
-  // composite 100 → -15yr (younger), composite 0 → +15yr (older), 70 → baseline
-  var adjustment = Math.round(((composite - 70) / 70) * 15);
-  var vAge = Math.max(18, realAge - adjustment);
-  return { vAge: vAge, composite: Math.round(composite), scores: scores };
+  // Clinical mapping: composite 70 = real age baseline
+  // Each 5 points = ~1 year. Range ±15 years max.
+  var adjustment = Math.round((composite - 70) / 5);
+  var vAge = Math.max(18, Math.min(realAge + 20, realAge - adjustment));
+
+  return {
+    vAge: vAge,
+    composite: composite,
+    scores: scores,
+    bloodworkConnected: bwScore !== null
+  };
 }
 
 function renderVitalityAge(result, realAge) {
@@ -1503,37 +1587,57 @@ function renderDriverCards(metrics, result) {
     if (card) { card.className = 'driver-card ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : ''); }
   }
 
-  var sleepScore = metrics.sleep !== null ? (metrics.sleep >= 7 && metrics.sleep <= 9 ? 100 : metrics.sleep >= 6 ? 70 : metrics.sleep >= 5 ? 45 : 20) : 0;
-  var stepsScore = metrics.steps !== null ? Math.min(100, Math.round(metrics.steps / 100)) : 0;
-  var hrScore = metrics.hr !== null ? (metrics.hr <= 60 ? 100 : metrics.hr <= 70 ? 85 : metrics.hr <= 80 ? 65 : metrics.hr <= 90 ? 45 : 25) : 0;
-  var actScore = metrics.activeCal !== null ? Math.min(100, Math.round(metrics.activeCal / 5)) : 0;
+  var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
+  var wtScore  = metrics.weightScore !== null ? scoreWeightTrend(metrics.weightScore) : 0;
+  var strScore = metrics.strengthData !== null ? (scoreStrength(metrics.strengthData) || 0) : 0;
+  var aerScore = metrics.activeCal !== null ? scoreAerobic(metrics.activeCal) : 0;
 
-  setDriver('sleep',    metrics.sleep !== null ? metrics.sleep : null,       sleepScore, 'h');
-  setDriver('activity', metrics.steps !== null ? (metrics.steps >= 1000 ? (Math.round(metrics.steps/100)/10) + 'k' : metrics.steps) : null, stepsScore, ' steps');
-  setDriver('heart',    metrics.hr,    hrScore,    ' bpm');
-  setDriver('nutrition', metrics.nutritionScore !== null ? Math.round(metrics.nutritionScore) + '%' : null, metrics.nutritionScore || 0, '');
-  setDriver('weight',   metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null, metrics.weightScore || 50, '');
+  var hrVal  = metrics.hr !== null ? metrics.hr + ' bpm' : null;
+  var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
+  var strVal = metrics.strengthData !== null
+    ? metrics.strengthData.sessions7d + (metrics.strengthData.sessions7d === 1 ? ' session' : ' sessions') + ' / wk'
+    : null;
+  var aerVal = metrics.activeCal !== null
+    ? metrics.activeCal + ' kcal'
+    : null;
+
+  setDriver('heart',     hrVal,  hrScore,  '');
+  setDriver('weight',    wtVal,  wtScore,  '');
+  setDriver('strength',  strVal, strScore, '');
+  setDriver('aerobic',   aerVal, aerScore, '');
+
+  // Blood work — show connected state if available
+  var bwScore = scoreBloodwork(metrics.bloodwork);
+  var bwCard = document.getElementById('drv-bloodwork');
+  if (bwScore !== null) {
+    setDriver('bloodwork', bwScore + '%', bwScore, '');
+    if (bwCard) bwCard.style.opacity = '1';
+  }
 }
 
 function buildInsightSentence(metrics, result) {
   if (!result) return null;
-  var parts = [];
-  if (metrics.sleep !== null) {
-    if (metrics.sleep >= 7.5) parts.push('strong sleep');
-    else if (metrics.sleep < 6) parts.push('poor sleep dragging your score');
-  }
-  if (metrics.steps !== null) {
-    if (metrics.steps >= 8000) parts.push('solid activity');
-    else if (metrics.steps < 3000) parts.push('low steps today');
-  }
-  if (metrics.nutritionScore !== null) {
-    if (metrics.nutritionScore >= 70) parts.push('good nutrition');
-    else if (metrics.nutritionScore < 40) parts.push('nutrition not yet logged');
-  }
-  if (parts.length === 0) return null;
   var diff = (metrics.realAge || 35) - result.vAge;
-  var prefix = diff > 2 ? 'Trending well \u2014 ' : diff < -2 ? 'Room to improve \u2014 ' : 'Holding steady \u2014 ';
-  return prefix + parts.join(', ') + '.';
+  var primary = '';
+
+  // Lead with the highest-weighted signal that has data
+  if (metrics.hr !== null) {
+    var hs = scoreHR(metrics.hr);
+    if (hs >= 78)      primary = 'Resting HR of ' + metrics.hr + ' bpm reflects strong cardiovascular fitness.';
+    else if (hs >= 50) primary = 'Resting HR of ' + metrics.hr + ' bpm is average — consistent aerobic training will move this needle.';
+    else               primary = 'Resting HR of ' + metrics.hr + ' bpm is elevated and is the biggest drag on your score.';
+  }
+
+  // Add secondary signal
+  var secondary = '';
+  if (!result.bloodworkConnected) {
+    secondary = ' Uploading blood work will unlock the highest-weighted signal (40%).';
+  } else if (metrics.strengthData && metrics.strengthData.sessions7d === 0) {
+    secondary = ' No strength sessions logged this week.';
+  }
+
+  if (!primary) return null;
+  return primary + secondary;
 }
 
 async function loadDashboardData() {
@@ -1550,7 +1654,7 @@ async function loadDashboardData() {
   }
   console.log('[Healix] Dashboard loading — realAge:', realAge, 'profile:', window.userProfileData ? Object.keys(window.userProfileData) : 'null');
 
-  var metrics = { sleep: null, steps: null, hr: null, activeCal: null, nutritionScore: null, weightScore: null, weightVal: null, realAge: realAge };
+  var metrics = { hr: null, activeCal: null, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, steps: null, nutritionScore: null, realAge: realAge };
 
   // 1. Health data (last 14 days for context)
   try {
@@ -1630,7 +1734,22 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('Meal error:', e); }
 
-  // 3. Weight
+  // 3. Strength — count workout sessions in last 7 days
+  try {
+    var sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    var workouts = await supabaseRequest(
+      '/rest/v1/workout_logs?user_id=eq.' + currentUser.id + '&logged_at=gte.' + sevenDaysAgo.toISOString() + '&select=id,logged_at,total_volume&order=logged_at.desc',
+      'GET', null, token
+    );
+    if (workouts && !workouts.error && workouts.length > 0) {
+      var totalVol = workouts.reduce(function(s, w) { return s + parseFloat(w.total_volume || 0); }, 0);
+      metrics.strengthData = { sessions7d: workouts.length, avgVolume: Math.round(totalVol / workouts.length) };
+    } else {
+      metrics.strengthData = null;
+    }
+  } catch(e) { metrics.strengthData = null; }
+
+  // 4. Weight
   try {
     var weightData = await supabaseRequest(
       '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=7',
@@ -1651,6 +1770,9 @@ async function loadDashboardData() {
       metrics.weightScore = 60;
     }
   } catch(e) {}
+
+  // Bloodwork — placeholder until document parsing is wired up
+  metrics.bloodwork = null;
 
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
@@ -2167,8 +2289,14 @@ async function loadMealsPage() {
       document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">Session expired. Please refresh.</div></div>';
       return;
     }
+    // Fetch meals for the selected date range (with buffer for timezone shifts)
+    var fetchStart = new Date(range.start); fetchStart.setDate(fetchStart.getDate() - 1);
+    var fetchEnd   = new Date(range.end);   fetchEnd.setDate(fetchEnd.getDate() + 1);
     var meals = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=500',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id
+        + '&created_at=gte.' + fetchStart.toISOString()
+        + '&created_at=lte.' + fetchEnd.toISOString()
+        + '&order=created_at.desc&limit=500',
       'GET', null, session.access_token
     );
     if (!meals || meals.error || !Array.isArray(meals)) {
