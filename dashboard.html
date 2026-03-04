@@ -911,43 +911,6 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
           </div>
         </div>
 
-        <!-- Macro breakdown bars (week/month averages) -->
-        <div class="card" style="margin-bottom:16px;padding:20px 24px">
-          <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Macro Split (avg)</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
-            <div>
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                <span style="font-size:11px;color:var(--cream-dim)">Protein</span>
-                <span id="agg-mp-prot-pct" style="font-size:11px;color:var(--muted)">—%</span>
-              </div>
-              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
-                <div id="agg-mp-prot-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
-              </div>
-              <div id="agg-mp-prot" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                <span style="font-size:11px;color:var(--cream-dim)">Carbs</span>
-                <span id="agg-mp-carb-pct" style="font-size:11px;color:var(--muted)">—%</span>
-              </div>
-              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
-                <div id="agg-mp-carb-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
-              </div>
-              <div id="agg-mp-carb" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
-            </div>
-            <div>
-              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-                <span style="font-size:11px;color:var(--cream-dim)">Fat</span>
-                <span id="agg-mp-fat-pct" style="font-size:11px;color:var(--muted)">—%</span>
-              </div>
-              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
-                <div id="agg-mp-fat-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
-              </div>
-              <div id="agg-mp-fat" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
-            </div>
-          </div>
-        </div>
-
         <!-- Per-day breakdown table -->
         <div class="card" style="padding:0;overflow:hidden">
           <div style="padding:16px 20px;border-bottom:1px solid var(--gold-border)">
@@ -2209,19 +2172,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
   document.getElementById('agg-carbs').innerHTML     = (avgCarb || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
   document.getElementById('agg-fat').innerHTML       = (avgFat || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
 
-  // Avg macro split bars (using agg-specific IDs)
-  var macroTotal = avgProt + avgCarb + avgFat || 1;
-  var setEl = function(id, val) { var e = document.getElementById(id); if(e) e.textContent = val; };
-  var setStyle = function(id, prop, val) { var e = document.getElementById(id); if(e) e.style[prop] = val; };
-  setEl('agg-mp-prot-pct', Math.round(avgProt/macroTotal*100) + '%');
-  setStyle('agg-mp-prot-bar', 'width', Math.round(avgProt/macroTotal*100) + '%');
-  setEl('agg-mp-prot', avgProt + ' g');
-  setEl('agg-mp-carb-pct', Math.round(avgCarb/macroTotal*100) + '%');
-  setStyle('agg-mp-carb-bar', 'width', Math.round(avgCarb/macroTotal*100) + '%');
-  setEl('agg-mp-carb', avgCarb + ' g');
-  setEl('agg-mp-fat-pct', Math.round(avgFat/macroTotal*100) + '%');
-  setStyle('agg-mp-fat-bar', 'width', Math.round(avgFat/macroTotal*100) + '%');
-  setEl('agg-mp-fat', avgFat + ' g');
+
 
   // Calorie bar chart with date labels
   var calChart = document.getElementById('agg-cal-chart');
