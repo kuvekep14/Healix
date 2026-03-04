@@ -1328,12 +1328,21 @@ async function loadDashboardData() {
         var nutrientData = await supabaseRequest(
           '/rest/v1/meal_nutrient?meal_log_id=in.(' + todayMealIds.join(',') + ')&select=meal_log_id,category,name,value,unit',
           'GET', null, token
-        );
-        if (nutrientData && !nutrientData.error) nutrients = nutrientData;
+        ).catch(function() { return []; });
+        if (Array.isArray(nutrientData)) nutrients = nutrientData;
       }
+      var todayMeals = mealLogs.filter(function(m) {
+        var dt = new Date(m.meal_time || m.created_at);
+        var ds = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+        return ds === today;
+      });
       renderDashMeals(mealLogs, today);
-      renderMacrosFromNutrients(nutrients);
-      renderMicronutrientsFromNutrients(nutrients);
+      if (nutrients.length > 0) {
+        renderMacrosFromNutrients(nutrients);
+        renderMicronutrientsFromNutrients(nutrients);
+      } else {
+        renderMacrosFromMealData(todayMeals);
+      }
     }
   } catch(e) { console.error('Meal load error:', e); }
 
@@ -1807,8 +1816,8 @@ async function loadMealsPage() {
       var nutrientData = await supabaseRequest(
         '/rest/v1/meal_nutrient?meal_log_id=in.(' + ids + ')&select=meal_log_id,category,name,value',
         'GET', null, currentSession.access_token
-      );
-      if (nutrientData && !nutrientData.error) nutrients = nutrientData;
+      ).catch(function() { return []; });
+      if (Array.isArray(nutrientData)) nutrients = nutrientData;
     }
 
     if (mealsView === 'day') {
@@ -1894,10 +1903,15 @@ function renderMealsDayView(meals, nutrients, today) {
     }).join('');
   }
 
-  // Day totals from nutrients
+  // Day totals — use meal_log.data macros (meal_nutrient table may not exist)
   var dayNutrientIds = new Set(dayMeals.map(function(m) { return m.id; }));
   var dayNutrients = nutrients.filter(function(n) { return dayNutrientIds.has(n.meal_log_id); });
-  renderMacrosFromNutrients(dayNutrients);
+  if (dayNutrients.length > 0) {
+    renderMacrosFromNutrients(dayNutrients);
+  } else {
+    // Fall back to reading macros from meal_log.data jsonb
+    renderMacrosFromMealData(dayMeals);
+  }
 }
 
 function renderMealsAggregateView(meals, nutrients, range) {
