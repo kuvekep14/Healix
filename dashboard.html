@@ -1529,12 +1529,14 @@ async function loadDashboardData() {
   var token = currentSession.access_token;
   var today = localDateStr(new Date());
 
-  // Real age from profile DOB
+  // Real age from profile — try birth_date first, then dob
   var realAge = 35;
-  if (window.userProfileData && window.userProfileData.dob) {
-    var dob = new Date(window.userProfileData.dob);
-    realAge = Math.floor((new Date() - dob) / (365.25 * 24 * 3600 * 1000));
+  var dobStr = (window.userProfileData && (window.userProfileData.birth_date || window.userProfileData.dob)) || null;
+  if (dobStr) {
+    var dob = new Date(dobStr);
+    if (!isNaN(dob)) realAge = Math.floor((new Date() - dob) / (365.25 * 24 * 3600 * 1000));
   }
+  console.log('[Healix] Dashboard loading — realAge:', realAge, 'profile:', window.userProfileData ? Object.keys(window.userProfileData) : 'null');
 
   var metrics = { sleep: null, steps: null, hr: null, activeCal: null, nutritionScore: null, weightScore: null, weightVal: null, realAge: realAge };
 
@@ -1545,12 +1547,14 @@ async function loadDashboardData() {
       '/rest/v1/apple_health_samples?select=metric_type,start_date,value&user_id=eq.' + currentUser.id + '&start_date=gte.' + daysAgo.toISOString().split('T')[0] + '&order=start_date.desc',
       'GET', null, token
     );
+    console.log('[Healix] healthData rows:', healthData ? (healthData.error ? 'ERROR:'+JSON.stringify(healthData.error) : healthData.length) : 'null');
     if (healthData && !healthData.error) {
       var byType = {};
       healthData.forEach(function(r) {
         if (!byType[r.metric_type]) byType[r.metric_type] = [];
         byType[r.metric_type].push(r);
       });
+      console.log('[Healix] health metric types:', Object.keys(byType));
 
       // Sleep
       var sleepRows = (byType['sleep_analysis'] || []).filter(function(r) { return r.value !== null && !isNaN(parseFloat(r.value)); });
@@ -1586,10 +1590,12 @@ async function loadDashboardData() {
       '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=100',
       'GET', null, token
     );
+    console.log('[Healix] mealLogs:', mealLogs ? (mealLogs.error ? 'ERROR' : mealLogs.length) : 'null');
     if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
       var todayMeals = mealLogs.filter(function(m) {
         return localDateStr(new Date(m.meal_time || m.created_at)) === today;
       });
+      console.log('[Healix] todayMeals:', todayMeals.length, 'today=', today);
       if (todayMeals.length > 0) {
         var totals = { cal: 0, prot: 0, carb: 0, fat: 0 };
         todayMeals.forEach(function(m) {
@@ -1635,7 +1641,9 @@ async function loadDashboardData() {
   } catch(e) {}
 
   // Render everything
+  console.log('[Healix] metrics:', JSON.stringify(metrics));
   var result = calcVitalityAge(metrics);
+  console.log('[Healix] vitalityResult:', result);
   renderVitalityAge(result, realAge);
   renderDriverCards(metrics, result);
 
