@@ -1603,12 +1603,23 @@ function addCustomTag(inputId, tagsId, type) {
 function renderCustomTags(containerId, arr, type) {
   var el = document.getElementById(containerId);
   if (!el) return;
-  el.innerHTML = arr.map(function(v) {
+  el.innerHTML = arr.map(function(v, i) {
     return '<div style="display:flex;align-items:center;gap:6px;background:var(--gold-faint);border:1px solid var(--gold-border);padding:4px 10px">'
       + '<span style="font-size:11px;color:var(--cream-dim)">' + v + '</span>'
-      + '<span style="font-size:10px;color:var(--muted);cursor:pointer" onclick="removeTag('' + containerId + '','' + v + '','' + type + '')">✕</span>'
+      + '<span style="font-size:10px;color:var(--muted);cursor:pointer" data-container="' + containerId + '" data-type="' + type + '" data-idx="' + i + '" onclick="removeTagByIdx(this)">✕</span>'
       + '</div>';
   }).join('');
+}
+
+function removeTagByIdx(el) {
+  var containerId = el.getAttribute("data-container");
+  var type = el.getAttribute("data-type");
+  var idx = parseInt(el.getAttribute("data-idx"));
+  var arr = type === "allergy" ? medicalProfile.allergies : type === "condition" ? medicalProfile.conditions : medicalProfile.medications;
+  var val = arr[idx];
+  arr.splice(idx, 1);
+  renderCustomTags(containerId, arr, type);
+  document.querySelectorAll("[data-val=\"" + val + "\"]").forEach(function(e) { e.classList.remove("active"); });
 }
 
 function removeTag(containerId, val, type) {
@@ -1689,6 +1700,13 @@ function loadLiftLog() {
   } catch(e) {}
 }
 
+function filterByBtn(btn) {
+  var val = btn.getAttribute('data-ex');
+  if (val === 'all') { filterExercise('all', btn); return; }
+  var exercises = getExercises();
+  filterExercise(exercises[parseInt(val)], btn);
+}
+
 function filterExercise(name, btn) {
   activeExerciseFilter = name;
   document.querySelectorAll('#exercise-filter .tf-btn').forEach(function(b) { b.classList.remove('active'); });
@@ -1714,12 +1732,14 @@ function getExercises() {
 function renderExerciseFilter() {
   var exercises = getExercises();
   var container = document.getElementById('exercise-filter');
-  container.innerHTML = '<button class="tf-btn ' + (activeExerciseFilter === 'all' ? 'active' : '') + '" onclick="filterExercise('all', this)" style="border:1px solid var(--gold-border)">All</button>'
-    + exercises.map(function(ex) {
-      return '<button class="tf-btn ' + (activeExerciseFilter === ex ? 'active' : '') + '" onclick="filterExercise('' + ex.replace(/'/g,"\'") + '', this)" style="border:1px solid var(--gold-border)">' + ex + '</button>';
-    }).join('');
+  var allActive = activeExerciseFilter === 'all' ? 'active' : '';
+  var html = '<button class="tf-btn ' + allActive + '" data-ex="all" onclick="filterByBtn(this)" style="border:1px solid var(--gold-border)">All</button>';
+  exercises.forEach(function(ex, i) {
+    var cls = activeExerciseFilter === ex ? 'active' : '';
+    html += '<button class="tf-btn ' + cls + '" data-ex="' + i + '" onclick="filterByBtn(this)" style="border:1px solid var(--gold-border)">' + ex + '</button>';
+  });
+  container.innerHTML = html;
 }
-
 function getPRs() {
   var prs = {};
   liftLog.forEach(function(e) {
