@@ -1679,30 +1679,89 @@ async function saveWeight() {
 }
 
 // ── MEALS ──
+var mealsView = 'day';
+var mealsDate = new Date();
+
+function setMealsView(view, btn) {
+  mealsView = view;
+  document.querySelectorAll('#page-meals .tf-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.getElementById('meals-day-view').style.display = view === 'day' ? 'block' : 'none';
+  document.getElementById('meals-aggregate-view').style.display = view !== 'day' ? 'block' : 'none';
+  updateMealsDateLabel();
+  loadMealsPage();
+}
+
+function stepMealsDate(dir) {
+  if (mealsView === 'day') mealsDate.setDate(mealsDate.getDate() + dir);
+  else if (mealsView === 'week') mealsDate.setDate(mealsDate.getDate() + dir * 7);
+  else if (mealsView === 'month') mealsDate.setMonth(mealsDate.getMonth() + dir);
+  var now = new Date();
+  if (mealsDate > now) mealsDate = new Date(now);
+  updateMealsDateLabel();
+  loadMealsPage();
+}
+
+function resetMealsDate() {
+  mealsDate = new Date();
+  updateMealsDateLabel();
+  loadMealsPage();
+}
+
+function getMealsDateRange() {
+  var end = new Date(mealsDate);
+  end.setHours(23,59,59,999);
+  var start = new Date(mealsDate);
+  if (mealsView === 'day') {
+    start.setHours(0,0,0,0);
+  } else if (mealsView === 'week') {
+    start.setDate(start.getDate() - 6);
+    start.setHours(0,0,0,0);
+  } else {
+    start.setDate(1);
+    start.setHours(0,0,0,0);
+  }
+  return { start: start, end: end };
+}
+
+function localDateStr(date) {
+  return date.getFullYear() + '-'
+    + String(date.getMonth()+1).padStart(2,'0') + '-'
+    + String(date.getDate()).padStart(2,'0');
+}
+
+function updateMealsDateLabel() {
+  var label = document.getElementById('meals-date-label');
+  var todayBtn = document.getElementById('meals-today-btn');
+  var nextBtn = document.getElementById('meals-next-btn');
+  var today = new Date();
+  var isToday = localDateStr(mealsDate) === localDateStr(today);
+
+  if (mealsView === 'day') {
+    if (isToday) label.innerHTML = '<em>Today</em>';
+    else if (localDateStr(mealsDate) === localDateStr(new Date(today.getTime() - 86400000))) label.innerHTML = 'Yesterday';
+    else label.innerHTML = mealsDate.toLocaleDateString('en-US', {weekday:'short', month:'long', day:'numeric'});
+  } else if (mealsView === 'week') {
+    var range = getMealsDateRange();
+    label.innerHTML = range.start.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' – ' + range.end.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  } else {
+    label.innerHTML = mealsDate.toLocaleDateString('en-US', {month:'long', year:'numeric'});
+  }
+
+  if (nextBtn) nextBtn.disabled = isToday;
+  if (todayBtn) todayBtn.classList.toggle('active', isToday);
+  document.getElementById('agg-period-label').textContent = mealsView === 'week' ? 'This week' : 'This month';
+}
+
 async function loadMealsPage() {
   if (!currentUser) return;
-  var selectedDate = pageSelectedDate['meals'] || new Date();
-  var today = selectedDate.toISOString().split('T')[0];
-  var yesterday = new Date(selectedDate); yesterday.setDate(yesterday.getDate() - 1);
-  var yesterdayStr = yesterday.toISOString().split('T')[0];
-  updateDateNav('meals');
-
-  // Build date filter - show selected day
-  // Use local timezone boundaries to avoid UTC offset issues
-  var tzOffset = selectedDate.getTimezoneOffset() * 60000;
-  var localDayStart = new Date(selectedDate);
-  localDayStart.setHours(0,0,0,0);
-  var localDayEnd = new Date(selectedDate);
-  localDayEnd.setHours(23,59,59,999);
-
-  // Expand for timeframe
-  var rangeStart = new Date(localDayEnd);
-  rangeStart.setDate(rangeStart.getDate() - (currentTimeframe - 1));
-  rangeStart.setHours(0,0,0,0);
+  updateMealsDateLabel();
+  var range = getMealsDateRange();
+  var today = localDateStr(mealsDate);
 
   try {
     var meals = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + rangeStart.toISOString() + '&meal_time=lte.' + localDayEnd.toISOString() + '&order=meal_time.desc,created_at.desc&limit=100',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + range.start.toISOString() + '&meal_time=lte.' + range.end.toISOString() + '&order=meal_time.desc,created_at.desc&limit=200',
       'GET', null, currentSession.access_token
     );
     if (!meals || meals.error) {
@@ -1710,41 +1769,47 @@ async function loadMealsPage() {
       return;
     }
 
-    // Fetch nutrients for all these meals
-    var ids = meals.map(function(m) { return m.id; }).join(',');
-    var nutrients = await supabaseRequest(
-      '/rest/v1/meal_nutrient?meal_log_id=in.(' + ids + ')&select=meal_log_id,name,value,unit',
-      'GET', null, currentSession.access_token
-    );
-
-    // Group nutrients by meal_log_id
-    var nutrientsByMeal = {};
-    if (nutrients && !nutrients.error) {
-      nutrients.forEach(function(n) {
-        if (!nutrientsByMeal[n.meal_log_id]) nutrientsByMeal[n.meal_log_id] = {};
-        nutrientsByMeal[n.meal_log_id][n.name] = parseFloat(n.value || 0);
-      });
+    // Fetch nutrients
+    var nutrients = [];
+    if (meals.length > 0) {
+      var ids = meals.map(function(m) { return m.id; }).join(',');
+      var nutrientData = await supabaseRequest(
+        '/rest/v1/meal_nutrient?meal_log_id=in.(' + ids + ')&select=meal_log_id,category,name,value',
+        'GET', null, currentSession.access_token
+      );
+      if (nutrientData && !nutrientData.error) nutrients = nutrientData;
     }
 
-    var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
-    var list = document.getElementById('meals-list');
+    if (mealsView === 'day') {
+      renderMealsDayView(meals, nutrients, today);
+    } else {
+      renderMealsAggregateView(meals, nutrients, range);
+    }
+  } catch(e) { console.error('Meals page error:', e); }
+}
 
-    // Filter to selected day only for the list display
-    var displayMeals = meals.filter(function(m) {
-      var dt = new Date(m.meal_time || m.created_at);
-      var localDateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
-      return localDateStr === today;
+function renderMealsDayView(meals, nutrients, today) {
+  // Filter to selected day only
+  var dayMeals = meals.filter(function(m) {
+    return localDateStr(new Date(m.meal_time || m.created_at)) === today;
+  });
+
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳' };
+  var list = document.getElementById('meals-list');
+
+  if (dayMeals.length === 0) {
+    list.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged on this day.</div></div>';
+  } else {
+    // Group nutrients by meal
+    var nutrientsByMeal = {};
+    nutrients.forEach(function(n) {
+      if (!nutrientsByMeal[n.meal_log_id]) nutrientsByMeal[n.meal_log_id] = {};
+      var existing = nutrientsByMeal[n.meal_log_id][n.name] || 0;
+      if (parseFloat(n.value || 0) > existing) nutrientsByMeal[n.meal_log_id][n.name] = parseFloat(n.value || 0);
     });
 
-    if (displayMeals.length === 0) {
-      list.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged on this day.</div></div>';
-      return;
-    }
-
-    list.innerHTML = displayMeals.map(function(m) {
+    list.innerHTML = dayMeals.map(function(m) {
       var dt = new Date(m.meal_time || m.created_at);
-      var dayStr = dt.toISOString().split('T')[0];
-      var dateLabel = dayStr === today ? 'Today' : dayStr === yesterdayStr ? 'Yesterday' : dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
       var mealType = (m.meal_type || '').toLowerCase();
       var n = nutrientsByMeal[m.id] || {};
       var cal  = n['Calories'] ? Math.round(n['Calories']) : null;
@@ -1755,7 +1820,7 @@ async function loadMealsPage() {
         + '<div class="meal-card-emoji">' + (emojis[mealType] || '🥘') + '</div>'
         + '<div class="meal-card-info">'
         + '<div class="meal-card-name">' + (m.meal_description || 'Meal') + '</div>'
-        + '<div class="meal-card-time">' + (m.meal_type ? m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1) : '') + ' · ' + dateLabel + ' ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
+        + '<div class="meal-card-time">' + (m.meal_type ? m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1) : '') + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
         + '<div class="meal-card-macros">'
         + (prot !== null ? '<div class="meal-card-macro">P <span>' + prot + 'g</span></div>' : '')
         + (carb !== null ? '<div class="meal-card-macro">C <span>' + carb + 'g</span></div>' : '')
@@ -1764,8 +1829,145 @@ async function loadMealsPage() {
         + '<div class="meal-card-cals">' + (cal || '—') + '</div>'
         + '</div>';
     }).join('');
-  } catch(e) { console.error('Meals page error:', e); }
+  }
+
+  // Day totals from nutrients
+  var dayNutrientIds = new Set(dayMeals.map(function(m) { return m.id; }));
+  var dayNutrients = nutrients.filter(function(n) { return dayNutrientIds.has(n.meal_log_id); });
+  renderMacrosFromNutrients(dayNutrients);
 }
+
+function renderMealsAggregateView(meals, nutrients, range) {
+  // Group meals and nutrients by day
+  var byDay = {};
+  meals.forEach(function(m) {
+    var d = localDateStr(new Date(m.meal_time || m.created_at));
+    if (!byDay[d]) byDay[d] = { meals: [], nutrients: [] };
+    byDay[d].meals.push(m);
+  });
+  nutrients.forEach(function(n) {
+    // Find which day this meal belongs to
+    var meal = meals.find(function(m) { return m.id === n.meal_log_id; });
+    if (!meal) return;
+    var d = localDateStr(new Date(meal.meal_time || meal.created_at));
+    if (byDay[d]) byDay[d].nutrients.push(n);
+  });
+
+  var days = Object.keys(byDay).sort();
+  var numDays = Math.max(days.length, 1);
+
+  // Aggregate totals per day
+  function dayTotal(d, name) {
+    var seen = {};
+    var total = 0;
+    (byDay[d] ? byDay[d].nutrients : []).forEach(function(n) {
+      if (n.name === name && n.category === 'Macronutrients') {
+        if (!seen[n.meal_log_id]) { seen[n.meal_log_id] = true; total += parseFloat(n.value || 0); }
+      }
+    });
+    if (total === 0) {
+      (byDay[d] ? byDay[d].nutrients : []).forEach(function(n) {
+        if (n.name === name && !seen[n.meal_log_id]) { seen[n.meal_log_id] = true; total += parseFloat(n.value || 0); }
+      });
+    }
+    return Math.round(total);
+  }
+
+  var calsByDay  = days.map(function(d) { return dayTotal(d, 'Calories') || dayTotal(d, 'Energy'); });
+  var protByDay  = days.map(function(d) { return dayTotal(d, 'Protein') || dayTotal(d, 'Proteins'); });
+  var carbsByDay = days.map(function(d) { return dayTotal(d, 'Carbohydrates') || dayTotal(d, 'Total Carbohydrates'); });
+  var fatsByDay  = days.map(function(d) { return dayTotal(d, 'Total Fat') || dayTotal(d, 'Fat'); });
+
+  var avgCal  = Math.round(calsByDay.reduce(function(s,v){return s+v;},0) / numDays);
+  var avgProt = Math.round(protByDay.reduce(function(s,v){return s+v;},0) / numDays);
+  var avgCarb = Math.round(carbsByDay.reduce(function(s,v){return s+v;},0) / numDays);
+  var avgFat  = Math.round(fatsByDay.reduce(function(s,v){return s+v;},0) / numDays);
+
+  document.getElementById('agg-cal').textContent     = avgCal || '—';
+  document.getElementById('agg-protein').innerHTML   = (avgProt || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
+  document.getElementById('agg-carbs').innerHTML     = (avgCarb || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
+  document.getElementById('agg-fat').innerHTML       = (avgFat || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
+
+  // Mini charts
+  function renderAggChart(id, vals) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var max = Math.max.apply(null, vals) || 1;
+    el.innerHTML = vals.map(function(v) {
+      return '<div style="flex:1;background:var(--gold);height:' + Math.max(8, Math.round(v/max*100)) + '%;min-height:4px;transition:height .4s"></div>';
+    }).join('');
+  }
+  renderAggChart('agg-cal-chart', calsByDay);
+  renderAggChart('agg-protein-chart', protByDay);
+  renderAggChart('agg-carbs-chart', carbsByDay);
+  renderAggChart('agg-fat-chart', fatsByDay);
+
+  // Daily breakdown table
+  var breakdown = document.getElementById('agg-daily-breakdown');
+  if (days.length === 0) {
+    breakdown.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-state-text">No meals logged in this period.</div></div>';
+    return;
+  }
+  breakdown.innerHTML = '<table style="width:100%;border-collapse:collapse">'
+    + '<thead><tr style="border-bottom:1px solid var(--gold-border)">'
+    + ['Date','Calories','Protein','Carbs','Fat','Meals'].map(function(h) {
+        return '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">' + h + '</th>';
+      }).join('')
+    + '</tr></thead><tbody>'
+    + days.slice().reverse().map(function(d, i) {
+        var ri = days.length - 1 - i;
+        var dt = new Date(d + 'T12:00:00');
+        var isToday = d === localDateStr(new Date());
+        return '<tr style="border-bottom:1px solid rgba(184,151,90,.08);cursor:pointer" data-day="' + d + '" onclick="drillToDay(this.getAttribute(\"data-day\"))">'
+          + '<td style="padding:12px 0;font-size:13px;color:' + (isToday ? 'var(--gold)' : 'var(--cream)') + '">' + dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>'
+          + '<td style="padding:12px 0;font-family:var(--F);font-size:18px;font-weight:300">' + (calsByDay[ri] || '—') + '</td>'
+          + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (protByDay[ri] || '—') + 'g</td>'
+          + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (carbsByDay[ri] || '—') + 'g</td>'
+          + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (fatsByDay[ri] || '—') + 'g</td>'
+          + '<td style="padding:12px 0;font-size:13px;color:var(--muted)">' + (byDay[d].meals.length) + '</td>'
+          + '</tr>';
+      }).join('')
+    + '</tbody></table>';
+
+  // Weight trend
+  renderWeightTrendChart(range);
+}
+
+async function renderWeightTrendChart(range) {
+  if (!currentUser) return;
+  try {
+    var weightData = await supabaseRequest(
+      '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&logged_at=gte.' + range.start.toISOString() + '&logged_at=lte.' + range.end.toISOString() + '&order=logged_at.asc',
+      'GET', null, currentSession.access_token
+    );
+    var chart = document.getElementById('agg-weight-chart');
+    var dates = document.getElementById('agg-weight-dates');
+    if (!weightData || weightData.error || weightData.length === 0) {
+      chart.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:16px">No weight entries logged in this period.</div>';
+      return;
+    }
+    var vals = weightData.map(function(w) { return parseFloat(w.value); });
+    var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals);
+    var range2 = max - min || 1;
+    chart.innerHTML = vals.map(function(v) {
+      var pct = Math.max(10, Math.round(((v - min) / range2) * 80) + 10);
+      return '<div style="flex:1;background:var(--gold);height:' + pct + '%;min-height:4px"></div>';
+    }).join('');
+    chart.style.display = 'flex';
+    chart.style.alignItems = 'flex-end';
+    chart.style.gap = '4px';
+    dates.innerHTML = weightData.map(function(w) {
+      var dt = new Date(w.logged_at || w.created_at);
+      return '<span style="font-size:9px;color:var(--muted)">' + dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>';
+    }).join('');
+  } catch(e) {}
+}
+
+function drillToDay(dateStr) {
+  mealsDate = new Date(dateStr + 'T12:00:00');
+  setMealsView('day', document.getElementById('meals-view-day'));
+}
+
 
 async function saveMeal() {
   var name = document.getElementById('ml-name').value;
