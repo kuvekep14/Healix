@@ -187,23 +187,27 @@ nav.s { border-bottom-color: var(--gold-border); }
 .ptoggle { display: inline-flex; border: 1px solid var(--gold-border); margin-top: 28px; overflow: hidden; }
 .tog { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 12px 28px; background: none; border: none; color: var(--muted); cursor: pointer; transition: all .25s; }
 .tog.on { background: var(--gold); color: var(--dark); }
-.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-bottom: 48px; }
-.pc { background: var(--dark); padding: 56px 48px; position: relative; transition: background .35s; }
-.pc:hover { background: var(--dark-3); }
-.pc.feat { background: var(--dark-3); border-left: 1px solid var(--gold); border-right: 1px solid var(--gold); }
-.pbadge { position: absolute; top: -1px; left: 50%; transform: translateX(-50%); background: var(--gold); color: var(--dark); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; padding: 6px 18px; white-space: nowrap; }
-.ptier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 24px; }
-.pprice { font-family: var(--F); font-size: 64px; font-weight: 300; line-height: 1; margin-bottom: 6px; }
-.pprice sup { font-size: 24px; vertical-align: super; }
-.pcad { font-size: 13px; color: var(--muted); margin-bottom: 40px; }
-.pdiv { border: none; border-top: 1px solid var(--gold-border); margin-bottom: 32px; }
-.pfeats { list-style: none; display: flex; flex-direction: column; gap: 16px; margin-bottom: 44px; }
-.pfeats li { font-size: 14px; color: var(--cream-dim); display: flex; gap: 14px; align-items: flex-start; }
-.pfeats li .ck { color: var(--gold); flex-shrink: 0; font-size: 12px; margin-top: 1px; }
-.pfeats li.off { color: var(--muted); }
+.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-bottom: 48px; align-items: start; }
+.pc { background: var(--dark-2); border: 1px solid var(--gold-border); padding: 48px 40px; position: relative; transition: border-color .35s, transform .3s; display: flex; flex-direction: column; }
+.pc:hover { border-color: rgba(184,151,90,.4); transform: translateY(-4px); }
+.pc.feat { background: var(--dark-3); border-color: var(--gold); transform: translateY(-8px); }
+.pc.feat:hover { transform: translateY(-12px); }
+.pbadge { display: inline-block; background: var(--gold); color: var(--dark); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; padding: 5px 14px; margin-bottom: 24px; }
+.ptier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
+.pprice { font-family: var(--F); font-size: 72px; font-weight: 300; line-height: 1; margin-bottom: 4px; display: flex; align-items: flex-start; gap: 4px; }
+.pprice sup { font-size: 22px; margin-top: 12px; }
+.pprice-int { line-height: 1; }
+.pcad { font-size: 12px; color: var(--muted); margin-bottom: 36px; letter-spacing: .05em; }
+.pdiv { border: none; border-top: 1px solid var(--gold-border); margin-bottom: 28px; }
+.pfeats { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-bottom: 40px; flex: 1; }
+.pfeats li { font-size: 13px; color: var(--cream-dim); display: flex; gap: 12px; align-items: flex-start; line-height: 1.5; }
+.pfeats li .ck { color: var(--gold); flex-shrink: 0; font-size: 11px; margin-top: 2px; }
+.pfeats li.off { color: var(--muted); opacity: .5; }
 .pfeats li.off .ck { color: var(--muted); }
-.pbtn { width: 100%; padding: 16px; font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; border: 1px solid var(--gold); background: none; color: var(--gold); cursor: pointer; transition: all .3s; }
-.pbtn:hover, .pc.feat .pbtn { background: var(--gold); color: var(--dark); }
+.pbtn { width: 100%; padding: 15px; font-size: 10px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; border: 1px solid var(--gold-border); background: none; color: var(--cream-dim); cursor: pointer; transition: all .3s; text-decoration: none; display: block; text-align: center; }
+.pbtn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-faint); }
+.pc.feat .pbtn { border-color: var(--gold); background: var(--gold); color: var(--dark); }
+.pc.feat .pbtn:hover { background: var(--gold-light); }
 .pnote { text-align: center; font-size: 13px; color: var(--muted); }
 .pnote span { color: var(--cream-dim); }
 
@@ -460,14 +464,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   </div>
 </section>
 
-<!-- STATS -->
-<div class="stats">
-  <div class="stat" data-n="01"><div class="stat-n">12+</div><div class="stat-l">Device integrations</div></div>
-  <div class="stat" data-n="02"><div class="stat-n">98%</div><div class="stat-l">Data accuracy</div></div>
-  <div class="stat" data-n="03"><div class="stat-n">3×</div><div class="stat-l">Faster clarity</div></div>
-  <div class="stat" data-n="04"><div class="stat-n">Free</div><div class="stat-l">Premium during beta</div></div>
-</div>
-
 <!-- HOW -->
 <section class="how" id="how">
   <div class="wrap">
@@ -622,9 +618,11 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
       </div>
     </div>
     <div class="pcards reveal">
+
+      <!-- ESSENTIAL -->
       <div class="pc">
         <div class="ptier">Essential</div>
-        <div class="pprice"><sup>$</sup><span class="pv">0</span></div>
+        <div class="pprice"><sup>$</sup><span class="pprice-int pv">0</span></div>
         <div class="pcad">Free forever</div>
         <hr class="pdiv">
         <ul class="pfeats">
@@ -632,19 +630,23 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
           <li><span class="ck">✓</span>7-day data history</li>
           <li><span class="ck">✓</span>Weekly insight summary</li>
           <li><span class="ck">✓</span>Basic recovery tracking</li>
+          <li><span class="ck">✓</span>Meal logging</li>
           <li class="off"><span class="ck">–</span>Lab result analysis</li>
           <li class="off"><span class="ck">–</span>Cross-source correlations</li>
           <li class="off"><span class="ck">–</span>Daily AI briefing</li>
         </ul>
-        <a href="signup.html" class="pbtn">Join Beta — Get Premium Free</a>
+        <a href="signup.html" class="pbtn">Get Started Free</a>
       </div>
+
+      <!-- PREMIUM -->
       <div class="pc feat">
         <div class="pbadge">Most Popular</div>
         <div class="ptier">Premium</div>
-        <div class="pprice"><sup>$</sup><span class="pv">19</span></div>
-        <div class="pcad pcad-m">per month</div>
+        <div class="pprice"><sup>$</sup><span class="pprice-int pv">19</span></div>
+        <div class="pcad pcad-m">per month · cancel anytime</div>
         <hr class="pdiv">
         <ul class="pfeats">
+          <li><span class="ck">✓</span>Everything in Essential</li>
           <li><span class="ck">✓</span>Unlimited integrations</li>
           <li><span class="ck">✓</span>Full data history</li>
           <li><span class="ck">✓</span>Daily AI-powered briefing</li>
@@ -655,9 +657,11 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
         </ul>
         <a href="signup.html" class="pbtn">Start 14-day Free Trial</a>
       </div>
+
+      <!-- CLINICAL -->
       <div class="pc">
         <div class="ptier">Clinical</div>
-        <div class="pprice"><sup>$</sup><span class="pv">49</span></div>
+        <div class="pprice"><sup>$</sup><span class="pprice-int pv">49</span></div>
         <div class="pcad pcad-c">per month</div>
         <hr class="pdiv">
         <ul class="pfeats">
@@ -669,8 +673,9 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
           <li><span class="ck">✓</span>Family plan (up to 4)</li>
           <li><span class="ck">✓</span>API access</li>
         </ul>
-        <a href="/cdn-cgi/l/email-protection#5929382c351934303634382b323c2b773a3634662a2c3b333c3a2d64113c383530217c6b691a353037303a38357c6b69093538377c6b691c37282c302b20" class="pbtn">Contact Sales</a>
+        <a href="mailto:hello@tryhealix.com" class="pbtn">Contact Sales</a>
       </div>
+
     </div>
     <p class="pnote reveal"><span>All plans include a 14-day free trial.</span> No credit card required. Cancel anytime.</p>
   </div>
@@ -747,23 +752,23 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
           <div class="hq-choices">
             <button class="hq-choice" data-val="1"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Golden retriever — tell me what button to press</span></button>
             <button class="hq-choice" data-val="2"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Competent adult — I know basics; I want structure</span></button>
-            <button class="hq-choice" data-val="3"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Biohacker adjacent — I read studies and argue online</span></button>
-            <button class="hq-choice" data-val="4"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Final boss — if you oversimplify, I will revolt</span></button>
+            <button class="hq-choice" data-val="3"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Weekend warrior — I go to the gym, I eat my greens, leave me alone</span></button>
+            <button class="hq-choice" data-val="4"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Biohacker — I read studies, track everything, and I will not apologise for it</span></button>
           </div>
         </div>
 
         <!-- Q5 -->
         <div class="hq-pane" id="hq-q4">
           <div class="hq-q-ghost">05</div>
-          <p class="hq-q-text">What do you want more energy for?</p>
-          <p class="hq-q-hint">Pick one</p>
-          <div class="hq-choices">
-            <button class="hq-choice" data-val="energy-steady"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Steady all-day energy — no crashes</span></button>
-            <button class="hq-choice" data-val="energy-sleep"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Better sleep / mornings</span></button>
-            <button class="hq-choice" data-val="energy-workout"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Workout performance / body comp</span></button>
-            <button class="hq-choice" data-val="energy-focus"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Focus / productivity</span></button>
-            <button class="hq-choice" data-val="energy-mood"><span class="hq-bullet"></span><span class="hq-choice-key">E</span><span class="hq-choice-text">Mood / emotional stability</span></button>
-            <button class="hq-choice" data-val="energy-parenting"><span class="hq-bullet"></span><span class="hq-choice-key">F</span><span class="hq-choice-text">Parenting stamina — not dying at 4pm</span></button>
+          <p class="hq-q-text">What are you most trying to improve?</p>
+          <p class="hq-q-hint">Pick all that apply</p>
+          <div class="hq-choices-multi">
+            <button class="hq-choice-multi" data-val="goal-energy"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">Steady all-day energy — no crashes</span></button>
+            <button class="hq-choice-multi" data-val="goal-sleep"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">Better sleep / mornings</span></button>
+            <button class="hq-choice-multi" data-val="goal-workout"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">Workout performance / body comp</span></button>
+            <button class="hq-choice-multi" data-val="goal-focus"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">Focus / productivity</span></button>
+            <button class="hq-choice-multi" data-val="goal-mood"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">Mood / emotional stability</span></button>
+            <button class="hq-choice-multi" data-val="goal-longevity"><span class="hq-checkbox"></span><span class="hq-choice-multi-text">Longevity &amp; disease prevention — playing the long game</span></button>
           </div>
         </div>
 
@@ -947,8 +952,8 @@ document.getElementById('ta').addEventListener('click',function(){
 <script>
 /* HEALIX QUIZ ENGINE */
 (function(){
-  var TOTAL=8, MULTI_Q=5;
-  var cur=0, answers=new Array(8).fill(null), multiSel=new Set(), hardCapFree=false;
+  var TOTAL=8, MULTI_Q=5, MULTI_Q2=4;
+  var cur=0, answers=new Array(8).fill(null), multiSel=new Set(), goalSel=new Set(), hardCapFree=false;
 
   var allPanes = [];
   for(var i=0;i<TOTAL;i++){ allPanes.push(document.getElementById('hq-q'+i)); }
@@ -973,7 +978,7 @@ document.getElementById('ta').addEventListener('click',function(){
     pipEl.style.left=pct+'%';
     fracEl.textContent=(cur+1)+' of '+TOTAL;
     backBtn.disabled=(cur===0);
-    var ready=(cur===MULTI_Q || answers[cur]!==null);
+    var ready=(cur===MULTI_Q || cur===MULTI_Q2 || answers[cur]!==null);
     if(ready){ nextBtn.classList.add('hq-ready'); }
     else { nextBtn.classList.remove('hq-ready'); }
   }
@@ -1006,14 +1011,21 @@ document.getElementById('ta').addEventListener('click',function(){
       btn.addEventListener('click', function(){
         btn.classList.toggle('hq-sel');
         var v=btn.getAttribute('data-val');
-        if(multiSel.has(v)){ multiSel.delete(v); } else { multiSel.add(v); }
+        var paneIdx = parseInt(btn.closest('.hq-pane').id.replace('hq-q',''));
+        if(paneIdx === MULTI_Q2) {
+          // Q4 goals multi-select
+          if(goalSel.has(v)){ goalSel.delete(v); } else { goalSel.add(v); }
+        } else {
+          // Q5 non-negotiables multi-select
+          if(multiSel.has(v)){ multiSel.delete(v); } else { multiSel.add(v); }
+        }
       });
     });
   }
   attachChoiceHandlers();
 
   nextBtn.addEventListener('click', function(){
-    if(cur!==MULTI_Q && answers[cur]===null) return;
+    if(cur!==MULTI_Q && cur!==MULTI_Q2 && answers[cur]===null) return;
     if(cur < TOTAL-1){ goTo(cur+1); }
     else { buildResult(); }
   });
@@ -1022,14 +1034,14 @@ document.getElementById('ta').addEventListener('click',function(){
     if(cur>0){ goTo(cur-1); }
   });
 
-  var EM={'energy-steady':'steady all-day energy','energy-sleep':'better sleep quality','energy-workout':'fitness and performance','energy-focus':'focus and clarity','energy-mood':'stress and emotional balance','energy-longevity':'long-term health and longevity','energy-parenting':'keeping up with life'};
+  var EM={'goal-energy':'steady all-day energy','goal-sleep':'better sleep quality','goal-workout':'fitness and performance','goal-focus':'focus and clarity','goal-mood':'stress and emotional balance','goal-longevity':'long-term health and longevity'};
   var CM={'no-caffeine':'keeping caffeine','no-alcohol':'keeping alcohol','no-tracking':'skipping calorie tracking','no-cooking':'not cooking more','no-workout':'not adding workouts','sleep-constrained':'working around constrained sleep'};
   var WM={'wearable-none':'No wearable yet','wearable-apple':'Apple Watch / iPhone Health','wearable-oura':'Oura Ring','wearable-garmin':'Garmin / Polar / Suunto','wearable-whoop':'Whoop','wearable-multi':'Multiple devices'};
   var YM={'why-wall':'Hit a wall','why-diagnosis':'Recent diagnosis / result','why-proactive':'Getting ahead of problems','why-better':'Just want to feel better','why-curious':'Curious / recommended'};
   function eL(v){return['','10 sec/day','1 min/day','3 min/day','10 min/day'][v]||'';}
   function hL(v){return['','Skips questions','Vibes-only','Rounds down','Full confessor'][v]||'';}
   function mL(v){return['','Rarely sees providers','Annual check-up','Sees providers 2-4x/yr','Regular ongoing care'][v]||'';}
-  function kL(v){return['','Golden retriever mode','Competent adult','Biohacker adjacent','Final boss'][v]||'';}
+  function kL(v){return['','Golden retriever mode','Competent adult','Weekend warrior','Biohacker'][v]||'';}
 
   function calcTier(){
     var q1=parseInt(answers[0])||0, q2=parseInt(answers[1])||0, q3=parseInt(answers[2])||0, q4=parseInt(answers[3])||0;
@@ -1046,7 +1058,7 @@ document.getElementById('ta').addEventListener('click',function(){
   function buildResult(){
     var tier=calcTier();
     var q1=parseInt(answers[0])||0, q2=parseInt(answers[1])||0, q3=parseInt(answers[2])||0, q4=parseInt(answers[3])||0;
-    var energy=EM[answers[4]]||'better health';
+    var goalsList=Array.from(goalSel).map(function(v){return EM[v]||v;}); var energy=goalsList.length>0?goalsList[0]:'better health';
     var wearable=WM[answers[6]]||'';
     var why=YM[answers[7]]||'';
     var noWear=(answers[6]==='wearable-none');
@@ -1095,11 +1107,11 @@ document.getElementById('ta').addEventListener('click',function(){
 
     var rb=document.getElementById('hq-rec-block');
     if(tier==='free'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Free Plan</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Get your health data unified and your first AI insights — no credit card, no pressure.</div><a href="signup.html" class="hq-cta-btn">Join the Beta — Free Access</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Free while we're testing</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Try Healix completely free during beta. Get your health data unified and your first AI insights — no credit card, no pressure, no catch.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free →</a></div>';
     } else if(tier==='premium'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Premium — $19/month</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">AI health insights, full wearable integration, weekly intelligence reports.</div><a href="signup.html" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Full Premium, free while we're testing</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">You're exactly who Healix was built for. Try the full Premium experience — wearable data, meal tracking, AI insights, bloodwork analysis — completely free during beta. No credit card needed.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free →</a></div>';
     } else {
-      rb.innerHTML='<div class="hq-rec hq-rec-featured" style="margin-bottom:12px"><div class="hq-rec-tier">Clinical — Waitlist</div><div class="hq-rec-headline">Get notified when Clinical launches.</div><div class="hq-rec-desc">Leave your email and you will be first to know.</div><form class="hq-email-form" id="hq-wl-form"><input class="hq-email-input" type="email" placeholder="your@email.com" required><button class="hq-email-submit" type="submit">Notify Me</button></form><div class="hq-email-thanks" id="hq-wl-thanks" style="display:none">You are on the list!</div></div><div class="hq-rec"><div class="hq-rec-tier">In the meantime — Premium at $19/month</div><div class="hq-rec-headline">More than enough until Clinical arrives.</div><a href="signup.html" class="hq-cta-btn">Join the Beta — Premium Access</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured" style="margin-bottom:12px"><div class="hq-rec-tier">Clinical — Coming soon</div><div class="hq-rec-headline">You're ahead of the curve.</div><div class="hq-rec-desc">Clinical is still in development. Join the waitlist and we'll reach out when it launches.</div><form class="hq-email-form" id="hq-wl-form"><input class="hq-email-input" type="email" placeholder="your@email.com" required><button class="hq-email-submit" type="submit">Join Waitlist</button></form><div class="hq-email-thanks" id="hq-wl-thanks" style="display:none">You're on the list!</div></div><div class="hq-rec"><div class="hq-rec-tier">In the meantime — try Premium free</div><div class="hq-rec-headline">Full access, no credit card, no commitment.</div><div class="hq-rec-desc">While Clinical is in development, Premium has everything you need — and it's free during beta.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free →</a></div>';
       setTimeout(function(){
         var f=document.getElementById('hq-wl-form');
         if(f){ f.addEventListener('submit',function(e){ e.preventDefault(); f.style.display='none'; document.getElementById('hq-wl-thanks').style.display='block'; }); }
