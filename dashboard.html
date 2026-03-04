@@ -1310,7 +1310,7 @@ async function loadDashboardData() {
     var dashEnd   = new Date(dashDate); dashEnd.setHours(23,59,59,999);
     var dashDateStr = dashDate.getFullYear() + '-' + String(dashDate.getMonth()+1).padStart(2,'0') + '-' + String(dashDate.getDate()).padStart(2,'0');
     var mealLogs = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + dashStart.toISOString() + '&meal_time=lte.' + dashEnd.toISOString() + '&order=meal_time.desc,created_at.desc&limit=20',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=100',
       'GET', null, token
     );
     if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
@@ -1455,11 +1455,7 @@ function updateMiniChart(id, data, today) {
 }
 
 function renderDashMeals(meals, today) {
-  var todayMeals = meals.filter(function(m) {
-    var dt = new Date(m.meal_time || m.created_at);
-    var localDateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
-    return localDateStr === today;
-  });
+  var todayMeals = meals; // already filtered by created_at in query
   var el = document.getElementById('d-meals');
   var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
   if (todayMeals.length === 0) {
@@ -1761,9 +1757,15 @@ async function loadMealsPage() {
   var today = localDateStr(mealsDate);
 
   try {
+    // Ensure we have a valid session token
+    var session = currentSession || getSession();
+    if (!session || !session.access_token) {
+      document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">Session expired. Please refresh.</div></div>';
+      return;
+    }
     var meals = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + range.start.toISOString() + '&meal_time=lte.' + range.end.toISOString() + '&order=meal_time.desc,created_at.desc&limit=200',
-      'GET', null, currentSession.access_token
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=500',
+      'GET', null, session.access_token
     );
     if (!meals || meals.error) {
       document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>';
@@ -1792,7 +1794,7 @@ async function loadMealsPage() {
 function renderMealsDayView(meals, nutrients, today) {
   // Filter to selected day only
   var dayMeals = meals.filter(function(m) {
-    return localDateStr(new Date(m.meal_time || m.created_at)) === today;
+    return localDateStr(new Date(m.created_at)) === today;
   });
 
   var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳' };
@@ -1850,7 +1852,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
     // Find which day this meal belongs to
     var meal = meals.find(function(m) { return m.id === n.meal_log_id; });
     if (!meal) return;
-    var d = localDateStr(new Date(meal.meal_time || meal.created_at));
+    var d = localDateStr(new Date(meal.created_at));
     if (byDay[d]) byDay[d].nutrients.push(n);
   });
 
