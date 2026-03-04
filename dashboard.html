@@ -637,7 +637,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
       <div class="topbar-title" id="page-title">Dashboard</div>
     </div>
     <div class="topbar-right">
-      <div class="timeframe-toggle">
+      <div class="timeframe-toggle" id="topbar-timeframe" style="display:none">
         <button class="tf-btn active" onclick="setTimeframe(7, this)">7D</button>
         <button class="tf-btn" onclick="setTimeframe(30, this)">30D</button>
         <button class="tf-btn" onclick="setTimeframe(90, this)">90D</button>
@@ -1320,6 +1320,8 @@ async function init() {
     document.getElementById('p-name').value = name;
     loadDidYouKnow();
     document.getElementById('page-title').textContent = greet() + ', ' + firstName;
+    var tf = document.getElementById('topbar-timeframe');
+    if (tf) tf.style.display = 'flex';
     loadDashboardData();
     loadFamilyHistoryForm();
     setWeightDateDefault();
@@ -1351,10 +1353,13 @@ function showPage(id, btn) {
     var firstName = name.split(' ')[0];
     document.getElementById('page-title').textContent = id === 'dashboard' ? greet() + ', ' + firstName : pageTitles[id] || id;
   }
+  // Show timeframe toggle only on dashboard
+  var tf = document.getElementById('topbar-timeframe');
+  if (tf) tf.style.display = id === 'dashboard' ? 'flex' : 'none';
   // Load page data
   if (id === 'meals') { loadMealsPage(); }
   if (id === 'documents') loadDocumentsPage();
-    if (id === 'strength') renderStrengthPage();
+  if (id === 'strength') renderStrengthPage();
 }
 
 // ── LOAD DASHBOARD DATA ──
