@@ -187,11 +187,11 @@ nav.s { border-bottom-color: var(--gold-border); }
 .ptoggle { display: inline-flex; border: 1px solid var(--gold-border); margin-top: 28px; overflow: hidden; }
 .tog { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 12px 28px; background: none; border: none; color: var(--muted); cursor: pointer; transition: all .25s; }
 .tog.on { background: var(--gold); color: var(--dark); }
-.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-bottom: 48px; align-items: start; }
+.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-bottom: 48px; align-items: stretch; }
 .pc { background: var(--dark-2); border: 1px solid var(--gold-border); padding: 48px 40px; position: relative; transition: border-color .35s, transform .3s; display: flex; flex-direction: column; }
-.pc:hover { border-color: rgba(184,151,90,.4); transform: translateY(-4px); }
-.pc.feat { background: var(--dark-3); border-color: var(--gold); transform: translateY(-8px); }
-.pc.feat:hover { transform: translateY(-12px); }
+.pc:hover { border-color: rgba(184,151,90,.4); transform: translateY(-2px); }
+.pc.feat { background: var(--dark-3); border-color: var(--gold); }
+.pc.feat:hover { transform: translateY(-4px); }
 .pbadge { display: inline-block; background: var(--gold); color: var(--dark); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; padding: 5px 14px; margin-bottom: 24px; }
 .ptier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
 .pprice { font-family: var(--F); font-size: 72px; font-weight: 300; line-height: 1; margin-bottom: 4px; display: flex; align-items: flex-start; gap: 4px; }
@@ -438,7 +438,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   <ul class="nav-links">
     <li><a href="#how">How it works</a></li>
     <li><a href="#integ">Integrations</a></li>
-    <li><a href="#team">Team</a></li>
+    <li><a href="#quiz">Quiz</a></li>
     <li><a href="#pricing">Pricing</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
@@ -640,7 +640,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
 
       <!-- PREMIUM -->
       <div class="pc feat">
-        <div class="pbadge">Most Popular</div>
         <div class="ptier">Premium</div>
         <div class="pprice"><sup>$</sup><span class="pprice-int pv">19</span></div>
         <div class="pcad pcad-m">per month · cancel anytime</div>
