@@ -1442,8 +1442,82 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(function(m) { m.classList.remove('open'); });
 });
 
+// ── MEDICAL PROFILE ──
+var medicalProfile = { allergies: [], conditions: [], medications: [] };
+
+var allergyPresets = ['Gluten','Dairy','Nuts','Peanuts','Shellfish','Eggs','Soy','Fish','Wheat','Sesame'];
+var conditionPresets = ['Type 2 Diabetes','Hypertension','Asthma','Hypothyroidism','IBS','PCOS','Anxiety','Depression','Sleep Apnea','Arthritis'];
+
+function loadMedicalProfileUI() {
+  renderPresets('allergy-presets', allergyPresets, 'allergy');
+  renderPresets('condition-presets', conditionPresets, 'condition');
+}
+
+function renderPresets(containerId, presets, type) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = presets.map(function(p) {
+    return '<div class="fh-tag" data-type="' + type + '" data-val="' + p + '" onclick="togglePreset(this)">' + p + '</div>';
+  }).join('');
+}
+
+function togglePreset(el) {
+  el.classList.toggle('active');
+  var type = el.getAttribute('data-type');
+  var val = el.getAttribute('data-val');
+  var arr = type === 'allergy' ? medicalProfile.allergies : medicalProfile.conditions;
+  var idx = arr.indexOf(val);
+  if (idx > -1) arr.splice(idx, 1);
+  else arr.push(val);
+}
+
+function addCustomTag(inputId, tagsId, type) {
+  var input = document.getElementById(inputId);
+  var val = input.value.trim();
+  if (!val) return;
+  var arr = type === 'allergy' ? medicalProfile.allergies : type === 'condition' ? medicalProfile.conditions : medicalProfile.medications;
+  if (arr.indexOf(val) === -1) arr.push(val);
+  renderCustomTags(tagsId, arr, type);
+  input.value = '';
+}
+
+function renderCustomTags(containerId, arr, type) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  el.innerHTML = arr.map(function(v) {
+    return '<div style="display:flex;align-items:center;gap:6px;background:var(--gold-faint);border:1px solid var(--gold-border);padding:4px 10px">'
+      + '<span style="font-size:11px;color:var(--cream-dim)">' + v + '</span>'
+      + '<span style="font-size:10px;color:var(--muted);cursor:pointer" onclick="removeTag('' + containerId + '','' + v + '','' + type + '')">✕</span>'
+      + '</div>';
+  }).join('');
+}
+
+function removeTag(containerId, val, type) {
+  var arr = type === 'allergy' ? medicalProfile.allergies : type === 'condition' ? medicalProfile.conditions : medicalProfile.medications;
+  var idx = arr.indexOf(val);
+  if (idx > -1) arr.splice(idx, 1);
+  renderCustomTags(containerId, arr, type);
+  // Also deactivate preset if it exists
+  document.querySelectorAll('[data-val="' + val + '"]').forEach(function(el) { el.classList.remove('active'); });
+}
+
+async function saveMedicalProfile() {
+  if (!currentUser) return;
+  try {
+    await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', {
+      allergies: medicalProfile.allergies,
+      conditions: medicalProfile.conditions,
+      medications: medicalProfile.medications
+    }, currentSession.access_token);
+    var btn = event.target;
+    btn.textContent = 'Saved ✓';
+    setTimeout(function() { btn.textContent = 'Save Medical Profile'; }, 2000);
+  } catch(e) { alert('Could not save. Please try again.'); }
+}
+
 // ── INIT ──
 init();
+loadMedicalProfileUI();
 </script>
 </body>
 </html>
