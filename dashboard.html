@@ -1705,7 +1705,7 @@ async function loadMealsPage() {
       '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&meal_time=gte.' + rangeStart.toISOString() + '&meal_time=lte.' + localDayEnd.toISOString() + '&order=meal_time.desc,created_at.desc&limit=100',
       'GET', null, currentSession.access_token
     );
-    if (!meals || meals.error || meals.length === 0) {
+    if (!meals || meals.error) {
       document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>';
       return;
     }
@@ -1728,7 +1728,20 @@ async function loadMealsPage() {
 
     var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
     var list = document.getElementById('meals-list');
-    list.innerHTML = meals.map(function(m) {
+
+    // Filter to selected day only for the list display
+    var displayMeals = meals.filter(function(m) {
+      var dt = new Date(m.meal_time || m.created_at);
+      var localDateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+      return localDateStr === today;
+    });
+
+    if (displayMeals.length === 0) {
+      list.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged on this day.</div></div>';
+      return;
+    }
+
+    list.innerHTML = displayMeals.map(function(m) {
       var dt = new Date(m.meal_time || m.created_at);
       var dayStr = dt.toISOString().split('T')[0];
       var dateLabel = dayStr === today ? 'Today' : dayStr === yesterdayStr ? 'Yesterday' : dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
