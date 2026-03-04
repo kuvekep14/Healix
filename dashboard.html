@@ -1804,10 +1804,12 @@ async function loadMealsPage() {
       '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=500',
       'GET', null, session.access_token
     );
-    if (!meals || meals.error) {
+    if (!meals || meals.error || !Array.isArray(meals)) {
+      console.log('[Healix] meals fetch failed or empty:', meals);
       document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>';
       return;
     }
+    console.log('[Healix] meals fetched:', meals.length, 'mealsDate=', localDateStr(mealsDate));
 
     // Fetch nutrients
     var nutrients = [];
@@ -1854,17 +1856,20 @@ function getMacrosFromMeal(m) {
 }
 
 function renderMealsDayView(meals, nutrients, today) {
-  // Filter to selected day only
-  // Use meal_time if set, otherwise created_at
-  // Compare using local date to avoid UTC offset issues
-  var selectedD = mealsDate;
-  var dayStart = new Date(selectedD); dayStart.setHours(0,0,0,0);
-  var dayEnd2  = new Date(selectedD); dayEnd2.setHours(23,59,59,999);
+  // Filter using localDateStr string comparison - robust against UTC/local timezone issues
+  // "today" = localDateStr(mealsDate) passed in from loadMealsPage
+  var selectedDateStr = today;
+  console.log("[Healix] renderMealsDayView: date=", selectedDateStr, "total meals=", meals.length);
 
   var dayMeals = meals.filter(function(m) {
-    var dt = new Date(m.meal_time && m.meal_time !== null ? m.meal_time : m.created_at);
-    return dt >= dayStart && dt <= dayEnd2;
+    var raw = (m.meal_time && m.meal_time !== null) ? m.meal_time : m.created_at;
+    var dt = new Date(raw);
+    var ds = localDateStr(dt);
+    return ds === selectedDateStr;
   });
+
+  console.log("[Healix] dayMeals after filter:", dayMeals.length);
+  if (meals.length > 0) { console.log("[Healix] sample:", meals.slice(0,3).map(function(m){ return (m.meal_time||m.created_at) + " -> " + localDateStr(new Date(m.meal_time||m.created_at)); })); }
 
   var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊' };
   var list = document.getElementById('meals-list');
