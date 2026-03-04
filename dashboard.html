@@ -341,6 +341,19 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 }
 .modal-close:hover { color: var(--cream); }
 
+/* ── DID YOU KNOW ── */
+.dyk-card {
+  background: var(--dark-3); border-left: 2px solid var(--gold);
+  padding: 16px 20px; display: flex; gap: 16px; align-items: flex-start;
+  transition: background .2s;
+}
+.dyk-card:hover { background: var(--dark-4); }
+.dyk-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+.dyk-content { flex: 1; }
+.dyk-hook { font-size: 13px; color: var(--cream); font-weight: 500; margin-bottom: 6px; line-height: 1.5; }
+.dyk-body { font-size: 12px; color: var(--cream-dim); line-height: 1.7; }
+.dyk-tag { display: inline-block; margin-top: 8px; font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); }
+
 /* ── EMPTY STATE ── */
 .empty-state { text-align: center; padding: 28px 16px; }
 .empty-state-icon { font-size: 28px; opacity: .3; margin-bottom: 10px; }
@@ -632,6 +645,14 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
           <div class="card-label">AI Insights <span class="card-label-action">This week</span></div>
           <div id="d-insights">
             <div class="empty-state"><div class="empty-state-icon">◈</div><div class="empty-state-text">Insights generate weekly once enough data is collected</div></div>
+          </div>
+        </div>
+
+        <!-- Did You Know -->
+        <div class="card span-2" id="dyk-card">
+          <div class="card-label">Did You Know <span class="card-label-action" id="dyk-goal-label">—</span></div>
+          <div id="dyk-insights" style="display:flex;flex-direction:column;gap:12px">
+            <div class="empty-state"><div class="empty-state-text">Loading insights...</div></div>
           </div>
         </div>
 
@@ -1040,6 +1061,7 @@ async function init() {
     document.getElementById('sb-name').textContent = name;
     document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
     document.getElementById('p-name').value = name;
+    loadDidYouKnow();
     document.getElementById('page-title').textContent = greet() + ', ' + firstName;
     loadDashboardData();
     loadFamilyHistoryForm();
@@ -1833,6 +1855,236 @@ function deleteLift(id) {
   liftLog = liftLog.filter(function(e) { return e.id !== id; });
   saveLiftLog();
   renderStrengthPage();
+}
+
+// ── DID YOU KNOW ── 
+var insightLibrary = {
+  longevity: [
+    {
+      icon: '🧬',
+      hook: 'Normal bloodwork ranges are not the same as optimal ranges.',
+      body: 'Lab reference ranges are built from population averages — including sick people. A result flagged as "normal" can still be far from the level associated with long-term health. Optimal ranges for longevity are often much narrower.',
+      tag: 'Bloodwork'
+    },
+    {
+      icon: '🔥',
+      hook: 'Chronic low-grade inflammation is the underlying driver of most age-related disease.',
+      body: 'Conditions like heart disease, Alzheimers, and type 2 diabetes all share a common thread — inflammation that builds silently over years. Markers like hsCRP and homocysteine can detect this long before symptoms appear.',
+      tag: 'Longevity'
+    },
+    {
+      icon: '💧',
+      hook: 'Reverse osmosis water removes the minerals your body needs most.',
+      body: 'RO filtration removes fluoride and contaminants but also strips magnesium, calcium, and potassium. If you drink RO water exclusively, you may be quietly depleting minerals critical for heart rhythm, sleep quality, and muscle function.',
+      tag: 'Hydration'
+    },
+    {
+      icon: '🫀',
+      hook: 'Your resting heart rate trend matters more than any single reading.',
+      body: 'A one-off resting HR means little. But a resting HR that has been climbing over weeks is an early signal of accumulated stress, illness, or overtraining — often before you feel it.',
+      tag: 'Cardiovascular'
+    }
+  ],
+  energy: [
+    {
+      icon: '😴',
+      hook: 'Sleep debt is real — and you cannot fully pay it back on weekends.',
+      body: 'Research shows that recovering from accumulated sleep deprivation takes far longer than the lost sleep itself. Consistent 6-hour nights create cognitive and metabolic deficits that a weekend lie-in will not fix.',
+      tag: 'Sleep'
+    },
+    {
+      icon: '⚡',
+      hook: 'Iron deficiency can cause exhaustion long before anaemia shows up on a blood test.',
+      body: 'Ferritin — your iron storage protein — can be depleted for months before haemoglobin drops enough to be flagged. Low ferritin alone causes fatigue, brain fog, and poor exercise recovery, even with a "normal" iron panel.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '🍬',
+      hook: 'Energy crashes after meals are a sign of glucose instability, not just sugar intake.',
+      body: 'Post-meal fatigue is often driven by a rapid glucose spike followed by a crash — triggered not just by sweets but by refined carbs, large portions, or eating carbs in isolation. Pairing carbs with protein or fat dramatically smooths this curve.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '☕',
+      hook: 'Caffeine does not create energy — it masks the signal that tells you you are tired.',
+      body: 'Caffeine works by blocking adenosine receptors, not by generating energy. The adenosine keeps building while you feel alert, then crashes when the caffeine clears — which is why the 3pm slump hits harder when you have had a lot of coffee.',
+      tag: 'Hydration'
+    }
+  ],
+  sleep: [
+    {
+      icon: '🍷',
+      hook: 'Alcohol makes you fall asleep faster but destroys your sleep quality.',
+      body: 'Even moderate alcohol suppresses REM sleep — the stage responsible for memory consolidation and emotional regulation. You may sleep 8 hours and wake feeling unrested — HRV is one of the clearest ways to see this effect.',
+      tag: 'Sleep'
+    },
+    {
+      icon: '🧠',
+      hook: 'Your brain physically cleans itself during deep sleep.',
+      body: 'The glymphatic system — essentially your brain waste disposal — is almost exclusively active during deep sleep. It flushes out metabolic waste including amyloid-beta, the protein associated with Alzheimers. Poor sleep means poor clearance.',
+      tag: 'Sleep'
+    },
+    {
+      icon: '🌡️',
+      hook: 'Your body temperature needs to drop 1-2°C to initiate sleep.',
+      body: 'Core body cooling is a key trigger for sleep onset. A warm shower or bath 1-2 hours before bed actually helps — the subsequent cooling accelerates the drop. Keeping your room cold (16-19°C / 60-67°F) is one of the most evidence-backed sleep improvements.',
+      tag: 'Sleep'
+    },
+    {
+      icon: '💊',
+      hook: 'Magnesium deficiency is one of the most common and overlooked causes of poor sleep.',
+      body: 'Magnesium activates the parasympathetic nervous system and regulates GABA — the neurotransmitter that quiets the brain for sleep. Deficiency is extremely common, partly because modern soils are depleted and RO water removes what is left.',
+      tag: 'Nutrition'
+    }
+  ],
+  fitness: [
+    {
+      icon: '💪',
+      hook: 'Muscle is built during rest, not during training.',
+      body: 'Training creates the stimulus — microscopic muscle damage that signals adaptation. The actual growth happens in the 24-72 hours after, during recovery. Insufficient sleep or back-to-back training sessions actively prevent the gains you worked for.',
+      tag: 'Recovery'
+    },
+    {
+      icon: '🥩',
+      hook: 'When you eat protein matters almost as much as how much you eat.',
+      body: 'Muscle protein synthesis peaks when protein is spread across meals rather than concentrated in one. Your body can only utilise roughly 20-40g per sitting for muscle building. Spreading intake across 3-4 meals is significantly more effective than one large protein meal.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '📉',
+      hook: 'Overtraining looks identical to undertraining from the outside.',
+      body: 'A plateau in performance, persistent fatigue, and mood changes can all be caused by doing too much, not too little. HRV declining week over week is one of the clearest early signals that your body is under more stress than it can adapt to.',
+      tag: 'Recovery'
+    },
+    {
+      icon: '🦴',
+      hook: 'Strength training is the most powerful intervention for long-term metabolic health.',
+      body: 'Muscle tissue is metabolically active — the more you have, the more glucose you clear from the bloodstream at rest. Higher muscle mass is strongly correlated with insulin sensitivity, lower visceral fat, and reduced all-cause mortality.',
+      tag: 'Fitness'
+    }
+  ],
+  focus: [
+    {
+      icon: '🐟',
+      hook: 'Omega-3 deficiency is one of the most common nutritional gaps in the developed world.',
+      body: 'DHA — found almost exclusively in fatty fish and algae — is a structural component of brain cell membranes. Low DHA is associated with slower cognition, mood instability, and higher inflammation. Most people get a fraction of what research suggests is optimal.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '🩸',
+      hook: 'Blood glucose swings are a leading cause of brain fog and poor focus.',
+      body: 'Your brain runs almost exclusively on glucose. Rapid spikes and crashes — from refined carbs, skipped meals, or high-sugar snacks — create the cognitive equivalent of flickering lights. Stable glucose means stable attention.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '💧',
+      hook: 'Even mild dehydration measurably reduces cognitive performance.',
+      body: 'Studies show that a 1-2% reduction in body water — before you even feel thirsty — impairs working memory, attention, and reaction time. Thirst is a lagging indicator. By the time you feel it, performance is already affected.',
+      tag: 'Hydration'
+    },
+    {
+      icon: '😴',
+      hook: 'One bad night of sleep impairs cognition as much as being legally drunk.',
+      body: '17-19 hours of wakefulness produces cognitive impairment equivalent to a 0.05% blood alcohol level. Yet most people in this state feel fine — the same way people underestimate their impairment when drunk.',
+      tag: 'Sleep'
+    }
+  ],
+  mood: [
+    {
+      icon: '🦠',
+      hook: 'About 90% of your serotonin is made in your gut, not your brain.',
+      body: 'The gut-brain axis means your microbiome directly influences mood, anxiety, and emotional regulation. Dietary diversity, fibre, and fermented foods feed the bacteria that produce the neurotransmitters affecting how you feel.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '☀️',
+      hook: 'Vitamin D deficiency is strongly associated with depression — and most people are deficient.',
+      body: 'Vitamin D acts more like a hormone than a vitamin, with receptors throughout the brain. Deficiency is linked to higher rates of depression, anxiety, and seasonal mood changes. Optimal levels (60-80 ng/mL) are well above what most labs flag as sufficient.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '🧘',
+      hook: 'HRV is one of the best objective measures of your stress resilience.',
+      body: 'Heart rate variability reflects the balance between your sympathetic (fight-or-flight) and parasympathetic (rest) nervous systems. A declining HRV trend — even before you feel stressed — is your body signalling that its capacity to handle load is shrinking.',
+      tag: 'Recovery'
+    },
+    {
+      icon: '🏃',
+      hook: 'Exercise is as effective as antidepressants for mild to moderate depression.',
+      body: 'Multiple large-scale studies show that regular aerobic exercise produces antidepressant effects comparable to medication — with the added benefits of improved sleep, cognition, and cardiovascular health. The dose that matters most is consistency, not intensity.',
+      tag: 'Fitness'
+    }
+  ],
+  weight: [
+    {
+      icon: '⚖️',
+      hook: 'Daily weight fluctuations of 1-3kg are normal and tell you almost nothing.',
+      body: 'Water retention, food volume, hormonal shifts, and glycogen storage all move the scale dramatically day to day. The only meaningful signal is the trend over 2-4 weeks — which is why logging consistently matters more than any single reading.',
+      tag: 'Body Composition'
+    },
+    {
+      icon: '🥩',
+      hook: 'High protein intake is the single most evidence-backed strategy for fat loss.',
+      body: 'Protein has the highest thermic effect of any macronutrient — your body burns roughly 25-30% of protein calories just digesting it. It also preserves muscle during a calorie deficit and reduces hunger more than carbs or fat.',
+      tag: 'Nutrition'
+    },
+    {
+      icon: '😴',
+      hook: 'Sleep deprivation makes fat loss almost impossible.',
+      body: 'Poor sleep elevates ghrelin (hunger hormone) and suppresses leptin (satiety hormone) — dramatically increasing appetite and cravings for calorie-dense food. Studies show sleep-deprived dieters lose 55% less fat and more muscle than those who sleep adequately.',
+      tag: 'Sleep'
+    },
+    {
+      icon: '💪',
+      hook: 'Muscle burns more calories at rest than fat — but probably less than you think.',
+      body: 'A kg of muscle burns roughly 13 kcal/day at rest vs 4.5 for fat. The metabolic advantage of muscle is real but modest — the bigger benefit is that more muscle means better glucose disposal, improved body composition, and sustainable long-term leanness.',
+      tag: 'Fitness'
+    }
+  ]
+};
+
+// Goal key mapping from profile values
+var goalKeyMap = {
+  longevity: 'longevity',
+  energy: 'energy',
+  sleep: 'sleep',
+  fitness: 'fitness',
+  stress: 'mood',
+  weight: 'weight',
+  focus: 'focus'
+};
+
+function loadDidYouKnow() {
+  if (!currentUser) return;
+
+  // Get goal from profile
+  var goal = document.getElementById('p-goal') ? document.getElementById('p-goal').value : '';
+  
+  // Also try from user metadata
+  if (!goal && currentUser.user_metadata && currentUser.user_metadata.primary_goal) {
+    goal = currentUser.user_metadata.primary_goal;
+  }
+
+  var key = goalKeyMap[goal] || 'longevity';
+  var insights = insightLibrary[key] || insightLibrary.longevity;
+
+  // Show top 2 insights
+  var toShow = insights.slice(0, 2);
+  var goalLabels = {
+    longevity: 'Longevity', energy: 'Energy', sleep: 'Sleep',
+    fitness: 'Fitness', mood: 'Mood', weight: 'Weight management', focus: 'Focus'
+  };
+
+  document.getElementById('dyk-goal-label').textContent = goalLabels[key] || 'Your goals';
+  document.getElementById('dyk-insights').innerHTML = toShow.map(function(ins) {
+    return '<div class="dyk-card">'
+      + '<div class="dyk-icon">' + ins.icon + '</div>'
+      + '<div class="dyk-content">'
+      + '<div class="dyk-hook">' + ins.hook + '</div>'
+      + '<div class="dyk-body">' + ins.body + '</div>'
+      + '<div class="dyk-tag">' + ins.tag + '</div>'
+      + '</div></div>';
+  }).join('');
 }
 
 // ── INIT ──
