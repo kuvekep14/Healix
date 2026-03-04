@@ -139,6 +139,12 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   gap: 16px;
 }
 
+/* ── WORKOUT MODAL ── */
+.wm-exercise-block {
+  background: var(--dark-3); border: 1px solid var(--gold-border); padding: 16px;
+}
+.wm-set-row input, .wm-set-row select { font-size: 13px; }
+
 /* ── VITALITY AGE DASHBOARD ── */
 .vitality-page {
   display: flex; flex-direction: column; gap: 20px;
@@ -1065,58 +1071,21 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 
     <!-- ══ STRENGTH LOG PAGE ══ -->
     <div class="page" id="page-strength">
-
-      <div class="date-nav" id="strength-date-nav">
-        <div class="date-nav-arrows">
-          <button class="date-nav-btn" onclick="stepDate('strength', -1)">←</button>
-          <button class="date-nav-btn" onclick="stepDate('strength', 1)" id="strength-next-btn">→</button>
-        </div>
-        <div class="date-nav-label" id="strength-date-label"><em>All Time</em></div>
-        <button class="date-nav-today active" id="strength-today-btn" onclick="goToday('strength')">All Time</button>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
         <div>
-          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Personal Records & Progression</div>
-          <div style="font-family:var(--F);font-size:28px;font-weight:300">Strength <em style="font-style:italic;color:var(--gold)">Log</em></div>
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Workouts &amp; Progression</div>
+          <div style="font-family:var(--F);font-size:28px;font-weight:300">Exercise <em style="font-style:italic;color:var(--gold)">Log</em></div>
         </div>
-        <button class="upload-btn" onclick="openModal('lift-modal')">+ Log a Lift</button>
+        <button class="upload-btn" onclick="openNewWorkoutModal()">+ New Workout</button>
       </div>
-
-      <!-- Exercise selector -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px" id="exercise-filter">
-        <button class="tf-btn active" onclick="filterExercise('all', this)" style="border:1px solid var(--gold-border)">All</button>
-      </div>
-
-      <!-- PRs row -->
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px" id="pr-grid">
         <div class="empty-state" style="grid-column:span 4;padding:24px">
           <div class="empty-state-icon">🏋️</div>
-          <div class="empty-state-text">No lifts logged yet.<br>Start tracking to see your personal records.</div>
+          <div class="empty-state-text">No workouts logged yet.</div>
         </div>
       </div>
-
-      <!-- Chart area -->
-      <div class="card" id="strength-chart-card" style="margin-bottom:16px;display:none">
-        <div class="card-label">Progression <span class="card-label-action" id="strength-chart-label">—</span></div>
-        <div style="display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:8px" id="strength-chart"></div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px" id="strength-chart-dates" style="font-size:9px;color:var(--muted)"></div>
-      </div>
-
-      <!-- Log table -->
-      <div class="card">
-        <div class="card-label">History</div>
-        <div id="strength-log-list">
-          <div class="empty-state" style="padding:32px">
-            <div class="empty-state-icon">🏋️</div>
-            <div class="empty-state-text">Log your first lift to start tracking progression.</div>
-          </div>
-        </div>
-      </div>
-
+      <div id="workout-history-list"></div>
     </div>
-
-  </div>
-</div>
 
 <!-- ── WEIGHT MODAL ── -->
 <div class="modal-overlay" id="weight-modal" onclick="closeModalOutside(event, 'weight-modal')">
@@ -1152,73 +1121,31 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   </div>
 </div>
 
-<!-- ── LIFT MODAL ── -->
-<div class="modal-overlay" id="lift-modal" onclick="closeModalOutside(event, 'lift-modal')">
-  <div class="modal" style="position:relative">
-    <button class="modal-close" onclick="closeModal('lift-modal')">✕</button>
-    <div class="modal-title">Log a <em>Lift</em></div>
-    <div class="modal-sub">Record a set. Track weight, reps, and sets over time to see your progression.</div>
-    <div class="modal-field">
-      <label class="modal-label">Exercise</label>
-      <div style="display:flex;gap:8px">
-        <select class="modal-input" id="lift-exercise" style="cursor:pointer;flex:1">
-          <option value="">Select or type below</option>
-          <optgroup label="Upper Body">
-            <option>Bench Press</option>
-            <option>Overhead Press</option>
-            <option>Pull-ups</option>
-            <option>Barbell Row</option>
-            <option>Dumbbell Curl</option>
-            <option>Tricep Dip</option>
-          </optgroup>
-          <optgroup label="Lower Body">
-            <option>Squat</option>
-            <option>Deadlift</option>
-            <option>Romanian Deadlift</option>
-            <option>Leg Press</option>
-            <option>Hip Thrust</option>
-            <option>Lunges</option>
-          </optgroup>
-          <optgroup label="Core & Cardio">
-            <option>Plank</option>
-            <option>Cable Crunch</option>
-            <option>Running</option>
-          </optgroup>
-        </select>
+<!-- ── WORKOUT MODAL ── -->
+<div class="modal-overlay" id="workout-modal" onclick="closeModalOutside(event,'workout-modal')">
+  <div class="modal" style="position:relative;max-width:680px;width:90vw;max-height:88vh;overflow-y:auto">
+    <button class="modal-close" onclick="closeModal('workout-modal')">✕</button>
+    <div class="modal-title" id="wm-title">New <em>Workout</em></div>
+    <div class="modal-sub">Add exercises and log each set individually. Workout name is optional.</div>
+    <div class="modal-row" style="margin-bottom:20px">
+      <div class="modal-field" style="flex:2">
+        <label class="modal-label">Workout Name</label>
+        <input class="modal-input" id="wm-name" type="text" placeholder="Optional — e.g. Push Day, Leg Day">
       </div>
-      <input class="modal-input" id="lift-custom" type="text" placeholder="Or type a custom exercise..." style="margin-top:8px">
-    </div>
-    <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Weight</label>
-        <input class="modal-input" id="lift-weight" type="number" placeholder="e.g. 185" step="2.5">
+      <div class="modal-field" style="flex:1">
+        <label class="modal-label">Date</label>
+        <input class="modal-input" id="wm-date" type="date">
       </div>
-      <div class="modal-field">
-        <label class="modal-label">Unit</label>
-        <select class="modal-input" id="lift-unit" style="cursor:pointer">
-          <option value="lbs">lbs</option>
-          <option value="kg">kg</option>
-          <option value="bodyweight">Bodyweight</option>
-        </select>
+      <div class="modal-field" style="flex:1">
+        <label class="modal-label">Duration (mins)</label>
+        <input class="modal-input" id="wm-duration" type="number" placeholder="60" min="1">
       </div>
     </div>
-    <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Sets</label>
-        <input class="modal-input" id="lift-sets" type="number" placeholder="e.g. 3" min="1">
-      </div>
-      <div class="modal-field">
-        <label class="modal-label">Reps</label>
-        <input class="modal-input" id="lift-reps" type="number" placeholder="e.g. 8" min="1">
-      </div>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Notes (optional)</label>
-      <input class="modal-input" id="lift-notes" type="text" placeholder="e.g. felt strong, paused reps">
-    </div>
+    <div id="wm-exercises" style="display:flex;flex-direction:column;gap:16px;margin-bottom:16px"></div>
+    <button class="modal-btn-secondary" onclick="addExerciseBlock()" style="width:100%;margin-bottom:20px">+ Add Exercise</button>
     <div class="modal-actions">
-      <button class="modal-btn-secondary" onclick="closeModal('lift-modal')">Cancel</button>
-      <button class="modal-btn-primary" onclick="saveLift()">Log Lift</button>
+      <button class="modal-btn-secondary" onclick="closeModal('workout-modal')">Cancel</button>
+      <button class="modal-btn-primary" onclick="saveWorkout()">Save Workout</button>
     </div>
   </div>
 </div>
@@ -2870,199 +2797,272 @@ async function saveMedicalProfile() {
   } catch(e) { alert('Could not save. Please try again.'); }
 }
 
-// ── STRENGTH LOG ──
-var liftLog = [];
-var activeExerciseFilter = 'all';
+// ── EXERCISE LOG ──
+var EXERCISE_PRESETS = [
+  'Bench Press','Overhead Press','Incline Press','Dumbbell Fly',
+  'Pull-ups','Chin-ups','Barbell Row','Cable Row','Lat Pulldown',
+  'Dumbbell Curl','Hammer Curl','Tricep Dip','Tricep Pushdown','Skull Crushers',
+  'Squat','Front Squat','Leg Press','Romanian Deadlift','Deadlift',
+  'Hip Thrust','Lunges','Leg Curl','Leg Extension',
+  'Plank','Cable Crunch','Ab Wheel','Face Pull',
+  'Running','Cycling','Row Machine','Jump Rope'
+];
 
-function saveLift() {
-  var exercise = document.getElementById('lift-custom').value.trim()
-    || document.getElementById('lift-exercise').value;
-  var weight = document.getElementById('lift-weight').value;
-  var unit = document.getElementById('lift-unit').value;
-  var sets = document.getElementById('lift-sets').value;
-  var reps = document.getElementById('lift-reps').value;
-  var notes = document.getElementById('lift-notes').value;
+var editingWorkoutId = null; // null = new workout
 
-  if (!exercise) { alert('Please select or enter an exercise.'); return; }
-  if (!reps) { alert('Please enter reps.'); return; }
+function openNewWorkoutModal() {
+  editingWorkoutId = null;
+  document.getElementById('wm-title').innerHTML = 'New <em>Workout</em>';
+  document.getElementById('wm-name').value = '';
+  document.getElementById('wm-date').value = localDateStr(new Date());
+  document.getElementById('wm-duration').value = '';
+  document.getElementById('wm-exercises').innerHTML = '';
+  addExerciseBlock();
+  openModal('workout-modal');
+}
 
-  var entry = {
-    id: Date.now(),
-    exercise: exercise,
-    weight: weight ? parseFloat(weight) : null,
-    unit: unit,
-    sets: sets ? parseInt(sets) : 1,
-    reps: parseInt(reps),
-    notes: notes,
-    date: new Date().toISOString(),
-    e1rm: weight ? Math.round(parseFloat(weight) * (1 + parseInt(reps) / 30)) : null
+function addExerciseBlock(exercise) {
+  var container = document.getElementById('wm-exercises');
+  var idx = container.children.length;
+  var exName = exercise ? exercise.name : '';
+  var sets = exercise ? exercise.sets : [{ weight: '', reps: '', unit: 'lbs' }];
+
+  var setsHtml = sets.map(function(s, si) {
+    return buildSetRow(idx, si, s.weight, s.reps, s.unit || 'lbs');
+  }).join('');
+
+  var el = document.createElement('div');
+  el.className = 'wm-exercise-block';
+  el.setAttribute('data-idx', idx);
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    + '<input class="modal-input wm-ex-name" style="flex:1" type="text" placeholder="Exercise name" list="ex-presets" value="' + exName + '">'
+    + '<span style="font-size:11px;color:var(--muted);cursor:pointer;padding:4px 8px;border:1px solid var(--gold-border)" onclick="removeExerciseBlock(this)">Remove</span>'
+    + '</div>'
+    + '<div class="wm-sets" data-ex="' + idx + '">'
+    + setsHtml
+    + '</div>'
+    + '<button class="modal-btn-secondary" style="width:auto;padding:6px 14px;font-size:11px;margin-top:8px" onclick="addSetRow(this,' + idx + ')">+ Add Set</button>';
+
+  container.appendChild(el);
+}
+
+function buildSetRow(exIdx, setIdx, weight, reps, unit) {
+  return '<div class="wm-set-row" style="display:grid;grid-template-columns:2fr 2fr 1fr auto;gap:8px;margin-bottom:6px;align-items:center">'
+    + '<input class="modal-input wm-weight" type="number" placeholder="Weight" step="2.5" value="' + (weight||'') + '" style="padding:8px 10px">'
+    + '<input class="modal-input wm-reps" type="number" placeholder="Reps" min="1" value="' + (reps||'') + '" style="padding:8px 10px">'
+    + '<select class="modal-input wm-unit" style="padding:8px 6px;cursor:pointer">'
+    + '<option value="lbs"' + (unit==='lbs'?' selected':'') + '>lbs</option>'
+    + '<option value="kg"' + (unit==='kg'?' selected':'') + '>kg</option>'
+    + '<option value="bw"' + (unit==='bw'?' selected':'') + '>BW</option>'
+    + '</select>'
+    + '<span style="color:var(--muted);cursor:pointer;font-size:13px;text-align:center" onclick="removeSetRow(this)">✕</span>'
+    + '</div>';
+}
+
+function addSetRow(btn, exIdx) {
+  var setsContainer = btn.previousElementSibling;
+  var div = document.createElement('div');
+  div.innerHTML = buildSetRow(exIdx, setsContainer.children.length, '', '', 'lbs');
+  setsContainer.appendChild(div.firstElementChild);
+}
+
+function removeSetRow(el) {
+  var row = el.closest('.wm-set-row');
+  if (row) row.remove();
+}
+
+function removeExerciseBlock(el) {
+  var block = el.closest('.wm-exercise-block');
+  if (block) block.remove();
+}
+
+function readWorkoutFromModal() {
+  var nameVal = document.getElementById('wm-name').value.trim();
+  var name = nameVal || null;
+  var date = document.getElementById('wm-date').value || localDateStr(new Date());
+  var duration = parseInt(document.getElementById('wm-duration').value) || null;
+
+  var exercises = [];
+  document.querySelectorAll('.wm-exercise-block').forEach(function(block) {
+    var exName = block.querySelector('.wm-ex-name').value.trim();
+    if (!exName) return;
+    var sets = [];
+    block.querySelectorAll('.wm-set-row').forEach(function(row, si) {
+      var w = parseFloat(row.querySelector('.wm-weight').value);
+      var r = parseInt(row.querySelector('.wm-reps').value);
+      var u = row.querySelector('.wm-unit').value;
+      if (r > 0) {
+        sets.push({
+          set: si + 1,
+          weight: isNaN(w) ? null : w,
+          reps: r,
+          unit: u,
+          e1rm: (!isNaN(w) && r > 0) ? Math.round(w * (1 + r / 30)) : null
+        });
+      }
+    });
+    if (sets.length > 0) exercises.push({ name: exName, sets: sets });
+  });
+
+  return { name: name, date: date, duration_mins: duration, exercises: exercises };
+}
+
+async function saveWorkout() {
+  var workout = readWorkoutFromModal();
+  if (workout.exercises.length === 0) { alert('Add at least one exercise with sets.'); return; }
+
+  var totalVol = 0;
+  workout.exercises.forEach(function(ex) {
+    ex.sets.forEach(function(s) {
+      if (s.weight && s.reps) totalVol += s.weight * s.reps;
+    });
+  });
+
+  var payload = {
+    user_id: currentUser.id,
+    logged_at: workout.date + 'T12:00:00',
+    total_volume: totalVol,
+    data: workout
   };
 
-  liftLog.unshift(entry);
-  saveLiftLog();
-  closeModal('lift-modal');
-
-  // Reset
-  ['lift-exercise','lift-unit'].forEach(function(id) {});
-  ['lift-custom','lift-notes'].forEach(function(id) { document.getElementById(id).value = ''; });
-  document.getElementById('lift-weight').value = '';
-  document.getElementById('lift-sets').value = '';
-  document.getElementById('lift-reps').value = '';
-
-  if (document.getElementById('page-strength').classList.contains('active')) {
-    renderStrengthPage();
-  }
-}
-
-function saveLiftLog() {
-  try { localStorage.setItem('healix_lifts', JSON.stringify(liftLog)); } catch(e) {}
-}
-
-function loadLiftLog() {
   try {
-    var saved = localStorage.getItem('healix_lifts');
-    if (saved) liftLog = JSON.parse(saved);
-  } catch(e) {}
-}
+    var btn = document.querySelector('#workout-modal .modal-btn-primary');
+    btn.textContent = 'Saving…'; btn.disabled = true;
 
-function filterByBtn(btn) {
-  var val = btn.getAttribute('data-ex');
-  if (val === 'all') { filterExercise('all', btn); return; }
-  var exercises = getExercises();
-  filterExercise(exercises[parseInt(val)], btn);
-}
+    if (editingWorkoutId) {
+      await supabaseRequest(
+        '/rest/v1/workout_logs?id=eq.' + editingWorkoutId,
+        'PATCH', payload, currentSession.access_token
+      );
+    } else {
+      await supabaseRequest('/rest/v1/workout_logs', 'POST', payload, currentSession.access_token);
+    }
 
-function filterExercise(name, btn) {
-  activeExerciseFilter = name;
-  document.querySelectorAll('#exercise-filter .tf-btn').forEach(function(b) { b.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  renderStrengthLog();
-  renderStrengthChart();
-}
-
-function renderStrengthPage() {
-  loadLiftLog();
-  renderExerciseFilter();
-  renderPRs();
-  renderStrengthLog();
-  renderStrengthChart();
-}
-
-function getExercises() {
-  var seen = {};
-  liftLog.forEach(function(e) { seen[e.exercise] = true; });
-  return Object.keys(seen);
-}
-
-function renderExerciseFilter() {
-  var exercises = getExercises();
-  var container = document.getElementById('exercise-filter');
-  var allActive = activeExerciseFilter === 'all' ? 'active' : '';
-  var html = '<button class="tf-btn ' + allActive + '" data-ex="all" onclick="filterByBtn(this)" style="border:1px solid var(--gold-border)">All</button>';
-  exercises.forEach(function(ex, i) {
-    var cls = activeExerciseFilter === ex ? 'active' : '';
-    html += '<button class="tf-btn ' + cls + '" data-ex="' + i + '" onclick="filterByBtn(this)" style="border:1px solid var(--gold-border)">' + ex + '</button>';
-  });
-  container.innerHTML = html;
-}
-function getPRs() {
-  var prs = {};
-  liftLog.forEach(function(e) {
-    if (!e.e1rm) return;
-    if (!prs[e.exercise] || e.e1rm > prs[e.exercise].e1rm) prs[e.exercise] = e;
-  });
-  return prs;
-}
-
-function renderPRs() {
-  var prs = getPRs();
-  var grid = document.getElementById('pr-grid');
-  var keys = Object.keys(prs);
-  if (keys.length === 0) {
-    grid.innerHTML = '<div class="empty-state" style="grid-column:span 4;padding:24px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">No lifts logged yet.<br>Start tracking to see your personal records.</div></div>';
-    return;
+    closeModal('workout-modal');
+    renderStrengthPage();
+  } catch(e) {
+    alert('Could not save workout. Please try again.');
+    console.error(e);
+  } finally {
+    var b = document.querySelector('#workout-modal .modal-btn-primary');
+    if (b) { b.textContent = 'Save Workout'; b.disabled = false; }
   }
-  grid.innerHTML = keys.map(function(ex) {
-    var pr = prs[ex];
-    var dateStr = new Date(pr.date).toLocaleDateString('en-US', {month:'short', day:'numeric'});
-    return '<div class="card" style="padding:18px">'
-      + '<div class="stat-item-label">' + ex + '</div>'
-      + '<div style="font-family:var(--F);font-size:28px;font-weight:300;line-height:1;margin:8px 0">'
-      + (pr.weight ? pr.weight + '<span style="font-size:13px;color:var(--muted)">' + pr.unit + '</span>' : 'BW')
-      + '</div>'
-      + '<div style="font-size:11px;color:var(--muted)">' + pr.sets + '×' + pr.reps + ' · est. 1RM: ' + (pr.e1rm || '—') + '</div>'
-      + '<div style="font-size:10px;color:var(--gold);margin-top:4px;letter-spacing:.1em">PR · ' + dateStr + '</div>'
-      + '</div>';
-  }).join('');
 }
 
-function renderStrengthLog() {
-  var dateFilter = pageSelectedDate['strength'];
-  var filtered = liftLog.filter(function(e) {
-    if (activeExerciseFilter !== 'all' && e.exercise !== activeExerciseFilter) return false;
-    if (!dateFilter) return true; // all time
-    var entryDate = new Date(e.date).toDateString();
-    return entryDate === dateFilter.toDateString();
-  });
-  var list = document.getElementById('strength-log-list');
-  if (filtered.length === 0) {
-    list.innerHTML = '<div class="empty-state" style="padding:32px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">No lifts logged yet.</div></div>';
-    return;
-  }
-  var today = new Date().toDateString();
-  var yesterday = new Date(Date.now() - 86400000).toDateString();
-  list.innerHTML = '<table style="width:100%;border-collapse:collapse">'
-    + '<thead><tr style="border-bottom:1px solid var(--gold-border)">'
-    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Exercise</th>'
-    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Weight</th>'
-    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Sets × Reps</th>'
-    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Est. 1RM</th>'
-    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Date</th>'
-    + '<th style="padding:8px 0"></th>'
-    + '</tr></thead><tbody>'
-    + filtered.map(function(e) {
-      var dt = new Date(e.date);
-      var dStr = dt.toDateString() === today ? 'Today'
-        : dt.toDateString() === yesterday ? 'Yesterday'
-        : dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
-      return '<tr style="border-bottom:1px solid rgba(184,151,90,.08)">'
-        + '<td style="padding:12px 0;font-size:13px;color:var(--cream)">' + e.exercise + '</td>'
-        + '<td style="padding:12px 0;font-family:var(--F);font-size:18px;font-weight:300">' + (e.weight ? e.weight + '<span style="font-size:11px;color:var(--muted)"> ' + e.unit + '</span>' : 'BW') + '</td>'
-        + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + e.sets + ' × ' + e.reps + '</td>'
-        + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (e.e1rm ? e.e1rm + ' ' + e.unit : '—') + '</td>'
-        + '<td style="padding:12px 0;font-size:11px;color:var(--muted)">' + dStr + '</td>'
-        + '<td style="padding:12px 0;text-align:right"><span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="deleteLift(' + e.id + ')">✕</span></td>'
-        + '</tr>';
-    }).join('')
-    + '</tbody></table>';
-}
-
-function renderStrengthChart() {
-  var exercise = activeExerciseFilter === 'all' ? null : activeExerciseFilter;
-  var data = exercise ? liftLog.filter(function(e) { return e.exercise === exercise && e.e1rm; }) : [];
-  var card = document.getElementById('strength-chart-card');
-  if (!exercise || data.length < 2) { card.style.display = 'none'; return; }
-  card.style.display = 'block';
-  document.getElementById('strength-chart-label').textContent = exercise + ' — Estimated 1RM';
-  var sorted = data.slice().reverse().slice(-10);
-  var maxV = Math.max.apply(null, sorted.map(function(e) { return e.e1rm; }));
-  var chart = document.getElementById('strength-chart');
-  chart.innerHTML = sorted.map(function(e) {
-    var pct = Math.max(10, Math.round(e.e1rm / maxV * 100));
-    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'
-      + '<div style="font-size:9px;color:var(--muted)">' + e.e1rm + '</div>'
-      + '<div style="width:100%;background:var(--gold);height:' + pct + '%;min-height:4px;transition:height .4s"></div>'
-      + '</div>';
-  }).join('');
-  document.getElementById('strength-chart-dates').innerHTML = sorted.map(function(e) {
-    return '<span style="font-size:9px;color:var(--muted)">' + new Date(e.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>';
-  }).join('');
-}
-
-function deleteLift(id) {
-  liftLog = liftLog.filter(function(e) { return e.id !== id; });
-  saveLiftLog();
+async function deleteWorkout(id) {
+  if (!confirm('Delete this workout?')) return;
+  await supabaseRequest('/rest/v1/workout_logs?id=eq.' + id, 'DELETE', null, currentSession.access_token);
   renderStrengthPage();
+}
+
+async function renderStrengthPage() {
+  if (!currentUser) return;
+  var list = document.getElementById('workout-history-list');
+  var prGrid = document.getElementById('pr-grid');
+  if (list) list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:24px 0">Loading…</div>';
+
+  try {
+    var workouts = await supabaseRequest(
+      '/rest/v1/workout_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=100&select=id,logged_at,total_volume,data',
+      'GET', null, currentSession.access_token
+    );
+
+    if (!workouts || workouts.error || workouts.length === 0) {
+      if (list) list.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">No workouts logged yet.<br>Hit "+ New Workout" to start.</div></div>';
+      if (prGrid) prGrid.innerHTML = '<div class="empty-state" style="grid-column:span 4;padding:24px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">No workouts yet.</div></div>';
+      return;
+    }
+
+    // Build PRs across all workouts
+    var prs = {}; // exercise name → { weight, reps, unit, e1rm, date }
+    workouts.forEach(function(w) {
+      var d = w.data; if (!d || !d.exercises) return;
+      d.exercises.forEach(function(ex) {
+        (ex.sets || []).forEach(function(s) {
+          if (!s.e1rm) return;
+          if (!prs[ex.name] || s.e1rm > prs[ex.name].e1rm) {
+            prs[ex.name] = { weight: s.weight, reps: s.reps, unit: s.unit, e1rm: s.e1rm, date: w.logged_at };
+          }
+        });
+      });
+    });
+
+    var prKeys = Object.keys(prs).slice(0, 4);
+    if (prGrid) {
+      if (prKeys.length === 0) {
+        prGrid.innerHTML = '<div class="empty-state" style="grid-column:span 4;padding:24px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">Log some sets to see PRs.</div></div>';
+      } else {
+        prGrid.innerHTML = prKeys.map(function(ex) {
+          var pr = prs[ex];
+          return '<div class="card" style="padding:18px">'
+            + '<div class="stat-item-label">' + ex + '</div>'
+            + '<div style="font-family:var(--F);font-size:28px;font-weight:300;line-height:1;margin:8px 0">'
+            + (pr.weight ? pr.weight + '<span style="font-size:13px;color:var(--muted)"> ' + pr.unit + '</span>' : 'BW') + '</div>'
+            + '<div style="font-size:11px;color:var(--muted)">' + pr.reps + ' reps · est. 1RM: ' + pr.e1rm + ' ' + (pr.unit||'') + '</div>'
+            + '<div style="font-size:10px;color:var(--gold);margin-top:4px;letter-spacing:.1em">PR · ' + new Date(pr.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</div>'
+            + '</div>';
+        }).join('');
+      }
+    }
+
+    // Workout history
+    if (list) {
+      list.innerHTML = workouts.map(function(w) {
+        var d = w.data || {};
+        var date = new Date(w.logged_at);
+        var dateStr = date.toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric'});
+        var exNames = (d.exercises || []).map(function(e){ return e.name; }).join(', ');
+        var totalSets = (d.exercises || []).reduce(function(s,e){ return s + (e.sets||[]).length; }, 0);
+        var vol = w.total_volume ? Math.round(w.total_volume).toLocaleString() + ' ' + (((d.exercises||[])[0]||{sets:[{}]}).sets[0] || {}).unit : '';
+
+        return '<div class="card" style="margin-bottom:12px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'
+          + '<div>'
+          + '<div style="font-family:var(--F);font-size:18px;font-weight:300;color:var(--cream)">' + (d.name || date.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})) + '</div>'
+          + '<div style="font-size:11px;color:var(--muted);margin-top:3px">' + dateStr + (d.duration_mins ? ' · ' + d.duration_mins + ' min' : '') + ' · ' + totalSets + ' sets' + (vol ? ' · ' + vol + ' vol' : '') + '</div>'
+          + '</div>'
+          + '<div style="display:flex;gap:8px">'
+          + '<span style="font-size:11px;color:var(--gold);cursor:pointer;border:1px solid var(--gold-border);padding:4px 10px" onclick="editWorkout(\'' + w.id + '\')">Edit</span>'
+          + '<span style="font-size:11px;color:var(--muted);cursor:pointer;border:1px solid var(--gold-border);padding:4px 10px" onclick="deleteWorkout(\'' + w.id + '\')">Delete</span>'
+          + '</div></div>'
+          + '<div style="display:flex;flex-direction:column;gap:10px">'
+          + (d.exercises || []).map(function(ex) {
+              var setsSummary = (ex.sets || []).map(function(s, i) {
+                return '<span style="display:inline-block;background:var(--dark-3);border:1px solid var(--gold-border);padding:3px 8px;font-size:11px;color:var(--cream-dim);margin:2px">'
+                  + 'S' + (i+1) + ': ' + (s.weight ? s.weight + ' ' + s.unit : 'BW') + ' × ' + s.reps
+                  + '</span>';
+              }).join('');
+              return '<div>'
+                + '<div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:5px">' + ex.name + '</div>'
+                + '<div>' + setsSummary + '</div>'
+                + '</div>';
+          }).join('')
+          + '</div></div>';
+      }).join('');
+    }
+
+  } catch(e) { console.error('Exercise log error:', e); }
+}
+
+async function editWorkout(id) {
+  try {
+    var data = await supabaseRequest(
+      '/rest/v1/workout_logs?id=eq.' + id + '&select=id,logged_at,data',
+      'GET', null, currentSession.access_token
+    );
+    if (!data || !data[0]) return;
+    var w = data[0]; var d = w.data || {};
+    editingWorkoutId = id;
+    document.getElementById('wm-title').innerHTML = 'Edit <em>Workout</em>';
+    document.getElementById('wm-name').value = d.name || '';
+    document.getElementById('wm-date').value = w.logged_at ? w.logged_at.split('T')[0] : localDateStr(new Date());
+    document.getElementById('wm-duration').value = d.duration_mins || '';
+    document.getElementById('wm-exercises').innerHTML = '';
+    (d.exercises || []).forEach(function(ex) { addExerciseBlock(ex); });
+    if ((d.exercises||[]).length === 0) addExerciseBlock();
+    openModal('workout-modal');
+  } catch(e) { console.error('Edit workout error:', e); }
 }
 
 // ── DID YOU KNOW ── 
@@ -3668,5 +3668,7 @@ function reloadPageData(page) {
 init();
 loadMedicalProfileUI();
 </script>
+
+<datalist id="ex-presets"><option value="Bench Press"><option value="Overhead Press"><option value="Incline Press"><option value="Dumbbell Fly"><option value="Pull-ups"><option value="Chin-ups"><option value="Barbell Row"><option value="Cable Row"><option value="Lat Pulldown"><option value="Dumbbell Curl"><option value="Hammer Curl"><option value="Tricep Dip"><option value="Tricep Pushdown"><option value="Skull Crushers"><option value="Squat"><option value="Front Squat"><option value="Leg Press"><option value="Romanian Deadlift"><option value="Deadlift"><option value="Hip Thrust"><option value="Lunges"><option value="Leg Curl"><option value="Leg Extension"><option value="Plank"><option value="Cable Crunch"><option value="Ab Wheel"><option value="Face Pull"><option value="Running"><option value="Cycling"><option value="Row Machine"><option value="Jump Rope"></datalist>
 </body>
 </html>
