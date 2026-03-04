@@ -2042,6 +2042,7 @@ async function loadMealsPage() {
       return;
     }
     console.log('[Healix] meals fetched:', meals.length, 'mealsDate=', localDateStr(mealsDate));
+    window._healixMeals = meals; // debug: call debugMealData(window._healixMeals[0]) in console
 
     // Fetch nutrients
     var nutrients = [];
@@ -2063,7 +2064,6 @@ async function loadMealsPage() {
 }
 
 function getNutrientFromData(mealData, name) {
-  // mealData is the parsed 'data' jsonb column
   if (!mealData || !mealData.total_nutrition) return null;
   var categories = Object.values(mealData.total_nutrition);
   for (var i = 0; i < categories.length; i++) {
@@ -2074,6 +2074,20 @@ function getNutrientFromData(mealData, name) {
     }
   }
   return null;
+}
+
+function debugMealData(meal) {
+  // Call this from console: debugMealData(meals[0])
+  var data = null;
+  try { data = typeof meal.data === 'string' ? JSON.parse(meal.data) : meal.data; } catch(e) {}
+  if (!data || !data.total_nutrition) { console.log('No total_nutrition in data'); return; }
+  Object.keys(data.total_nutrition).forEach(function(cat) {
+    var items = data.total_nutrition[cat];
+    if (Array.isArray(items)) {
+      console.log('Category:', cat);
+      items.forEach(function(i) { console.log('  ', i.name, '=', i.value, i.unit); });
+    }
+  });
 }
 
 function getMacrosFromMeal(m) {
