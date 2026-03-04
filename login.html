@@ -285,7 +285,7 @@ function handleLogin() {
         user: data.user
       }));
       // Redirect to chat
-      window.location.href = 'chat.html';
+      window.location.href = 'dashboard.html';
     } else {
       showAlert('Something went wrong. Please try again.');
     }
@@ -323,7 +323,7 @@ var session = localStorage.getItem('healix_session');
 if (session) {
   try {
     var s = JSON.parse(session);
-    if (s.access_token) window.location.href = 'chat.html';
+    if (s.access_token) window.location.href = 'dashboard.html';
   } catch(e) {}
 }
 </script>
