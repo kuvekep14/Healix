@@ -1285,7 +1285,13 @@ async function loadDashboardData() {
     if (insights && !insights.error && insights.length > 0) renderInsights(insights);
   } catch(e) { console.error('Insights load error:', e); }
 
-  // Weight
+  // Weight - show profile weight as starting point if no weight_logs
+  if (window.userProfileData && window.userProfileData.current_weight_kg) {
+    var lbs = Math.round(window.userProfileData.current_weight_kg * 2.205);
+    document.getElementById('d-weight').innerHTML = lbs + '<span class="weight-unit">lbs</span>';
+    document.getElementById('d-weight-d').textContent = 'From your profile';
+    document.getElementById('d-weight-d').className = 'weight-delta delta-neutral';
+  }
   loadWeightHistory();
 }
 
@@ -1294,18 +1300,23 @@ function renderHealthStats(byType, today) {
   var sleepKeys = ['sleep_analysis'];
   var sleepData = [];
   sleepKeys.forEach(function(k) { if (byType[k]) sleepData = sleepData.concat(byType[k]); });
-  if (sleepData.length > 0) {
-    // sleep_analysis stored in seconds
-    var v = parseFloat(sleepData[0].value);
-    if (v > 100) v = v / 3600; // convert seconds to hours
+  // Filter out null sleep values
+  var validSleepData = sleepData.filter(function(r) { return r.value !== null && r.value !== undefined && !isNaN(parseFloat(r.value)); });
+  if (validSleepData.length > 0) {
+    var v = parseFloat(validSleepData[0].value);
+    if (v > 100) v = v / 3600;
     v = Math.round(v * 10) / 10;
-    var avg = sleepData.reduce(function(s, r) { var x=parseFloat(r.value); if(x>100)x=x/3600; return s+x; }, 0) / sleepData.length;
+    var avg = validSleepData.reduce(function(s, r) { var x=parseFloat(r.value); if(x>100)x=x/3600; return s+x; }, 0) / validSleepData.length;
     avg = Math.round(avg * 10) / 10;
     var diff = Math.round((v - avg) * 10) / 10;
     document.getElementById('d-sleep').innerHTML = v + '<span class="stat-item-unit">h</span>';
     var el = document.getElementById('d-sleep-d');
     el.textContent = diff > 0 ? '↑ +' + diff + 'h vs avg' : diff < 0 ? '↓ ' + diff + 'h vs avg' : '— avg ' + avg + 'h';
     el.className = 'stat-item-delta ' + (diff > 0 ? 'delta-up' : diff < 0 ? 'delta-down' : 'delta-neutral');
+  } else {
+    document.getElementById('d-sleep').innerHTML = '—<span class="stat-item-unit">h</span>';
+    document.getElementById('d-sleep-d').textContent = 'No data yet';
+    document.getElementById('d-sleep-d').className = 'stat-item-delta delta-neutral';
   }
 
   // Steps - unit: steps, sum all entries for today
@@ -2263,21 +2274,22 @@ var goalKeyMap = {
   energy: 'energy',
   sleep: 'sleep',
   fitness: 'fitness',
+  gain_strength: 'fitness',
   stress: 'mood',
+  feel_better: 'mood',
+  sleep_better: 'sleep',
   weight: 'weight',
+  lose_weight: 'weight',
+  healthier_diet: 'longevity',
   focus: 'focus'
 };
 
 function loadDidYouKnow() {
   if (!currentUser) return;
 
-  // Get goal from profile
-  var goal = document.getElementById('p-goal') ? document.getElementById('p-goal').value : '';
-  
-  // Also try from user metadata
-  if (!goal && currentUser.user_metadata && currentUser.user_metadata.primary_goal) {
-    goal = currentUser.user_metadata.primary_goal;
-  }
+  // Get goal from profiles table first
+  var goal = (window.userProfileData && window.userProfileData.primary_goal) || '';
+  if (!goal) goal = document.getElementById('p-goal') ? document.getElementById('p-goal').value : '';
 
   var key = goalKeyMap[goal] || 'longevity';
   var insights = insightLibrary[key] || insightLibrary.longevity;
@@ -2452,12 +2464,17 @@ function openBenchmark(metric) {
   if (metric === 'steps' && rawVal < 500) rawVal = rawVal * 1000; // convert k display back to steps
 
   var age = null, sex = null;
-  var dobEl = document.getElementById('p-dob');
-  var sexEl = document.getElementById('p-sex');
-  if (dobEl && dobEl.value) {
-    age = Math.floor((Date.now() - new Date(dobEl.value)) / (365.25 * 24 * 3600 * 1000));
+  if (window.userProfileData) {
+    if (window.userProfileData.birth_date) {
+      age = Math.floor((Date.now() - new Date(window.userProfileData.birth_date)) / (365.25 * 24 * 3600 * 1000));
+    }
+    sex = window.userProfileData.gender || null;
+  } else {
+    var dobEl = document.getElementById('p-dob');
+    var sexEl = document.getElementById('p-sex');
+    if (dobEl && dobEl.value) age = Math.floor((Date.now() - new Date(dobEl.value)) / (365.25 * 24 * 3600 * 1000));
+    if (sexEl) sex = sexEl.value;
   }
-  if (sexEl) sex = sexEl.value;
 
   // Set panel content
   document.getElementById('bench-eyebrow').textContent = 'How you compare · ' + (age ? age + ' · ' : '') + (sex || 'your peer group');
