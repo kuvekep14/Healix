@@ -464,6 +464,9 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
       <button class="nav-item" onclick="showPage('documents', this)">
         <span class="nav-icon">◻</span> Documents
       </button>
+      <button class="nav-item" onclick="showPage('strength', this)">
+        <span class="nav-icon">◈</span> Strength Log
+      </button>
     </div>
     <div class="nav-section">
       <span class="nav-section-label">Tools</span>
@@ -802,6 +805,50 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
       </div>
     </div>
 
+    <!-- ══ STRENGTH LOG PAGE ══ -->
+    <div class="page" id="page-strength">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+        <div>
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Personal Records & Progression</div>
+          <div style="font-family:var(--F);font-size:28px;font-weight:300">Strength <em style="font-style:italic;color:var(--gold)">Log</em></div>
+        </div>
+        <button class="upload-btn" onclick="openModal('lift-modal')">+ Log a Lift</button>
+      </div>
+
+      <!-- Exercise selector -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px" id="exercise-filter">
+        <button class="tf-btn active" onclick="filterExercise('all', this)" style="border:1px solid var(--gold-border)">All</button>
+      </div>
+
+      <!-- PRs row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px" id="pr-grid">
+        <div class="empty-state" style="grid-column:span 4;padding:24px">
+          <div class="empty-state-icon">🏋️</div>
+          <div class="empty-state-text">No lifts logged yet.<br>Start tracking to see your personal records.</div>
+        </div>
+      </div>
+
+      <!-- Chart area -->
+      <div class="card" id="strength-chart-card" style="margin-bottom:16px;display:none">
+        <div class="card-label">Progression <span class="card-label-action" id="strength-chart-label">—</span></div>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:8px" id="strength-chart"></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px" id="strength-chart-dates" style="font-size:9px;color:var(--muted)"></div>
+      </div>
+
+      <!-- Log table -->
+      <div class="card">
+        <div class="card-label">History</div>
+        <div id="strength-log-list">
+          <div class="empty-state" style="padding:32px">
+            <div class="empty-state-icon">🏋️</div>
+            <div class="empty-state-text">Log your first lift to start tracking progression.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
   </div>
 </div>
 
@@ -835,6 +882,77 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
     <div class="modal-actions">
       <button class="modal-btn-secondary" onclick="closeModal('weight-modal')">Cancel</button>
       <button class="modal-btn-primary" onclick="saveWeight()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LIFT MODAL ── -->
+<div class="modal-overlay" id="lift-modal" onclick="closeModalOutside(event, 'lift-modal')">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModal('lift-modal')">✕</button>
+    <div class="modal-title">Log a <em>Lift</em></div>
+    <div class="modal-sub">Record a set. Track weight, reps, and sets over time to see your progression.</div>
+    <div class="modal-field">
+      <label class="modal-label">Exercise</label>
+      <div style="display:flex;gap:8px">
+        <select class="modal-input" id="lift-exercise" style="cursor:pointer;flex:1">
+          <option value="">Select or type below</option>
+          <optgroup label="Upper Body">
+            <option>Bench Press</option>
+            <option>Overhead Press</option>
+            <option>Pull-ups</option>
+            <option>Barbell Row</option>
+            <option>Dumbbell Curl</option>
+            <option>Tricep Dip</option>
+          </optgroup>
+          <optgroup label="Lower Body">
+            <option>Squat</option>
+            <option>Deadlift</option>
+            <option>Romanian Deadlift</option>
+            <option>Leg Press</option>
+            <option>Hip Thrust</option>
+            <option>Lunges</option>
+          </optgroup>
+          <optgroup label="Core & Cardio">
+            <option>Plank</option>
+            <option>Cable Crunch</option>
+            <option>Running</option>
+          </optgroup>
+        </select>
+      </div>
+      <input class="modal-input" id="lift-custom" type="text" placeholder="Or type a custom exercise..." style="margin-top:8px">
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label class="modal-label">Weight</label>
+        <input class="modal-input" id="lift-weight" type="number" placeholder="e.g. 185" step="2.5">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Unit</label>
+        <select class="modal-input" id="lift-unit" style="cursor:pointer">
+          <option value="lbs">lbs</option>
+          <option value="kg">kg</option>
+          <option value="bodyweight">Bodyweight</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field">
+        <label class="modal-label">Sets</label>
+        <input class="modal-input" id="lift-sets" type="number" placeholder="e.g. 3" min="1">
+      </div>
+      <div class="modal-field">
+        <label class="modal-label">Reps</label>
+        <input class="modal-input" id="lift-reps" type="number" placeholder="e.g. 8" min="1">
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Notes (optional)</label>
+      <input class="modal-input" id="lift-notes" type="text" placeholder="e.g. felt strong, paused reps">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" onclick="closeModal('lift-modal')">Cancel</button>
+      <button class="modal-btn-primary" onclick="saveLift()">Log Lift</button>
     </div>
   </div>
 </div>
@@ -943,7 +1061,7 @@ function setTimeframe(days, btn) {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', documents: 'Documents', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
@@ -957,6 +1075,7 @@ function showPage(id, btn) {
   // Load page data
   if (id === 'meals') loadMealsPage();
   if (id === 'documents') loadDocumentsPage();
+    if (id === 'strength') renderStrengthPage();
 }
 
 // ── LOAD DASHBOARD DATA ──
@@ -1513,6 +1632,187 @@ async function saveMedicalProfile() {
     btn.textContent = 'Saved ✓';
     setTimeout(function() { btn.textContent = 'Save Medical Profile'; }, 2000);
   } catch(e) { alert('Could not save. Please try again.'); }
+}
+
+// ── STRENGTH LOG ──
+var liftLog = [];
+var activeExerciseFilter = 'all';
+
+function saveLift() {
+  var exercise = document.getElementById('lift-custom').value.trim()
+    || document.getElementById('lift-exercise').value;
+  var weight = document.getElementById('lift-weight').value;
+  var unit = document.getElementById('lift-unit').value;
+  var sets = document.getElementById('lift-sets').value;
+  var reps = document.getElementById('lift-reps').value;
+  var notes = document.getElementById('lift-notes').value;
+
+  if (!exercise) { alert('Please select or enter an exercise.'); return; }
+  if (!reps) { alert('Please enter reps.'); return; }
+
+  var entry = {
+    id: Date.now(),
+    exercise: exercise,
+    weight: weight ? parseFloat(weight) : null,
+    unit: unit,
+    sets: sets ? parseInt(sets) : 1,
+    reps: parseInt(reps),
+    notes: notes,
+    date: new Date().toISOString(),
+    e1rm: weight ? Math.round(parseFloat(weight) * (1 + parseInt(reps) / 30)) : null
+  };
+
+  liftLog.unshift(entry);
+  saveLiftLog();
+  closeModal('lift-modal');
+
+  // Reset
+  ['lift-exercise','lift-unit'].forEach(function(id) {});
+  ['lift-custom','lift-notes'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('lift-weight').value = '';
+  document.getElementById('lift-sets').value = '';
+  document.getElementById('lift-reps').value = '';
+
+  if (document.getElementById('page-strength').classList.contains('active')) {
+    renderStrengthPage();
+  }
+}
+
+function saveLiftLog() {
+  try { localStorage.setItem('healix_lifts', JSON.stringify(liftLog)); } catch(e) {}
+}
+
+function loadLiftLog() {
+  try {
+    var saved = localStorage.getItem('healix_lifts');
+    if (saved) liftLog = JSON.parse(saved);
+  } catch(e) {}
+}
+
+function filterExercise(name, btn) {
+  activeExerciseFilter = name;
+  document.querySelectorAll('#exercise-filter .tf-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderStrengthLog();
+  renderStrengthChart();
+}
+
+function renderStrengthPage() {
+  loadLiftLog();
+  renderExerciseFilter();
+  renderPRs();
+  renderStrengthLog();
+  renderStrengthChart();
+}
+
+function getExercises() {
+  var seen = {};
+  liftLog.forEach(function(e) { seen[e.exercise] = true; });
+  return Object.keys(seen);
+}
+
+function renderExerciseFilter() {
+  var exercises = getExercises();
+  var container = document.getElementById('exercise-filter');
+  container.innerHTML = '<button class="tf-btn ' + (activeExerciseFilter === 'all' ? 'active' : '') + '" onclick="filterExercise('all', this)" style="border:1px solid var(--gold-border)">All</button>'
+    + exercises.map(function(ex) {
+      return '<button class="tf-btn ' + (activeExerciseFilter === ex ? 'active' : '') + '" onclick="filterExercise('' + ex.replace(/'/g,"\'") + '', this)" style="border:1px solid var(--gold-border)">' + ex + '</button>';
+    }).join('');
+}
+
+function getPRs() {
+  var prs = {};
+  liftLog.forEach(function(e) {
+    if (!e.e1rm) return;
+    if (!prs[e.exercise] || e.e1rm > prs[e.exercise].e1rm) prs[e.exercise] = e;
+  });
+  return prs;
+}
+
+function renderPRs() {
+  var prs = getPRs();
+  var grid = document.getElementById('pr-grid');
+  var keys = Object.keys(prs);
+  if (keys.length === 0) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:span 4;padding:24px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">No lifts logged yet.<br>Start tracking to see your personal records.</div></div>';
+    return;
+  }
+  grid.innerHTML = keys.map(function(ex) {
+    var pr = prs[ex];
+    var dateStr = new Date(pr.date).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    return '<div class="card" style="padding:18px">'
+      + '<div class="stat-item-label">' + ex + '</div>'
+      + '<div style="font-family:var(--F);font-size:28px;font-weight:300;line-height:1;margin:8px 0">'
+      + (pr.weight ? pr.weight + '<span style="font-size:13px;color:var(--muted)">' + pr.unit + '</span>' : 'BW')
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--muted)">' + pr.sets + '×' + pr.reps + ' · est. 1RM: ' + (pr.e1rm || '—') + '</div>'
+      + '<div style="font-size:10px;color:var(--gold);margin-top:4px;letter-spacing:.1em">PR · ' + dateStr + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function renderStrengthLog() {
+  var filtered = activeExerciseFilter === 'all' ? liftLog
+    : liftLog.filter(function(e) { return e.exercise === activeExerciseFilter; });
+  var list = document.getElementById('strength-log-list');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-state" style="padding:32px"><div class="empty-state-icon">🏋️</div><div class="empty-state-text">No lifts logged yet.</div></div>';
+    return;
+  }
+  var today = new Date().toDateString();
+  var yesterday = new Date(Date.now() - 86400000).toDateString();
+  list.innerHTML = '<table style="width:100%;border-collapse:collapse">'
+    + '<thead><tr style="border-bottom:1px solid var(--gold-border)">'
+    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Exercise</th>'
+    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Weight</th>'
+    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Sets × Reps</th>'
+    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Est. 1RM</th>'
+    + '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">Date</th>'
+    + '<th style="padding:8px 0"></th>'
+    + '</tr></thead><tbody>'
+    + filtered.map(function(e) {
+      var dt = new Date(e.date);
+      var dStr = dt.toDateString() === today ? 'Today'
+        : dt.toDateString() === yesterday ? 'Yesterday'
+        : dt.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+      return '<tr style="border-bottom:1px solid rgba(184,151,90,.08)">'
+        + '<td style="padding:12px 0;font-size:13px;color:var(--cream)">' + e.exercise + '</td>'
+        + '<td style="padding:12px 0;font-family:var(--F);font-size:18px;font-weight:300">' + (e.weight ? e.weight + '<span style="font-size:11px;color:var(--muted)"> ' + e.unit + '</span>' : 'BW') + '</td>'
+        + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + e.sets + ' × ' + e.reps + '</td>'
+        + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (e.e1rm ? e.e1rm + ' ' + e.unit : '—') + '</td>'
+        + '<td style="padding:12px 0;font-size:11px;color:var(--muted)">' + dStr + '</td>'
+        + '<td style="padding:12px 0;text-align:right"><span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="deleteLift(' + e.id + ')">✕</span></td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody></table>';
+}
+
+function renderStrengthChart() {
+  var exercise = activeExerciseFilter === 'all' ? null : activeExerciseFilter;
+  var data = exercise ? liftLog.filter(function(e) { return e.exercise === exercise && e.e1rm; }) : [];
+  var card = document.getElementById('strength-chart-card');
+  if (!exercise || data.length < 2) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('strength-chart-label').textContent = exercise + ' — Estimated 1RM';
+  var sorted = data.slice().reverse().slice(-10);
+  var maxV = Math.max.apply(null, sorted.map(function(e) { return e.e1rm; }));
+  var chart = document.getElementById('strength-chart');
+  chart.innerHTML = sorted.map(function(e) {
+    var pct = Math.max(10, Math.round(e.e1rm / maxV * 100));
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">'
+      + '<div style="font-size:9px;color:var(--muted)">' + e.e1rm + '</div>'
+      + '<div style="width:100%;background:var(--gold);height:' + pct + '%;min-height:4px;transition:height .4s"></div>'
+      + '</div>';
+  }).join('');
+  document.getElementById('strength-chart-dates').innerHTML = sorted.map(function(e) {
+    return '<span style="font-size:9px;color:var(--muted)">' + new Date(e.date).toLocaleDateString('en-US',{month:'short',day:'numeric'}) + '</span>';
+  }).join('');
+}
+
+function deleteLift(id) {
+  liftLog = liftLog.filter(function(e) { return e.id !== id; });
+  saveLiftLog();
+  renderStrengthPage();
 }
 
 // ── INIT ──
