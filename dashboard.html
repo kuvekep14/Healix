@@ -813,40 +813,177 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 
     <!-- ══ MEALS PAGE ══ -->
     <div class="page" id="page-meals">
-      <div class="date-nav" id="meals-date-nav">
-        <div class="date-nav-arrows">
-          <button class="date-nav-btn" onclick="stepDate('meals', -1)">←</button>
-          <button class="date-nav-btn" onclick="stepDate('meals', 1)" id="meals-next-btn">→</button>
+
+      <!-- Top bar: view toggle + date nav -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px">
+        <div style="display:flex;gap:6px">
+          <button class="tf-btn active" id="meals-view-day" onclick="setMealsView('day',this)">Day</button>
+          <button class="tf-btn" id="meals-view-week" onclick="setMealsView('week',this)">Week</button>
+          <button class="tf-btn" id="meals-view-month" onclick="setMealsView('month',this)">Month</button>
         </div>
-        <div class="date-nav-label" id="meals-date-label"><em>Today</em></div>
-        <button class="date-nav-today active" id="meals-today-btn" onclick="goToday('meals')">Today</button>
+        <div class="date-nav" id="meals-date-nav" style="margin-bottom:0;flex:1;justify-content:flex-end">
+          <div class="date-nav-arrows">
+            <button class="date-nav-btn" onclick="stepDate('meals', -1)">←</button>
+            <button class="date-nav-btn" onclick="stepDate('meals', 1)" id="meals-next-btn">→</button>
+          </div>
+          <div class="date-nav-label" id="meals-date-label"><em>Today</em></div>
+          <button class="date-nav-today active" id="meals-today-btn" onclick="goToday('meals')">Today</button>
+        </div>
       </div>
+
+      <!-- Macro summary cards (shown in all views) -->
       <div class="meals-summary">
         <div class="card">
           <div class="card-label">Calories</div>
           <div class="stat-item-val" id="mp-cal" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral">of 2000 goal</div>
+          <div class="stat-item-delta delta-neutral" id="mp-cal-sub">of 2000 goal</div>
         </div>
         <div class="card">
           <div class="card-label">Protein</div>
           <div class="stat-item-val" id="mp-protein" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral">of 150g goal</div>
+          <div class="stat-item-delta delta-neutral" id="mp-prot-sub">of 150g goal</div>
         </div>
         <div class="card">
           <div class="card-label">Carbs</div>
           <div class="stat-item-val" id="mp-carbs" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral">today</div>
+          <div class="stat-item-delta delta-neutral" id="mp-carb-sub">today</div>
         </div>
         <div class="card">
           <div class="card-label">Fat</div>
           <div class="stat-item-val" id="mp-fat" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral">today</div>
+          <div class="stat-item-delta delta-neutral" id="mp-fat-sub">today</div>
         </div>
       </div>
-      <div class="meals-log" id="meals-list">
-        <div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.<br>Start tracking to see your nutrition data.</div></div>
+
+      <!-- Macro progress bars (day view only) -->
+      <div id="meals-day-view">
+        <div class="card" style="margin-bottom:16px;padding:20px 24px">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)">Protein</span>
+                <span id="m-protein-pct" style="font-size:11px;color:var(--muted)">—%</span>
+              </div>
+              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
+                <div id="m-protein-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
+              </div>
+              <div id="m-protein" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)">Carbs</span>
+                <span id="m-carbs-pct" style="font-size:11px;color:var(--muted)">—%</span>
+              </div>
+              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
+                <div id="m-carbs-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
+              </div>
+              <div id="m-carbs" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)">Fat</span>
+                <span id="m-fat-pct" style="font-size:11px;color:var(--muted)">—%</span>
+              </div>
+              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
+                <div id="m-fat-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
+              </div>
+              <div id="m-fat" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
+            </div>
+          </div>
+          <!-- Calorie total bar -->
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--gold-border)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)">Calories</span>
+              <span id="m-cal-pct" style="font-size:11px;color:var(--muted)">— of 2000</span>
+            </div>
+            <div style="height:6px;background:var(--gold-faint);border-radius:3px">
+              <div id="m-cal-bar" style="height:100%;background:var(--gold);border-radius:3px;width:0%;transition:width .6s;max-width:100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="meals-log" id="meals-list">
+          <div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>
+        </div>
+        <button class="add-meal-btn" onclick="openModal('meal-modal')" style="margin-top:12px">+ Log a Meal</button>
       </div>
-      <button class="add-meal-btn" onclick="openModal('meal-modal')" style="margin-top:12px">+ Log a Meal</button>
+
+      <!-- Aggregate view (week / month) -->
+      <div id="meals-aggregate-view" style="display:none">
+
+        <!-- Daily calorie trend chart -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-label" style="margin-bottom:16px">Daily Calories <span id="agg-period-label" style="color:var(--muted);font-weight:400"></span></div>
+          <div id="agg-cal-chart" style="display:flex;align-items:flex-end;gap:4px;height:80px"></div>
+          <div id="agg-cal-dates" style="display:flex;justify-content:space-between;margin-top:6px"></div>
+        </div>
+
+        <!-- Avg macro summary -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+          <div class="card" style="text-align:center">
+            <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">Avg Cal/Day</div>
+            <div id="agg-cal" style="font-family:var(--F);font-size:32px;font-weight:300">—</div>
+          </div>
+          <div class="card" style="text-align:center">
+            <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">Avg Protein</div>
+            <div id="agg-protein" style="font-family:var(--F);font-size:32px;font-weight:300">—</div>
+          </div>
+          <div class="card" style="text-align:center">
+            <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">Avg Carbs</div>
+            <div id="agg-carbs" style="font-family:var(--F);font-size:32px;font-weight:300">—</div>
+          </div>
+          <div class="card" style="text-align:center">
+            <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">Avg Fat</div>
+            <div id="agg-fat" style="font-family:var(--F);font-size:32px;font-weight:300">—</div>
+          </div>
+        </div>
+
+        <!-- Macro breakdown bars (week/month averages) -->
+        <div class="card" style="margin-bottom:16px;padding:20px 24px">
+          <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:16px">Macro Split (avg)</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px">
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:11px;color:var(--cream-dim)">Protein</span>
+                <span id="agg-mp-prot-pct" style="font-size:11px;color:var(--muted)">—%</span>
+              </div>
+              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
+                <div id="agg-mp-prot-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
+              </div>
+              <div id="agg-mp-prot" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:11px;color:var(--cream-dim)">Carbs</span>
+                <span id="agg-mp-carb-pct" style="font-size:11px;color:var(--muted)">—%</span>
+              </div>
+              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
+                <div id="agg-mp-carb-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
+              </div>
+              <div id="agg-mp-carb" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
+            </div>
+            <div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+                <span style="font-size:11px;color:var(--cream-dim)">Fat</span>
+                <span id="agg-mp-fat-pct" style="font-size:11px;color:var(--muted)">—%</span>
+              </div>
+              <div style="height:4px;background:var(--gold-faint);border-radius:2px">
+                <div id="agg-mp-fat-bar" style="height:100%;background:var(--gold);border-radius:2px;width:0%;transition:width .6s"></div>
+              </div>
+              <div id="agg-mp-fat" style="font-size:11px;color:var(--cream-dim);margin-top:4px">— g</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Per-day breakdown table -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--gold-border)">
+            <div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold)">Daily Breakdown</div>
+          </div>
+          <div id="agg-daily-breakdown" style="padding:0 20px"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- ══ DOCUMENTS PAGE ══ -->
@@ -1492,33 +1629,14 @@ function renderMacrosFromMealData(meals) {
     carbs += macros.carb || 0;
     fat   += macros.fat  || 0;
   });
-  cal = Math.round(cal); prot = Math.round(prot); carbs = Math.round(carbs); fat = Math.round(fat);
-  var total = prot + carbs + fat || 1;
-
-  document.getElementById('m-cal').textContent     = cal || '—';
-  document.getElementById('m-protein').textContent = prot || '—';
-  document.getElementById('m-carbs').textContent   = carbs || '—';
-  document.getElementById('m-fat').textContent     = fat || '—';
-  document.getElementById('m-protein-pct').textContent = Math.round(prot/total*100) + '%';
-  document.getElementById('m-carbs-pct').textContent   = Math.round(carbs/total*100) + '%';
-  document.getElementById('m-fat-pct').textContent     = Math.round(fat/total*100) + '%';
-  document.getElementById('m-protein-bar').style.width = Math.round(prot/total*100) + '%';
-  document.getElementById('m-carbs-bar').style.width   = Math.round(carbs/total*100) + '%';
-  document.getElementById('m-fat-bar').style.width     = Math.round(fat/total*100) + '%';
-  document.getElementById('mp-cal').textContent = cal || '—';
-  document.getElementById('mp-protein').innerHTML = (prot || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-carbs').innerHTML   = (carbs || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-fat').innerHTML     = (fat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  renderDayMacroUI(Math.round(cal), Math.round(prot), Math.round(carbs), Math.round(fat));
 }
 
 function renderMacrosFromNutrients(nutrients) {
-  // Sum macros per meal first to avoid double-counting across categories
   var macroByMeal = {};
   nutrients.forEach(function(n) {
     if (!macroByMeal[n.meal_log_id]) macroByMeal[n.meal_log_id] = {};
-    var key = n.name;
-    var val = parseFloat(n.value || 0);
-    // For macros, prefer Macronutrients category values
+    var key = n.name, val = parseFloat(n.value || 0);
     if (n.category === 'Macronutrients' || !macroByMeal[n.meal_log_id][key]) {
       macroByMeal[n.meal_log_id][key] = val;
     }
@@ -1527,30 +1645,49 @@ function renderMacrosFromNutrients(nutrients) {
   Object.values(macroByMeal).forEach(function(m) {
     Object.keys(m).forEach(function(k) { totals[k] = (totals[k] || 0) + m[k]; });
   });
-
-  var cal   = Math.round(totals['Calories'] || totals['Energy'] || 0);
-  var prot  = Math.round(totals['Protein'] || totals['Proteins'] || 0);
-  var carbs = Math.round(totals['Carbohydrates'] || totals['Total Carbohydrates'] || 0);
-  var fat   = Math.round(totals['Total Fat'] || totals['Fat'] || totals['Fats'] || 0);
-  var total = prot + carbs + fat || 1;
-
-  document.getElementById('m-cal').textContent     = cal || '—';
-  document.getElementById('m-protein').textContent = prot || '—';
-  document.getElementById('m-carbs').textContent   = carbs || '—';
-  document.getElementById('m-fat').textContent     = fat || '—';
-
-  document.getElementById('m-protein-pct').textContent = Math.round(prot/total*100) + '%';
-  document.getElementById('m-carbs-pct').textContent   = Math.round(carbs/total*100) + '%';
-  document.getElementById('m-fat-pct').textContent     = Math.round(fat/total*100) + '%';
-  document.getElementById('m-protein-bar').style.width = Math.round(prot/total*100) + '%';
-  document.getElementById('m-carbs-bar').style.width   = Math.round(carbs/total*100) + '%';
-  document.getElementById('m-fat-bar').style.width     = Math.round(fat/total*100) + '%';
-
-  document.getElementById('mp-cal').textContent = cal || '—';
-  document.getElementById('mp-protein').innerHTML = (prot || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-carbs').innerHTML   = (carbs || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-fat').innerHTML     = (fat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  renderDayMacroUI(
+    Math.round(totals['Calories'] || totals['Energy'] || 0),
+    Math.round(totals['Protein'] || totals['Proteins'] || 0),
+    Math.round(totals['Carbohydrates'] || totals['Total Carbohydrates'] || 0),
+    Math.round(totals['Total Fat'] || totals['Fat'] || totals['Fats'] || 0)
+  );
 }
+
+function renderDayMacroUI(cal, prot, carbs, fat) {
+  var macroTotal = prot + carbs + fat || 1;
+  var calGoal = 2000;
+  var setEl = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
+  var setHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
+  var setW = function(id,v) { var e=document.getElementById(id); if(e) e.style.width=v; };
+
+  // Top summary cards
+  setEl('mp-cal', cal || '—');
+  setEl('mp-cal-sub', 'of 2000 goal');
+  setHTML('mp-protein', (prot||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
+  setEl('mp-prot-sub', 'of 150g goal');
+  setHTML('mp-carbs', (carbs||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
+  setEl('mp-carb-sub', 'today');
+  setHTML('mp-fat', (fat||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
+  setEl('mp-fat-sub', 'today');
+
+  // Macro proportion bars
+  setEl('m-protein-pct', Math.round(prot/macroTotal*100)+'%');
+  setW('m-protein-bar', Math.round(prot/macroTotal*100)+'%');
+  setEl('m-protein', prot + ' g');
+  setEl('m-carbs-pct', Math.round(carbs/macroTotal*100)+'%');
+  setW('m-carbs-bar', Math.round(carbs/macroTotal*100)+'%');
+  setEl('m-carbs', carbs + ' g');
+  setEl('m-fat-pct', Math.round(fat/macroTotal*100)+'%');
+  setW('m-fat-bar', Math.round(fat/macroTotal*100)+'%');
+  setEl('m-fat', fat + ' g');
+
+  // Calorie goal bar
+  setEl('m-cal-pct', (cal||'—') + ' of ' + calGoal);
+  setW('m-cal-bar', Math.min(100, Math.round((cal/calGoal)*100))+'%');
+  var calBar = document.getElementById('m-cal-bar');
+  if (calBar) calBar.style.background = cal > calGoal ? 'var(--down)' : 'var(--gold)';
+}
+
 
 function renderMicronutrientsFromNutrients(nutrients) {
   if (nutrients.length === 0) return;
@@ -1920,25 +2057,20 @@ function renderMealsDayView(meals, nutrients, today) {
 }
 
 function renderMealsAggregateView(meals, nutrients, range) {
-  // Group meals and nutrients by day
+  // Group meals by local date
   var byDay = {};
   meals.forEach(function(m) {
     var d = localDateStr(new Date(m.meal_time || m.created_at));
-    if (!byDay[d]) byDay[d] = { meals: [], nutrients: [] };
+    if (!byDay[d]) byDay[d] = { meals: [] };
     byDay[d].meals.push(m);
   });
-  nutrients.forEach(function(n) {
-    // Find which day this meal belongs to
-    var meal = meals.find(function(m) { return m.id === n.meal_log_id; });
-    if (!meal) return;
-    var d = localDateStr(new Date(meal.created_at));
-    if (byDay[d]) byDay[d].nutrients.push(n);
-  });
 
-  var days = Object.keys(byDay).sort();
+  // Only show days within the selected range
+  var rangeStart = localDateStr(range.start);
+  var rangeEnd   = localDateStr(range.end);
+  var days = Object.keys(byDay).filter(function(d) { return d >= rangeStart && d <= rangeEnd; }).sort();
   var numDays = Math.max(days.length, 1);
 
-  // Aggregate totals per day
   function dayMacroTotal(d, macroKey) {
     var total = 0;
     (byDay[d] ? byDay[d].meals : []).forEach(function(m) {
@@ -1958,54 +2090,104 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var avgCarb = Math.round(carbsByDay.reduce(function(s,v){return s+v;},0) / numDays);
   var avgFat  = Math.round(fatsByDay.reduce(function(s,v){return s+v;},0) / numDays);
 
+  // Update top macro cards with avg label
+  var periodLabel = mealsView === 'week' ? 'this week' : 'this month';
+  document.getElementById('mp-cal').textContent  = avgCal || '—';
+  document.getElementById('mp-cal-sub').textContent = 'avg/day ' + periodLabel;
+  document.getElementById('mp-protein').innerHTML = (avgProt || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-prot-sub').textContent = 'avg/day protein';
+  document.getElementById('mp-carbs').innerHTML   = (avgCarb || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-carb-sub').textContent = 'avg/day carbs';
+  document.getElementById('mp-fat').innerHTML     = (avgFat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-fat-sub').textContent = 'avg/day fat';
+
+  // Avg macro cards
   document.getElementById('agg-cal').textContent     = avgCal || '—';
   document.getElementById('agg-protein').innerHTML   = (avgProt || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
   document.getElementById('agg-carbs').innerHTML     = (avgCarb || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
   document.getElementById('agg-fat').innerHTML       = (avgFat || '—') + '<span style="font-size:14px;color:var(--muted)">g</span>';
 
-  // Mini charts
-  function renderAggChart(id, vals) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    var max = Math.max.apply(null, vals) || 1;
-    el.innerHTML = vals.map(function(v) {
-      return '<div style="flex:1;background:var(--gold);height:' + Math.max(8, Math.round(v/max*100)) + '%;min-height:4px;transition:height .4s"></div>';
+  // Avg macro split bars (using agg-specific IDs)
+  var macroTotal = avgProt + avgCarb + avgFat || 1;
+  var setEl = function(id, val) { var e = document.getElementById(id); if(e) e.textContent = val; };
+  var setStyle = function(id, prop, val) { var e = document.getElementById(id); if(e) e.style[prop] = val; };
+  setEl('agg-mp-prot-pct', Math.round(avgProt/macroTotal*100) + '%');
+  setStyle('agg-mp-prot-bar', 'width', Math.round(avgProt/macroTotal*100) + '%');
+  setEl('agg-mp-prot', avgProt + ' g');
+  setEl('agg-mp-carb-pct', Math.round(avgCarb/macroTotal*100) + '%');
+  setStyle('agg-mp-carb-bar', 'width', Math.round(avgCarb/macroTotal*100) + '%');
+  setEl('agg-mp-carb', avgCarb + ' g');
+  setEl('agg-mp-fat-pct', Math.round(avgFat/macroTotal*100) + '%');
+  setStyle('agg-mp-fat-bar', 'width', Math.round(avgFat/macroTotal*100) + '%');
+  setEl('agg-mp-fat', avgFat + ' g');
+
+  // Calorie bar chart with date labels
+  var calChart = document.getElementById('agg-cal-chart');
+  var calDates = document.getElementById('agg-cal-dates');
+  if (calChart) {
+    var maxCal = Math.max.apply(null, calsByDay.concat([1]));
+    var calGoal = 2000;
+    calChart.style.display = 'flex';
+    calChart.style.alignItems = 'flex-end';
+    calChart.style.gap = '3px';
+    calChart.innerHTML = calsByDay.map(function(v, i) {
+      var pct = Math.max(4, Math.round(v / Math.max(maxCal, calGoal) * 100));
+      var overGoal = v > calGoal;
+      var color = overGoal ? 'var(--down)' : 'var(--gold)';
+      var dt = new Date(days[i] + 'T12:00:00');
+      var label = mealsView === 'month'
+        ? dt.toLocaleDateString('en-US',{day:'numeric'})
+        : dt.toLocaleDateString('en-US',{weekday:'short'});
+      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer" title="' + v + ' cal" onclick="drillToDay(\'' + days[i] + '\')">'
+        + '<div style="width:100%;background:' + color + ';height:' + pct + '%;min-height:3px;border-radius:2px 2px 0 0;transition:height .4s"></div>'
+        + '</div>';
     }).join('');
+    if (calDates) {
+      // Show first, middle, last labels only (avoid crowding)
+      calDates.style.display = 'flex';
+      calDates.style.justifyContent = 'space-between';
+      calDates.innerHTML = days.map(function(d, i) {
+        var dt = new Date(d + 'T12:00:00');
+        var showLabel = (i === 0 || i === days.length - 1 || (days.length <= 14 && mealsView === 'week') || i % 7 === 0);
+        return '<span style="font-size:9px;color:' + (showLabel ? 'var(--muted)' : 'transparent') + ';flex:1;text-align:' + (i===0?'left':i===days.length-1?'right':'center') + '">'
+          + (showLabel ? dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '·') + '</span>';
+      }).join('');
+    }
   }
-  renderAggChart('agg-cal-chart', calsByDay);
-  renderAggChart('agg-protein-chart', protByDay);
-  renderAggChart('agg-carbs-chart', carbsByDay);
-  renderAggChart('agg-fat-chart', fatsByDay);
+
+  // Period label
+  var aggLabel = document.getElementById('agg-period-label');
+  if (aggLabel) aggLabel.textContent = mealsView === 'week' ? '· this week' : '· this month';
 
   // Daily breakdown table
   var breakdown = document.getElementById('agg-daily-breakdown');
+  if (!breakdown) return;
   if (days.length === 0) {
-    breakdown.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-state-text">No meals logged in this period.</div></div>';
+    breakdown.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No meals logged in this period.</div>';
     return;
   }
   breakdown.innerHTML = '<table style="width:100%;border-collapse:collapse">'
     + '<thead><tr style="border-bottom:1px solid var(--gold-border)">'
     + ['Date','Calories','Protein','Carbs','Fat','Meals'].map(function(h) {
-        return '<th style="text-align:left;padding:8px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">' + h + '</th>';
+        return '<th style="text-align:left;padding:10px 0;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:400">' + h + '</th>';
       }).join('')
     + '</tr></thead><tbody>'
     + days.slice().reverse().map(function(d, i) {
         var ri = days.length - 1 - i;
         var dt = new Date(d + 'T12:00:00');
         var isToday = d === localDateStr(new Date());
-        return '<tr style="border-bottom:1px solid rgba(184,151,90,.08);cursor:pointer" data-day="' + d + '" onclick="drillToDay(this.getAttribute(\"data-day\"))">'
-          + '<td style="padding:12px 0;font-size:13px;color:' + (isToday ? 'var(--gold)' : 'var(--cream)') + '">' + dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>'
-          + '<td style="padding:12px 0;font-family:var(--F);font-size:18px;font-weight:300">' + (calsByDay[ri] || '—') + '</td>'
-          + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (protByDay[ri] || '—') + 'g</td>'
-          + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (carbsByDay[ri] || '—') + 'g</td>'
-          + '<td style="padding:12px 0;font-size:13px;color:var(--cream-dim)">' + (fatsByDay[ri] || '—') + 'g</td>'
-          + '<td style="padding:12px 0;font-size:13px;color:var(--muted)">' + (byDay[d].meals.length) + '</td>'
+        var overGoal = calsByDay[ri] > 2000;
+        return '<tr style="border-bottom:1px solid rgba(184,151,90,.06);cursor:pointer" onclick="drillToDay(\'' + d + '\')" onmouseover="this.style.background=\'var(--gold-faint)\'" onmouseout="this.style.background=\'\'">'
+
+          + '<td style="padding:11px 0;font-size:13px;color:' + (isToday ? 'var(--gold)' : 'var(--cream)') + '">' + dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>'
+          + '<td style="padding:11px 0;font-family:var(--F);font-size:18px;font-weight:300;color:' + (overGoal ? 'var(--down)' : 'var(--cream)') + '">' + (calsByDay[ri] || '—') + '</td>'
+          + '<td style="padding:11px 0;font-size:13px;color:var(--cream-dim)">' + (protByDay[ri] || '—') + 'g</td>'
+          + '<td style="padding:11px 0;font-size:13px;color:var(--cream-dim)">' + (carbsByDay[ri] || '—') + 'g</td>'
+          + '<td style="padding:11px 0;font-size:13px;color:var(--cream-dim)">' + (fatsByDay[ri] || '—') + 'g</td>'
+          + '<td style="padding:11px 0;font-size:13px;color:var(--muted)">' + (byDay[d] ? byDay[d].meals.length : 0) + '</td>'
           + '</tr>';
       }).join('')
     + '</tbody></table>';
-
-  // Weight trend
-  renderWeightTrendChart(range);
 }
 
 async function renderWeightTrendChart(range) {
@@ -2039,8 +2221,11 @@ async function renderWeightTrendChart(range) {
 }
 
 function drillToDay(dateStr) {
-  mealsDate = new Date(dateStr + 'T12:00:00');
+  var d = new Date(dateStr + 'T12:00:00');
+  mealsDate = d;
+  pageSelectedDate['meals'] = d;
   setMealsView('day', document.getElementById('meals-view-day'));
+  updateDateNav('meals');
 }
 
 
@@ -2997,7 +3182,14 @@ function getSelectedDateStr(page) {
 function stepDate(page, dir) {
   var current = pageSelectedDate[page] || new Date();
   var next = new Date(current);
-  next.setDate(next.getDate() + dir);
+  // Step by appropriate unit based on view
+  if (page === 'meals' && mealsView === 'week') {
+    next.setDate(next.getDate() + dir * 7);
+  } else if (page === 'meals' && mealsView === 'month') {
+    next.setMonth(next.getMonth() + dir);
+  } else {
+    next.setDate(next.getDate() + dir);
+  }
   // Don't go into future
   var today = new Date();
   today.setHours(23,59,59,999);
