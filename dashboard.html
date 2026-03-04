@@ -1310,7 +1310,7 @@ async function loadDashboardData() {
     var dashEnd   = new Date(dashDate); dashEnd.setHours(23,59,59,999);
     var dashDateStr = dashDate.getFullYear() + '-' + String(dashDate.getMonth()+1).padStart(2,'0') + '-' + String(dashDate.getDate()).padStart(2,'0');
     var mealLogs = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=100',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=100',
       'GET', null, token
     );
     if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
@@ -1472,6 +1472,34 @@ function renderDashMeals(meals, today) {
       + '<div class="meal-cals">—</div>'
       + '</div>';
   }).join('');
+}
+
+function renderMacrosFromMealData(meals) {
+  var cal = 0, prot = 0, carbs = 0, fat = 0;
+  meals.forEach(function(m) {
+    var macros = getMacrosFromMeal(m);
+    cal   += macros.cal  || 0;
+    prot  += macros.prot || 0;
+    carbs += macros.carb || 0;
+    fat   += macros.fat  || 0;
+  });
+  cal = Math.round(cal); prot = Math.round(prot); carbs = Math.round(carbs); fat = Math.round(fat);
+  var total = prot + carbs + fat || 1;
+
+  document.getElementById('m-cal').textContent     = cal || '—';
+  document.getElementById('m-protein').textContent = prot || '—';
+  document.getElementById('m-carbs').textContent   = carbs || '—';
+  document.getElementById('m-fat').textContent     = fat || '—';
+  document.getElementById('m-protein-pct').textContent = Math.round(prot/total*100) + '%';
+  document.getElementById('m-carbs-pct').textContent   = Math.round(carbs/total*100) + '%';
+  document.getElementById('m-fat-pct').textContent     = Math.round(fat/total*100) + '%';
+  document.getElementById('m-protein-bar').style.width = Math.round(prot/total*100) + '%';
+  document.getElementById('m-carbs-bar').style.width   = Math.round(carbs/total*100) + '%';
+  document.getElementById('m-fat-bar').style.width     = Math.round(fat/total*100) + '%';
+  document.getElementById('mp-cal').textContent = cal || '—';
+  document.getElementById('mp-protein').innerHTML = (prot || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-carbs').innerHTML   = (carbs || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
+  document.getElementById('mp-fat').innerHTML     = (fat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
 }
 
 function renderMacrosFromNutrients(nutrients) {
@@ -1764,7 +1792,7 @@ async function loadMealsPage() {
       return;
     }
     var meals = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=500',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=500',
       'GET', null, session.access_token
     );
     if (!meals || meals.error) {
@@ -1791,13 +1819,45 @@ async function loadMealsPage() {
   } catch(e) { console.error('Meals page error:', e); }
 }
 
+function getNutrientFromData(mealData, name) {
+  // mealData is the parsed 'data' jsonb column
+  if (!mealData || !mealData.total_nutrition) return null;
+  var categories = Object.values(mealData.total_nutrition);
+  for (var i = 0; i < categories.length; i++) {
+    var cat = categories[i];
+    if (!Array.isArray(cat)) continue;
+    for (var j = 0; j < cat.length; j++) {
+      if (cat[j].name === name) return parseFloat(cat[j].value || 0);
+    }
+  }
+  return null;
+}
+
+function getMacrosFromMeal(m) {
+  var data = null;
+  try { data = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) {}
+  return {
+    cal:  getNutrientFromData(data, 'Calories'),
+    prot: getNutrientFromData(data, 'Protein'),
+    carb: getNutrientFromData(data, 'Carbohydrates'),
+    fat:  getNutrientFromData(data, 'Total Fat')
+  };
+}
+
 function renderMealsDayView(meals, nutrients, today) {
   // Filter to selected day only
+  // Use meal_time if set, otherwise created_at
+  // Compare using local date to avoid UTC offset issues
+  var selectedD = mealsDate;
+  var dayStart = new Date(selectedD); dayStart.setHours(0,0,0,0);
+  var dayEnd2  = new Date(selectedD); dayEnd2.setHours(23,59,59,999);
+
   var dayMeals = meals.filter(function(m) {
-    return localDateStr(new Date(m.created_at)) === today;
+    var dt = new Date(m.meal_time && m.meal_time !== null ? m.meal_time : m.created_at);
+    return dt >= dayStart && dt <= dayEnd2;
   });
 
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊' };
   var list = document.getElementById('meals-list');
 
   if (dayMeals.length === 0) {
@@ -1860,26 +1920,19 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var numDays = Math.max(days.length, 1);
 
   // Aggregate totals per day
-  function dayTotal(d, name) {
-    var seen = {};
+  function dayMacroTotal(d, macroKey) {
     var total = 0;
-    (byDay[d] ? byDay[d].nutrients : []).forEach(function(n) {
-      if (n.name === name && n.category === 'Macronutrients') {
-        if (!seen[n.meal_log_id]) { seen[n.meal_log_id] = true; total += parseFloat(n.value || 0); }
-      }
+    (byDay[d] ? byDay[d].meals : []).forEach(function(m) {
+      var macros = getMacrosFromMeal(m);
+      total += macros[macroKey] || 0;
     });
-    if (total === 0) {
-      (byDay[d] ? byDay[d].nutrients : []).forEach(function(n) {
-        if (n.name === name && !seen[n.meal_log_id]) { seen[n.meal_log_id] = true; total += parseFloat(n.value || 0); }
-      });
-    }
     return Math.round(total);
   }
 
-  var calsByDay  = days.map(function(d) { return dayTotal(d, 'Calories') || dayTotal(d, 'Energy'); });
-  var protByDay  = days.map(function(d) { return dayTotal(d, 'Protein') || dayTotal(d, 'Proteins'); });
-  var carbsByDay = days.map(function(d) { return dayTotal(d, 'Carbohydrates') || dayTotal(d, 'Total Carbohydrates'); });
-  var fatsByDay  = days.map(function(d) { return dayTotal(d, 'Total Fat') || dayTotal(d, 'Fat'); });
+  var calsByDay  = days.map(function(d) { return dayMacroTotal(d, 'cal'); });
+  var protByDay  = days.map(function(d) { return dayMacroTotal(d, 'prot'); });
+  var carbsByDay = days.map(function(d) { return dayMacroTotal(d, 'carb'); });
+  var fatsByDay  = days.map(function(d) { return dayMacroTotal(d, 'fat'); });
 
   var avgCal  = Math.round(calsByDay.reduce(function(s,v){return s+v;},0) / numDays);
   var avgProt = Math.round(protByDay.reduce(function(s,v){return s+v;},0) / numDays);
