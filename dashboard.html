@@ -3328,35 +3328,7 @@ async function renderStrengthPage() {
     var profile = getUserProfile();
     var html = '';
 
-    // ── Recommended tests section ──
     var recommended = getRecommendedTests(profile, byKey);
-    if (recommended.length > 0) {
-      html += '<div style="margin-bottom:32px">'
-        + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Recommended for you</div>'
-        + '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Based on your age, goals, and what you haven\'t tested recently</div>'
-        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">';
-
-      recommended.forEach(function(key) {
-        var norm = FITNESS_NORMS[key];
-        var history = byKey[key] || [];
-        var latest = history[0];
-        var daysSince = latest ? Math.round((Date.now() - new Date(latest.tested_at)) / 86400000) : null;
-        var reason = !latest ? 'Never tested'
-          : daysSince > 90 ? 'Last tested ' + daysSince + ' days ago'
-          : latest.percentile < 30 ? 'Percentile needs attention'
-          : 'Recommended for your profile';
-
-        html += '<div class="rec-test-card" data-key="' + key + '" style="background:var(--dark-2);border:1px solid rgba(184,151,90,.3);padding:16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none">'
-          + '<div style="pointer-events:none">'
-          + '<div style="font-size:12px;color:var(--cream);margin-bottom:3px;font-weight:500">' + norm.label + '</div>'
-          + '<div style="font-size:10px;color:var(--muted)">' + reason + '</div>'
-          + '</div>'
-          + '<div style="font-size:18px;color:var(--gold);opacity:.7;pointer-events:none">→</div>'
-          + '</div>';
-      });
-
-      html += '</div></div><div style="width:100%;height:1px;background:var(--gold-border);margin-bottom:28px"></div>';
-    }
 
     FITNESS_CATEGORIES.forEach(function(cat) {
       var hasAny = cat.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
@@ -3403,7 +3375,9 @@ async function renderStrengthPage() {
 
         var dateStr = latest ? new Date(latest.tested_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
 
-        html += '<div class="card" style="padding:20px;position:relative">'
+        var isRec = recommended.indexOf(key) !== -1;
+        html += '<div class="card" style="padding:20px;position:relative' + (isRec ? ';border-color:rgba(184,151,90,.5)' : '') + '">'
+          + (isRec ? '<div style="position:absolute;top:12px;right:12px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);background:rgba(184,151,90,.12);border:1px solid var(--gold-border);padding:2px 8px">Recommended</div>' : '')
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'
           + '<div>'
           + '<div style="font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">' + norm.label + '</div>'
@@ -3428,12 +3402,10 @@ async function renderStrengthPage() {
 
     container.innerHTML = html;
 
-    // Single delegated listener — handles rec cards AND log buttons
+    // Delegated listener for log buttons
     container.addEventListener('click', function(e) {
-      var rec = e.target.closest('.rec-test-card');
-      if (rec) { openLogTestModal(rec.getAttribute('data-key')); return; }
       var logBtn = e.target.closest('.log-test-btn');
-      if (logBtn) { openLogTestModal(logBtn.getAttribute('data-key')); return; }
+      if (logBtn) { openLogTestModal(logBtn.getAttribute('data-key')); }
     });
 
   } catch(e) {
