@@ -2386,11 +2386,12 @@ function renderMealsDayView(meals, nutrients, today) {
     list.innerHTML = dayMeals.map(function(m) {
       var dt = new Date(m.meal_time || m.created_at);
       var mealType = (m.meal_type || '').toLowerCase();
-      var n = nutrientsByMeal[m.id] || {};
-      var cal  = n['Calories'] ? Math.round(n['Calories']) : null;
-      var prot = n['Protein'] ? Math.round(n['Protein']) : null;
-      var carb = n['Carbohydrates'] ? Math.round(n['Carbohydrates']) : null;
-      var fat  = n['Total Fat'] ? Math.round(n['Total Fat']) : null;
+      // Always read from meal_log.data for consistency with macro totals
+      var macros = getMacrosFromMeal(m);
+      var cal  = macros.cal  !== null ? Math.round(macros.cal)  : null;
+      var prot = macros.prot !== null ? Math.round(macros.prot) : null;
+      var carb = macros.carb !== null ? Math.round(macros.carb) : null;
+      var fat  = macros.fat  !== null ? Math.round(macros.fat)  : null;
       return '<div class="meal-card">'
         + '<div class="meal-card-emoji">' + (emojis[mealType] || '🥘') + '</div>'
         + '<div class="meal-card-info">'
@@ -2406,15 +2407,9 @@ function renderMealsDayView(meals, nutrients, today) {
     }).join('');
   }
 
-  // Day totals — use meal_log.data macros (meal_nutrient table may not exist)
-  var dayNutrientIds = new Set(dayMeals.map(function(m) { return m.id; }));
-  var dayNutrients = nutrients.filter(function(n) { return dayNutrientIds.has(n.meal_log_id); });
-  if (dayNutrients.length > 0) {
-    renderMacrosFromNutrients(dayNutrients);
-  } else {
-    // Fall back to reading macros from meal_log.data jsonb
-    renderMacrosFromMealData(dayMeals);
-  }
+  // Day totals — always use meal_log.data as source of truth for macros.
+  // meal_nutrient table may have stale or partial data so we skip it for macro totals.
+  renderMacrosFromMealData(dayMeals);
 
   // Micronutrients — always read from meal_log.data (meal_nutrient table not available)
   renderMicronutrientsFromMealData(dayMeals);
