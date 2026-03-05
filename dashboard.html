@@ -3418,7 +3418,7 @@ async function renderStrengthPage() {
           + '</div>'
           + '<div style="font-size:11px;color:var(--muted);line-height:1.5;border-top:1px solid var(--gold-border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">'
           + '<span>' + norm.hint + '</span>'
-          + '<span style="cursor:pointer;color:var(--gold);white-space:nowrap;margin-left:12px" onclick="openLogTestModal(\'' + key + '\')">+ Log</span>'
+          + '<span class="log-test-btn" data-key="' + key + '" style="cursor:pointer;color:var(--gold);white-space:nowrap;margin-left:12px">+ Log</span>'
           + '</div>'
           + '</div>';
       });
@@ -3428,11 +3428,12 @@ async function renderStrengthPage() {
 
     container.innerHTML = html;
 
-    // Event delegation for recommended test cards
-    container.querySelectorAll('.rec-test-card').forEach(function(card) {
-      card.addEventListener('click', function() {
-        openLogTestModal(this.getAttribute('data-key'));
-      });
+    // Single delegated listener — handles rec cards AND log buttons
+    container.addEventListener('click', function(e) {
+      var rec = e.target.closest('.rec-test-card');
+      if (rec) { openLogTestModal(rec.getAttribute('data-key')); return; }
+      var logBtn = e.target.closest('.log-test-btn');
+      if (logBtn) { openLogTestModal(logBtn.getAttribute('data-key')); return; }
     });
 
   } catch(e) {
