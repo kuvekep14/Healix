@@ -713,7 +713,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
         <span class="nav-icon">◻</span> Documents
       </button>
       <button class="nav-item" onclick="showPage('strength', this)">
-        <span class="nav-icon">◈</span> Exercise Log
+        <span class="nav-icon">◈</span> Fitness
       </button>
     </div>
     <div class="nav-section">
@@ -1092,18 +1092,26 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   <div class="modal" style="position:relative">
     <button class="modal-close" onclick="closeModal('fitness-modal')">✕</button>
     <div class="modal-title">Log a <em>Test</em></div>
-    <div class="modal-sub">Record a benchmark result. Be consistent with conditions — same time of day, rested state.</div>
+    <div class="modal-sub" id="ft-modal-sub">Record a benchmark result. Be consistent — same time of day, rested state.</div>
     <div class="modal-field">
       <label class="modal-label">Test</label>
       <select class="modal-input" id="ft-test" onchange="onFitnessTestChange()" style="cursor:pointer">
-        <optgroup label="Strength">
-          <option value="bench_1rm">Bench Press 1RM</option>
-          <option value="squat_1rm">Squat 1RM</option>
-          <option value="deadlift_1rm">Deadlift 1RM</option>
+        <optgroup label="Strength — go to failure">
+          <option value="bench_1rm">Bench Press</option>
+          <option value="squat_1rm">Squat</option>
+          <option value="deadlift_1rm">Deadlift</option>
+          <option value="pushup">Push-ups</option>
+          <option value="pullup">Pull-ups</option>
         </optgroup>
         <optgroup label="Cardio">
           <option value="mile_time">Mile Time</option>
           <option value="vo2max">VO2 Max</option>
+          <option value="walk_6min">6-Minute Walk</option>
+        </optgroup>
+        <optgroup label="Functional">
+          <option value="grip_strength">Grip Strength</option>
+          <option value="chair_stand">30-sec Chair Stand</option>
+          <option value="balance">Single-leg Balance</option>
         </optgroup>
         <optgroup label="Mobility">
           <option value="sit_reach">Sit &amp; Reach</option>
@@ -1120,6 +1128,26 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
         <label class="modal-label">Unit</label>
         <div class="modal-input" id="ft-unit-display" style="display:flex;align-items:center;color:var(--muted);font-size:13px">lbs</div>
       </div>
+    </div>
+    <div id="ft-amrap-fields" style="display:none">
+      <label class="modal-label">Weight used & reps completed to failure</label>
+      <div class="modal-row">
+        <div class="modal-field">
+          <input class="modal-input" id="ft-amrap-weight" type="number" placeholder="e.g. 185" step="2.5">
+          <div style="font-size:10px;color:var(--muted);margin-top:4px" id="ft-amrap-wunit">lbs</div>
+        </div>
+        <div class="modal-field" style="flex:0.6">
+          <input class="modal-input" id="ft-amrap-reps" type="number" placeholder="reps" min="1" max="30">
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">reps to failure</div>
+        </div>
+        <div class="modal-field" style="flex:1">
+          <select class="modal-input" id="ft-amrap-unit" style="cursor:pointer">
+            <option value="lbs">lbs</option>
+            <option value="kg">kg</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--gold);margin-top:-4px;margin-bottom:12px" id="ft-amrap-1rm-preview"></div>
     </div>
     <div id="ft-time-fields" style="display:none">
       <label class="modal-label">Time (min : sec)</label>
@@ -2923,7 +2951,7 @@ var FITNESS_NORMS = {
   },
   shoulder_mobility: {
     label: 'Shoulder Mobility', unit: 'cm', higherBetter: true,
-    hint: 'FMS shoulder mobility screen. Reach behind back from above and below. Measure gap (negative = hands apart).',
+    hint: 'FMS screen. Reach behind back from above and below. Measure gap (negative = hands apart).',
     norms: {
       male: {
         '18-29': [[5,99],[2,90],[0,80],[-2,70],[-5,60],[-8,50],[-12,40],[-16,30],[-20,20],[-25,10]],
@@ -2940,14 +2968,188 @@ var FITNESS_NORMS = {
         '60+':   [[4,99],[1,90],[-2,80],[-6,70],[-10,60],[-14,50],[-18,40],[-22,30],[-27,20],[-33,10]]
       }
     }
+  },
+  pushup: {
+    label: 'Push-up Test', unit: 'reps', higherBetter: true,
+    hint: 'Max push-ups to failure with good form. No rest at the top.',
+    amrap: false,
+    norms: {
+      male: {
+        '18-29': [[56,99],[47,90],[41,80],[36,70],[32,60],[29,50],[25,40],[21,30],[16,20],[10,10]],
+        '30-39': [[47,99],[39,90],[34,80],[30,70],[27,60],[24,50],[21,40],[17,30],[13,20],[8,10]],
+        '40-49': [[38,99],[31,90],[27,80],[23,70],[20,60],[18,50],[16,40],[13,30],[9,20],[5,10]],
+        '50-59': [[30,99],[25,90],[21,80],[18,70],[15,60],[13,50],[11,40],[9,30],[6,20],[3,10]],
+        '60+':   [[24,99],[19,90],[16,80],[13,70],[11,60],[10,50],[8,40],[6,30],[4,20],[2,10]]
+      },
+      female: {
+        '18-29': [[35,99],[30,90],[26,80],[23,70],[20,60],[17,50],[14,40],[11,30],[8,20],[4,10]],
+        '30-39': [[29,99],[24,90],[21,80],[18,70],[15,60],[13,50],[10,40],[8,30],[5,20],[2,10]],
+        '40-49': [[24,99],[19,90],[16,80],[13,70],[11,60],[9,50],[7,40],[5,30],[3,20],[1,10]],
+        '50-59': [[20,99],[15,90],[13,80],[10,70],[8,60],[7,50],[5,40],[3,30],[2,20],[1,10]],
+        '60+':   [[17,99],[12,90],[10,80],[8,70],[6,60],[5,50],[3,40],[2,30],[1,20],[0,10]]
+      }
+    }
+  },
+  pullup: {
+    label: 'Pull-up Test', unit: 'reps', higherBetter: true,
+    hint: 'Dead hang, chin over bar. Max reps to failure. Use bodyweight only.',
+    amrap: false,
+    norms: {
+      male: {
+        '18-29': [[22,99],[16,90],[13,80],[11,70],[9,60],[8,50],[6,40],[4,30],[2,20],[1,10]],
+        '30-39': [[20,99],[14,90],[11,80],[9,70],[8,60],[6,50],[5,40],[3,30],[2,20],[1,10]],
+        '40-49': [[16,99],[11,90],[9,80],[7,70],[6,60],[5,50],[4,40],[2,30],[1,20],[0,10]],
+        '50-59': [[12,99],[8,90],[6,80],[5,70],[4,60],[3,50],[2,40],[1,30],[0,20],[0,10]],
+        '60+':   [[8,99],[5,90],[4,80],[3,70],[2,60],[2,50],[1,40],[0,30],[0,20],[0,10]]
+      },
+      female: {
+        '18-29': [[9,99],[6,90],[5,80],[4,70],[3,60],[2,50],[1,40],[1,30],[0,20],[0,10]],
+        '30-39': [[7,99],[5,90],[4,80],[3,70],[2,60],[2,50],[1,40],[0,30],[0,20],[0,10]],
+        '40-49': [[6,99],[4,90],[3,80],[2,70],[2,60],[1,50],[1,40],[0,30],[0,20],[0,10]],
+        '50-59': [[4,99],[3,90],[2,80],[1,70],[1,60],[1,50],[0,40],[0,30],[0,20],[0,10]],
+        '60+':   [[3,99],[2,90],[1,80],[1,70],[0,60],[0,50],[0,40],[0,30],[0,20],[0,10]]
+      }
+    }
+  },
+  grip_strength: {
+    label: 'Grip Strength', unit: 'kg', higherBetter: true,
+    hint: 'Dominant hand, using a hand dynamometer. Squeeze maximally for 3 seconds. Best of 3 attempts.',
+    norms: {
+      male: {
+        '18-29': [[65,99],[57,90],[52,80],[48,70],[45,60],[43,50],[40,40],[37,30],[33,20],[28,10]],
+        '30-39': [[63,99],[56,90],[51,80],[47,70],[44,60],[42,50],[39,40],[36,30],[32,20],[27,10]],
+        '40-49': [[59,99],[52,90],[47,80],[44,70],[41,60],[39,50],[36,40],[33,30],[29,20],[24,10]],
+        '50-59': [[55,99],[48,90],[43,80],[40,70],[37,60],[35,50],[32,40],[29,30],[26,20],[21,10]],
+        '60+':   [[49,99],[42,90],[38,80],[35,70],[32,60],[30,50],[28,40],[25,30],[22,20],[17,10]]
+      },
+      female: {
+        '18-29': [[40,99],[35,90],[31,80],[28,70],[26,60],[24,50],[22,40],[20,30],[17,20],[13,10]],
+        '30-39': [[39,99],[34,90],[30,80],[27,70],[25,60],[23,50],[21,40],[19,30],[16,20],[12,10]],
+        '40-49': [[36,99],[31,90],[28,80],[25,70],[23,60],[21,50],[19,40],[17,30],[14,20],[11,10]],
+        '50-59': [[33,99],[28,90],[25,80],[22,70],[20,60],[19,50],[17,40],[15,30],[13,20],[9,10]],
+        '60+':   [[29,99],[25,90],[22,80],[19,70],[17,60],[16,50],[14,40],[12,30],[10,20],[7,10]]
+      }
+    }
+  },
+  chair_stand: {
+    label: '30-sec Chair Stand', unit: 'reps', higherBetter: true,
+    hint: 'Sit in a chair, arms crossed. Stand fully then sit. Count reps in 30 seconds.',
+    norms: {
+      male: {
+        '18-29': [[25,99],[22,90],[20,80],[18,70],[17,60],[16,50],[14,40],[13,30],[11,20],[9,10]],
+        '30-39': [[24,99],[21,90],[19,80],[17,70],[16,60],[15,50],[13,40],[12,30],[10,20],[8,10]],
+        '40-49': [[22,99],[19,90],[17,80],[16,70],[14,60],[13,50],[12,40],[10,30],[9,20],[7,10]],
+        '50-59': [[19,99],[17,90],[15,80],[14,70],[12,60],[12,50],[10,40],[9,30],[7,20],[5,10]],
+        '60+':   [[17,99],[15,90],[14,80],[12,70],[11,60],[10,50],[9,40],[7,30],[6,20],[4,10]]
+      },
+      female: {
+        '18-29': [[23,99],[20,90],[18,80],[17,70],[15,60],[14,50],[13,40],[11,30],[10,20],[8,10]],
+        '30-39': [[22,99],[19,90],[17,80],[16,70],[14,60],[13,50],[12,40],[10,30],[9,20],[7,10]],
+        '40-49': [[20,99],[18,90],[16,80],[14,70],[13,60],[12,50],[11,40],[9,30],[8,20],[6,10]],
+        '50-59': [[18,99],[16,90],[14,80],[13,70],[11,60],[11,50],[9,40],[8,30],[6,20],[5,10]],
+        '60+':   [[16,99],[14,90],[13,80],[11,70],[10,60],[9,50],[8,40],[6,30],[5,20],[3,10]]
+      }
+    }
+  },
+  balance: {
+    label: 'Single-leg Balance', unit: 'sec', higherBetter: true,
+    hint: 'Stand on one foot, eyes closed. Time until you touch down. Best of 2 attempts per leg, use better leg.',
+    norms: {
+      male: {
+        '18-29': [[45,99],[35,90],[28,80],[22,70],[17,60],[13,50],[9,40],[6,30],[3,20],[1,10]],
+        '30-39': [[40,99],[30,90],[24,80],[18,70],[14,60],[10,50],[7,40],[4,30],[2,20],[1,10]],
+        '40-49': [[30,99],[22,90],[17,80],[13,70],[9,60],[7,50],[4,40],[3,30],[1,20],[0,10]],
+        '50-59': [[20,99],[14,90],[10,80],[7,70],[5,60],[3,50],[2,40],[1,30],[0,20],[0,10]],
+        '60+':   [[12,99],[8,90],[5,80],[3,70],[2,60],[1,50],[1,40],[0,30],[0,20],[0,10]]
+      },
+      female: {
+        '18-29': [[43,99],[33,90],[26,80],[20,70],[15,60],[11,50],[8,40],[5,30],[2,20],[1,10]],
+        '30-39': [[37,99],[28,90],[21,80],[16,70],[12,60],[8,50],[5,40],[3,30],[1,20],[0,10]],
+        '40-49': [[28,99],[20,90],[15,80],[11,70],[7,60],[5,50],[3,40],[2,30],[1,20],[0,10]],
+        '50-59': [[18,99],[12,90],[8,80],[5,70],[3,60],[2,50],[1,40],[0,30],[0,20],[0,10]],
+        '60+':   [[10,99],[6,90],[4,80],[2,70],[1,60],[1,50],[0,40],[0,30],[0,20],[0,10]]
+      }
+    }
+  },
+  walk_6min: {
+    label: '6-Minute Walk', unit: 'm', higherBetter: true,
+    hint: 'Walk as far as possible in 6 minutes on a flat surface. Measure distance in metres.',
+    norms: {
+      male: {
+        '18-29': [[780,99],[720,90],[685,80],[655,70],[630,60],[608,50],[583,40],[554,30],[516,20],[460,10]],
+        '30-39': [[760,99],[700,90],[665,80],[635,70],[610,60],[588,50],[563,40],[534,30],[496,20],[440,10]],
+        '40-49': [[730,99],[670,90],[635,80],[605,70],[580,60],[558,50],[533,40],[504,30],[466,20],[410,10]],
+        '50-59': [[690,99],[630,90],[595,80],[565,70],[540,60],[518,50],[493,40],[464,30],[426,20],[370,10]],
+        '60+':   [[630,99],[570,90],[535,80],[505,70],[480,60],[458,50],[433,40],[404,30],[366,20],[310,10]]
+      },
+      female: {
+        '18-29': [[740,99],[680,90],[645,80],[615,70],[590,60],[568,50],[543,40],[514,30],[476,20],[420,10]],
+        '30-39': [[720,99],[660,90],[625,80],[595,70],[570,60],[548,50],[523,40],[494,30],[456,20],[400,10]],
+        '40-49': [[695,99],[635,90],[600,80],[570,70],[545,60],[523,50],[498,40],[469,30],[431,20],[375,10]],
+        '50-59': [[655,99],[595,90],[560,80],[530,70],[505,60],[483,50],[458,40],[429,30],[391,20],[335,10]],
+        '60+':   [[595,99],[535,90],[500,80],[470,70],[445,60],[423,50],[398,40],[369,30],[331,20],[275,10]]
+      }
+    }
   }
 };
 
 var FITNESS_CATEGORIES = [
-  { key: 'strength', label: 'Strength', tests: ['bench_1rm','squat_1rm','deadlift_1rm'] },
-  { key: 'cardio',   label: 'Cardio',   tests: ['mile_time','vo2max'] },
-  { key: 'mobility', label: 'Mobility', tests: ['sit_reach','shoulder_mobility'] }
+  { key: 'strength',   label: 'Strength',   tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
+  { key: 'cardio',     label: 'Cardio',     tests: ['mile_time','vo2max','walk_6min'] },
+  { key: 'functional', label: 'Functional', tests: ['grip_strength','chair_stand','balance'] },
+  { key: 'mobility',   label: 'Mobility',   tests: ['sit_reach','shoulder_mobility'] }
 ];
+
+// Recommendation engine — returns ordered list of test keys for this user
+function getRecommendedTests(profile, byKey) {
+  var age = profile.age;
+  var goal = ((window.userProfileData || {}).primary_goal || '').toLowerCase();
+  var scored = [];
+
+  Object.keys(FITNESS_NORMS).forEach(function(key) {
+    var score = 0;
+    var history = byKey[key] || [];
+    var latest = history[0];
+    var daysSince = latest ? (Date.now() - new Date(latest.tested_at)) / 86400000 : 999;
+
+    // Staleness — not tested in 60+ days gets priority
+    if (daysSince > 90) score += 30;
+    else if (daysSince > 60) score += 15;
+    else if (daysSince < 14) score -= 20; // recently done, deprioritise
+
+    // Never tested
+    if (!latest) score += 25;
+
+    // Age suitability
+    if (age >= 60) {
+      if (['chair_stand','balance','walk_6min','grip_strength','sit_reach'].includes(key)) score += 30;
+      if (['bench_1rm','squat_1rm','deadlift_1rm'].includes(key)) score -= 15;
+    } else if (age >= 50) {
+      if (['chair_stand','balance','grip_strength','walk_6min'].includes(key)) score += 20;
+      if (['bench_1rm','squat_1rm','deadlift_1rm'].includes(key)) score -= 5;
+    } else if (age < 35) {
+      if (['bench_1rm','squat_1rm','deadlift_1rm','pullup','vo2max'].includes(key)) score += 15;
+    }
+
+    // Goal alignment
+    if (goal.includes('weight') || goal.includes('fat')) {
+      if (['walk_6min','mile_time','vo2max','chair_stand'].includes(key)) score += 20;
+    }
+    if (goal.includes('muscle') || goal.includes('strength')) {
+      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength'].includes(key)) score += 20;
+    }
+    if (goal.includes('longevity') || goal.includes('health')) {
+      if (['grip_strength','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
+    }
+
+    // Low percentile = needs attention
+    if (latest && latest.percentile && latest.percentile < 30) score += 20;
+
+    scored.push({ key: key, score: score });
+  });
+
+  return scored.sort(function(a,b){ return b.score - a.score; }).slice(0,4).map(function(x){ return x.key; });
+}
 
 function getUserProfile() {
   var p = window.userProfileData || {};
@@ -2995,24 +3197,64 @@ function percentileLabel(p) {
   return { text: 'Poor', cls: 'pct-poor' };
 }
 
+var AMRAP_TESTS = ['bench_1rm','squat_1rm','deadlift_1rm'];
+var REPS_ONLY_TESTS = ['pushup','pullup'];
+
+function epley1RM(weight, reps) {
+  // Epley formula: 1RM = weight × (1 + reps/30)
+  return Math.round(weight * (1 + reps / 30));
+}
+
 function onFitnessTestChange() {
   var key = document.getElementById('ft-test').value;
   var norm = FITNESS_NORMS[key];
   var isMileTime = key === 'mile_time';
+  var isAMRAP = AMRAP_TESTS.includes(key);
+  var isRepsOnly = REPS_ONLY_TESTS.includes(key);
+
   document.getElementById('ft-time-fields').style.display = isMileTime ? 'block' : 'none';
-  document.getElementById('ft-value').parentElement.parentElement.style.display = isMileTime ? 'none' : 'flex';
+  document.getElementById('ft-amrap-fields').style.display = isAMRAP ? 'block' : 'none';
+  // Show plain value field for non-AMRAP, non-time, non-reps-only tests
+  var showVal = !isMileTime && !isAMRAP && !isRepsOnly;
+  document.getElementById('ft-value').parentElement.parentElement.style.display = showVal ? 'flex' : 'none';
+
   if (norm) {
     document.getElementById('ft-val-label').textContent = norm.label;
     document.getElementById('ft-unit-display').textContent = norm.unit;
+    // Update AMRAP sub hint
+    var sub = document.getElementById('ft-modal-sub');
+    if (isAMRAP) sub.textContent = 'Use a weight you can lift for 3-10 reps and go to failure. We calculate your estimated 1RM automatically.';
+    else if (isRepsOnly) sub.textContent = 'Max reps to failure with good form. Enter the total count below.';
+    else sub.textContent = 'Record a benchmark result. Be consistent — same time of day, rested state.';
+  }
+
+  // Live 1RM preview for AMRAP tests
+  if (isAMRAP) {
+    ['ft-amrap-weight','ft-amrap-reps'].forEach(function(id) {
+      document.getElementById(id).oninput = function() {
+        var w = parseFloat(document.getElementById('ft-amrap-weight').value);
+        var r = parseInt(document.getElementById('ft-amrap-reps').value);
+        var preview = document.getElementById('ft-amrap-1rm-preview');
+        if (w > 0 && r > 0 && r <= 30) {
+          preview.textContent = 'Estimated 1RM: ' + epley1RM(w, r) + ' ' + document.getElementById('ft-amrap-unit').value;
+        } else {
+          preview.textContent = '';
+        }
+      };
+    });
   }
 }
 
-function openLogTestModal() {
+function openLogTestModal(preselect) {
   document.getElementById('ft-date').value = localDateStr(new Date());
   document.getElementById('ft-value').value = '';
   document.getElementById('ft-mins').value = '';
   document.getElementById('ft-secs').value = '';
+  document.getElementById('ft-amrap-weight').value = '';
+  document.getElementById('ft-amrap-reps').value = '';
+  document.getElementById('ft-amrap-1rm-preview').textContent = '';
   document.getElementById('ft-notes').value = '';
+  if (preselect) document.getElementById('ft-test').value = preselect;
   onFitnessTestChange();
   openModal('fitness-modal');
 }
@@ -3029,6 +3271,11 @@ async function saveFitnessTest() {
     var secs = parseFloat(document.getElementById('ft-secs').value) || 0;
     rawValue = mins + secs / 60;
     if (rawValue <= 0) { alert('Enter a mile time.'); return; }
+  } else if (AMRAP_TESTS.includes(key)) {
+    var w = parseFloat(document.getElementById('ft-amrap-weight').value);
+    var r = parseInt(document.getElementById('ft-amrap-reps').value);
+    if (!w || !r || r > 30) { alert('Enter weight and reps (max 30 for accuracy).'); return; }
+    rawValue = epley1RM(w, r);
   } else {
     rawValue = parseFloat(document.getElementById('ft-value').value);
     if (isNaN(rawValue)) { alert('Enter a value.'); return; }
@@ -3085,6 +3332,36 @@ async function renderStrengthPage() {
 
     var profile = getUserProfile();
     var html = '';
+
+    // ── Recommended tests section ──
+    var recommended = getRecommendedTests(profile, byKey);
+    if (recommended.length > 0) {
+      html += '<div style="margin-bottom:32px">'
+        + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Recommended for you</div>'
+        + '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Based on your age, goals, and what you haven\'t tested recently</div>'
+        + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">';
+
+      recommended.forEach(function(key) {
+        var norm = FITNESS_NORMS[key];
+        var history = byKey[key] || [];
+        var latest = history[0];
+        var daysSince = latest ? Math.round((Date.now() - new Date(latest.tested_at)) / 86400000) : null;
+        var reason = !latest ? 'Never tested'
+          : daysSince > 90 ? 'Last tested ' + daysSince + ' days ago'
+          : latest.percentile < 30 ? 'Percentile needs attention'
+          : 'Recommended for your profile';
+
+        html += '<div style="background:var(--dark-2);border:1px solid rgba(184,151,90,.3);padding:16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="openLogTestModal(\'' + key + '\')">'
+          + '<div>'
+          + '<div style="font-size:12px;color:var(--cream);margin-bottom:3px">' + norm.label + '</div>'
+          + '<div style="font-size:10px;color:var(--muted)">' + reason + '</div>'
+          + '</div>'
+          + '<div style="font-size:18px;color:var(--gold);opacity:.7">→</div>'
+          + '</div>';
+      });
+
+      html += '</div></div><div style="width:100%;height:1px;background:var(--gold-border);margin-bottom:28px"></div>';
+    }
 
     FITNESS_CATEGORIES.forEach(function(cat) {
       var hasAny = cat.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
@@ -3146,7 +3423,7 @@ async function renderStrengthPage() {
           + '</div>'
           + '<div style="font-size:11px;color:var(--muted);line-height:1.5;border-top:1px solid var(--gold-border);padding-top:10px;display:flex;justify-content:space-between;align-items:center">'
           + '<span>' + norm.hint + '</span>'
-          + '<span style="cursor:pointer;color:var(--gold);white-space:nowrap;margin-left:12px" onclick="document.getElementById(\'ft-test\').value=\'' + key + '\';openLogTestModal()">+ Log</span>'
+          + '<span style="cursor:pointer;color:var(--gold);white-space:nowrap;margin-left:12px" onclick="openLogTestModal(\'' + key + '\')">+ Log</span>'
           + '</div>'
           + '</div>';
       });
