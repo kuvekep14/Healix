@@ -2827,7 +2827,7 @@ async function saveMedicalProfile() {
 var FITNESS_NORMS = {
   // Bench Press 1RM relative to bodyweight — male norms by age (NSCA)
   bench_1rm: {
-    label: 'Bench Press 1RM', unit: 'lbs', higherBetter: true,
+    label: 'Bench Press', unit: 'lbs', higherBetter: true,
     hint: 'Your true 1-rep max. Use a spotter or calculate from a heavy set.',
     norms: {
       male: {
@@ -2848,7 +2848,7 @@ var FITNESS_NORMS = {
     relativeToWeight: true
   },
   squat_1rm: {
-    label: 'Squat 1RM', unit: 'lbs', higherBetter: true,
+    label: 'Squat', unit: 'lbs', higherBetter: true,
     hint: 'Back squat to parallel. Calculate from a heavy set if needed.',
     norms: {
       male: {
@@ -2869,7 +2869,7 @@ var FITNESS_NORMS = {
     relativeToWeight: true
   },
   deadlift_1rm: {
-    label: 'Deadlift 1RM', unit: 'lbs', higherBetter: true,
+    label: 'Deadlift', unit: 'lbs', higherBetter: true,
     hint: 'Conventional deadlift. Relative to bodyweight.',
     norms: {
       male: {
@@ -3216,7 +3216,7 @@ function onFitnessTestChange() {
   document.getElementById('ft-amrap-fields').style.display = isAMRAP ? 'block' : 'none';
   // Show plain value field for non-AMRAP, non-time, non-reps-only tests
   var showVal = !isMileTime && !isAMRAP && !isRepsOnly;
-  document.getElementById('ft-value').parentElement.parentElement.style.display = showVal ? 'flex' : 'none';
+  document.getElementById('ft-value-row').style.display = showVal ? 'flex' : 'none';
 
   if (norm) {
     document.getElementById('ft-val-label').textContent = norm.label;
