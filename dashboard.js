@@ -1458,9 +1458,20 @@ function handleDocUpload(input) {
 var familyHistory = {};
 
 var conditions = [
-  'Heart disease', 'Type 2 Diabetes', 'High blood pressure',
-  'Cancer', 'Stroke', 'High cholesterol', 'Osteoporosis',
-  'Mental health conditions', 'Thyroid disorders', 'Kidney disease'
+  'Heart disease', 'High blood pressure', 'High cholesterol', 'Stroke',
+  'Type 2 Diabetes', 'Type 1 Diabetes',
+  'Cancer — Breast', 'Cancer — Colon', 'Cancer — Lung', 'Cancer — Prostate', 'Cancer — Other',
+  'Alzheimer\'s / Dementia', 'Parkinson\'s disease',
+  'Asthma', 'COPD / Emphysema',
+  'Depression', 'Bipolar disorder', 'Schizophrenia', 'Anxiety disorder', 'Substance abuse / Alcoholism',
+  'Autoimmune disorder (Lupus, RA, MS)',
+  'Thyroid disorders', 'Osteoporosis', 'Arthritis',
+  'Kidney disease', 'Liver disease',
+  'Sickle cell disease', 'Blood clotting disorder',
+  'Epilepsy / Seizure disorder',
+  'Obesity', 'Eating disorder',
+  'Glaucoma', 'Macular degeneration',
+  'Congenital heart defect', 'Sudden cardiac death'
 ];
 var members = ['Parent', 'Sibling', 'Grandparent'];
 
