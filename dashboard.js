@@ -150,6 +150,36 @@ function scoreAerobic(activeCal) {
   return 12;
 }
 
+function scoreSleep(sleepData) {
+  // sleepData: { latest: hours, avg: hours, nights: count, debt: hours }
+  // Sleep score considers: duration adequacy, consistency, and accumulated debt
+  if (!sleepData || !sleepData.nights) return null;
+
+  // Duration score (0-40): How close to optimal 7-9h range
+  var dur = sleepData.avg;
+  var durScore;
+  if (dur >= 7 && dur <= 9) durScore = 40;
+  else if (dur >= 6.5 && dur <= 9.5) durScore = 30;
+  else if (dur >= 6 && dur <= 10) durScore = 20;
+  else if (dur >= 5) durScore = 10;
+  else durScore = 0;
+
+  // Debt score (0-40): Accumulated sleep debt over rolling window
+  // Debt = sum of (7h target - actual) for nights below target, capped at 0
+  var debt = sleepData.debt || 0;
+  var debtScore;
+  if (debt <= 1) debtScore = 40;       // minimal debt
+  else if (debt <= 3) debtScore = 30;   // mild
+  else if (debt <= 7) debtScore = 18;   // moderate
+  else if (debt <= 14) debtScore = 8;   // severe
+  else debtScore = 0;                   // extreme
+
+  // Consistency score (0-20): Number of nights with data in last 7 days
+  var consScore = Math.min(20, Math.round((sleepData.nights / 7) * 20));
+
+  return durScore + debtScore + consScore;
+}
+
 function scoreBloodwork(bw) {
   // bw: { glucose, hba1c, ldl, hdl, crp, creatinine } — parsed from documents
   // Returns 0-100 composite or null if no data
@@ -200,6 +230,12 @@ function calcVitalityAge(metrics) {
   var strScore = scoreStrength(metrics.strengthData);
   if (strScore !== null) {
     scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.10 });
+  }
+
+  // Sleep — 15%
+  var slpScore = scoreSleep(metrics.sleepData);
+  if (slpScore !== null) {
+    scores.push({ name: 'sleep', label: 'Sleep', score: slpScore, weight: 0.15 });
   }
 
   // Aerobic — 5% (or 8% without bloodwork)
@@ -315,6 +351,19 @@ function renderDriverCards(metrics, result) {
   setDriver('strength',  strVal, strScore, '');
   setDriver('aerobic',   aerVal, aerScore, '');
 
+  // Sleep driver card
+  var slpData = metrics.sleepData;
+  var slpScore = slpData ? (scoreSleep(slpData) || 0) : 0;
+  if (slpData) {
+    var debtLabel = slpData.debt <= 1 ? 'Minimal debt' : slpData.debt <= 3 ? 'Mild debt' : slpData.debt <= 7 ? 'Moderate debt' : 'High debt';
+    var slpVal = slpData.latest + 'h last night';
+    setDriver('sleep', slpVal, slpScore, '');
+    var slpSt = document.getElementById('drv-sleep-status');
+    if (slpSt) slpSt.textContent = debtLabel + ' · ' + slpData.debt + 'h';
+  } else {
+    setDriver('sleep', null, 0, '');
+  }
+
   // Blood work — show connected state if available
   var bwScore = scoreBloodwork(metrics.bloodwork);
   var bwCard = document.getElementById('drv-bloodwork');
@@ -349,6 +398,64 @@ function buildInsightSentence(metrics, result) {
   return primary + secondary;
 }
 
+// ── Sleep processing functions (session-based) ──
+function mapSleepStage(value) {
+  if (!value) return 'core';
+  var stage = value.toLowerCase();
+  if (stage.includes('deep')) return 'deep';
+  if (stage.includes('rem')) return 'rem';
+  if (stage.includes('awake')) return 'awake';
+  return 'core';
+}
+
+function identifySleepSessions(samples) {
+  var sorted = samples.slice().sort(function(a, b) { return new Date(a.start_date) - new Date(b.start_date); });
+  var sessions = [];
+  var currentSession = [];
+  var lastEndMs = null;
+  for (var i = 0; i < sorted.length; i++) {
+    var sample = sorted[i];
+    var startMs = new Date(sample.start_date).getTime();
+    var endMs = new Date(sample.end_date).getTime();
+    var gapMinutes = lastEndMs != null ? (startMs - lastEndMs) / (1000 * 60) : 0;
+    if (lastEndMs == null || gapMinutes > 45) {
+      if (currentSession.length > 0) {
+        var sessStart = new Date(currentSession[0].start_date).getTime();
+        var sessEnd = new Date(currentSession[currentSession.length - 1].end_date).getTime();
+        if ((sessEnd - sessStart) / (1000 * 60 * 60) >= 2) {
+          sessions.push({ startTime: sessStart, endTime: sessEnd, samples: currentSession.slice() });
+        }
+      }
+      currentSession = [sample];
+    } else {
+      currentSession.push(sample);
+    }
+    lastEndMs = endMs;
+  }
+  if (currentSession.length > 0) {
+    var sessStart = new Date(currentSession[0].start_date).getTime();
+    var sessEnd = new Date(currentSession[currentSession.length - 1].end_date).getTime();
+    if ((sessEnd - sessStart) / (1000 * 60 * 60) >= 2) {
+      sessions.push({ startTime: sessStart, endTime: sessEnd, samples: currentSession.slice() });
+    }
+  }
+  return sessions.sort(function(a, b) { return b.startTime - a.startTime; });
+}
+
+function computeSessionMinutes(session) {
+  var stages = { deep: 0, rem: 0, core: 0, awake: 0 };
+  var total = 0;
+  for (var i = 0; i < session.samples.length; i++) {
+    var s = session.samples[i];
+    var duration = (new Date(s.end_date) - new Date(s.start_date)) / (1000 * 60);
+    var stage = mapSleepStage(s.value || s.text_value);
+    stages[stage] += duration;
+    total += duration;
+  }
+  var actualSleep = Math.max(0, total - stages.awake);
+  return { totalMinutes: total, actualSleepMinutes: actualSleep, stages: stages };
+}
+
 async function loadDashboardData() {
   if (!currentUser) return;
   var token = currentSession.access_token;
@@ -363,13 +470,13 @@ async function loadDashboardData() {
   }
   console.log('[Healix] Dashboard loading — realAge:', realAge, 'profile:', window.userProfileData ? Object.keys(window.userProfileData) : 'null');
 
-  var metrics = { hr: null, activeCal: null, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, steps: null, nutritionScore: null, realAge: realAge };
+  var metrics = { hr: null, activeCal: null, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
 
   // 1. Health data (last 14 days for context)
   try {
-    var daysAgo = new Date(); daysAgo.setDate(daysAgo.getDate() - 14);
+    var daysAgo = new Date(); daysAgo.setDate(daysAgo.getDate() - 21);
     var healthData = await supabaseRequest(
-      '/rest/v1/apple_health_samples?select=metric_type,start_date,end_date,value&user_id=eq.' + currentUser.id + '&start_date=gte.' + daysAgo.toISOString().split('T')[0] + '&order=start_date.desc',
+      '/rest/v1/apple_health_samples?select=metric_type,start_date,end_date,value,text_value&user_id=eq.' + currentUser.id + '&start_date=gte.' + daysAgo.toISOString().split('T')[0] + '&order=start_date.desc',
       'GET', null, token
     );
     console.log('[Healix] healthData rows:', healthData ? (healthData.error ? 'ERROR:'+JSON.stringify(healthData.error) : healthData.length) : 'null');
@@ -381,19 +488,28 @@ async function loadDashboardData() {
       });
       console.log('[Healix] health metric types:', Object.keys(byType));
 
-      // Sleep — calculate duration from start_date/end_date
+      // Sleep — session-based processing per CTO spec
       var sleepRows = byType['sleep_analysis'] || [];
-      var todaySleepHours = 0;
-      sleepRows.forEach(function(r) {
-        if (r.start_date && r.end_date) {
-          var start = new Date(r.start_date).getTime();
-          var end = new Date(r.end_date).getTime();
-          var hours = (end - start) / (1000 * 60 * 60);
-          if (hours > 0 && hours < 24) todaySleepHours += hours;
+      if (sleepRows.length > 0) {
+        var sessions = identifySleepSessions(sleepRows);
+        if (sessions.length > 0) {
+          var mostRecent = computeSessionMinutes(sessions[0]);
+          var latestSleep = Math.round((mostRecent.actualSleepMinutes / 60) * 10) / 10;
+          // Compute per-session actual sleep hours for averages and debt
+          var sessionSleepHours = sessions.map(function(sess) {
+            return computeSessionMinutes(sess).actualSleepMinutes / 60;
+          });
+          var avgSleep = Math.round(sessionSleepHours.reduce(function(s, h) { return s + h; }, 0) / sessionSleepHours.length * 10) / 10;
+          var TARGET_SLEEP = 7;
+          var recentSessions = sessionSleepHours.slice(0, 7);
+          var sleepDebt = recentSessions.reduce(function(debt, h) {
+            var deficit = TARGET_SLEEP - h;
+            return debt + (deficit > 0 ? deficit : 0);
+          }, 0);
+          sleepDebt = Math.round(sleepDebt * 10) / 10;
+          metrics.sleep = latestSleep;
+          metrics.sleepData = { latest: latestSleep, avg: avgSleep, nights: sessions.length, debt: sleepDebt };
         }
-      });
-      if (todaySleepHours > 0) {
-        metrics.sleep = Math.round(todaySleepHours * 10) / 10;
       }
 
       // Steps
@@ -512,35 +628,7 @@ function setHTML(id, val) { var e = document.getElementById(id); if (e) e.innerH
 function setClass(id, cls) { var e = document.getElementById(id); if (e) e.className = cls; }
 
 function renderHealthStats(byType, today) {
-  // Sleep — calculate duration from start_date/end_date per night
-  var sleepData = byType['sleep_analysis'] || [];
-  // Group sleep samples by night (use start_date's date)
-  var sleepByNight = {};
-  sleepData.forEach(function(r) {
-    if (r.start_date && r.end_date) {
-      var start = new Date(r.start_date).getTime();
-      var end = new Date(r.end_date).getTime();
-      var hours = (end - start) / (1000 * 60 * 60);
-      if (hours > 0 && hours < 24) {
-        var night = r.start_date.split('T')[0];
-        sleepByNight[night] = (sleepByNight[night] || 0) + hours;
-      }
-    }
-  });
-  var nightKeys = Object.keys(sleepByNight).sort().reverse();
-  if (nightKeys.length > 0) {
-    var v = Math.round(sleepByNight[nightKeys[0]] * 10) / 10;
-    var totalSleep = nightKeys.reduce(function(s, k) { return s + sleepByNight[k]; }, 0);
-    var avg = Math.round((totalSleep / nightKeys.length) * 10) / 10;
-    var diff = Math.round((v - avg) * 10) / 10;
-    setHTML('d-sleep', v + '<span class="stat-item-unit">h</span>');
-    setEl('d-sleep-d', diff > 0 ? '↑ +' + diff + 'h vs avg' : diff < 0 ? '↓ ' + diff + 'h vs avg' : '— avg ' + avg + 'h');
-    setClass('d-sleep-d', 'stat-item-delta ' + (diff > 0 ? 'delta-up' : diff < 0 ? 'delta-down' : 'delta-neutral'));
-  } else {
-    setHTML('d-sleep', '—<span class="stat-item-unit">h</span>');
-    setEl('d-sleep-d', 'No data yet');
-    setClass('d-sleep-d', 'stat-item-delta delta-neutral');
-  }
+  // Sleep is now handled by the driver card in renderDriverCards — no separate stat display needed
 
   // Steps - unit: steps, sum all entries for today
   var stepsKeys = ['step_count'];

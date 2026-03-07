@@ -261,48 +261,111 @@ async function loadUserProfile() {
 }
 loadUserProfile();
 
+// ── Sleep processing functions (session-based) ──
+function mapSleepStage(value) {
+  if (!value) return 'core';
+  var stage = value.toLowerCase();
+  if (stage.includes('deep')) return 'deep';
+  if (stage.includes('rem')) return 'rem';
+  if (stage.includes('awake')) return 'awake';
+  return 'core';
+}
+
+function identifySleepSessions(samples) {
+  var sorted = samples.slice().sort(function(a, b) { return new Date(a.start_date) - new Date(b.start_date); });
+  var sessions = [];
+  var currentSession = [];
+  var lastEndMs = null;
+  for (var i = 0; i < sorted.length; i++) {
+    var sample = sorted[i];
+    var startMs = new Date(sample.start_date).getTime();
+    var endMs = new Date(sample.end_date).getTime();
+    var gapMinutes = lastEndMs != null ? (startMs - lastEndMs) / (1000 * 60) : 0;
+    if (lastEndMs == null || gapMinutes > 45) {
+      if (currentSession.length > 0) {
+        var sessStart = new Date(currentSession[0].start_date).getTime();
+        var sessEnd = new Date(currentSession[currentSession.length - 1].end_date).getTime();
+        if ((sessEnd - sessStart) / (1000 * 60 * 60) >= 2) {
+          sessions.push({ startTime: sessStart, endTime: sessEnd, samples: currentSession.slice() });
+        }
+      }
+      currentSession = [sample];
+    } else {
+      currentSession.push(sample);
+    }
+    lastEndMs = endMs;
+  }
+  if (currentSession.length > 0) {
+    var sessStart = new Date(currentSession[0].start_date).getTime();
+    var sessEnd = new Date(currentSession[currentSession.length - 1].end_date).getTime();
+    if ((sessEnd - sessStart) / (1000 * 60 * 60) >= 2) {
+      sessions.push({ startTime: sessStart, endTime: sessEnd, samples: currentSession.slice() });
+    }
+  }
+  return sessions.sort(function(a, b) { return b.startTime - a.startTime; });
+}
+
+function computeSessionMinutes(session) {
+  var stages = { deep: 0, rem: 0, core: 0, awake: 0 };
+  var total = 0;
+  for (var i = 0; i < session.samples.length; i++) {
+    var s = session.samples[i];
+    var duration = (new Date(s.end_date) - new Date(s.start_date)) / (1000 * 60);
+    var stage = mapSleepStage(s.value || s.text_value);
+    stages[stage] += duration;
+    total += duration;
+  }
+  var actualSleep = Math.max(0, total - stages.awake);
+  return { totalMinutes: total, actualSleepMinutes: actualSleep, stages: stages };
+}
+
+function processSleepData(samples) {
+  var sessions = identifySleepSessions(samples);
+  if (sessions.length === 0) return null;
+  var mostRecent = sessions[0];
+  var computed = computeSessionMinutes(mostRecent);
+  return {
+    totalHours: Math.floor(computed.actualSleepMinutes / 60),
+    totalMinutes: computed.actualSleepMinutes % 60,
+    stages: computed.stages,
+    efficiency: computed.totalMinutes > 0 ? Math.round((computed.actualSleepMinutes / computed.totalMinutes) * 100) : 0,
+    sessions: sessions
+  };
+}
+
 async function loadHealthData() {
   var session = getSession();
   if (!session) return;
   var token = session.access_token;
   var today = new Date();
   var todayStr = today.toISOString().split('T')[0];
-  var sevenDaysAgo = new Date(today); sevenDaysAgo.setDate(today.getDate() - 7);
-  var sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+  var twentyOneDaysAgo = new Date(today); twentyOneDaysAgo.setDate(today.getDate() - 21);
+  var sevenDaysAgoStr = twentyOneDaysAgo.toISOString().split('T')[0];
   try {
-    var params = new URLSearchParams({ select: 'metric_type,start_date,end_date,value', start_date: 'gte.' + sevenDaysAgoStr, order: 'start_date.desc' });
+    var params = new URLSearchParams({ select: 'metric_type,start_date,end_date,value,text_value', start_date: 'gte.' + sevenDaysAgoStr, order: 'start_date.desc' });
     var data = await supabaseRequest('/rest/v1/apple_health_samples?' + params.toString(), 'GET', null, token);
     if (!data || data.error) { setStatFallback(); return; }
     var byType = {};
     data.forEach(function(row) { if (!byType[row.metric_type]) byType[row.metric_type] = []; byType[row.metric_type].push(row); });
 
-    // SLEEP — calculate duration from start_date/end_date (value is often NULL for sleep_analysis)
+    // SLEEP — session-based processing per CTO spec
     var sleepData = byType['sleep_analysis'] || byType['sleep'] || byType['HKCategoryTypeIdentifierSleepAnalysis'] || [];
     if (sleepData.length > 0) {
-      // Group sleep sessions by night (use start_date's date)
-      var sleepByNight = {};
-      sleepData.forEach(function(r) {
-        var nightDate = r.start_date ? r.start_date.split('T')[0] : null;
-        if (!nightDate) return;
-        if (!sleepByNight[nightDate]) sleepByNight[nightDate] = 0;
-        if (r.start_date && r.end_date) {
-          var dur = (new Date(r.end_date) - new Date(r.start_date)) / 3600000;
-          if (dur > 0 && dur < 24) sleepByNight[nightDate] += dur;
-        } else if (r.value) {
-          var x = parseFloat(r.value); if (x > 24) x = x / 3600;
-          if (x > 0 && x < 24) sleepByNight[nightDate] += x;
-        }
-      });
-      var nights = Object.keys(sleepByNight).sort().reverse();
-      if (nights.length > 0) {
-        var v = Math.round(sleepByNight[nights[0]] * 10) / 10;
-        var avg = Math.round(nights.reduce(function(s,n){ return s + sleepByNight[n]; }, 0) / nights.length * 10) / 10;
-        var diff = Math.round((v - avg) * 10) / 10;
-        document.getElementById('stat-sleep').innerHTML = v + '<span style="font-size:13px;color:var(--muted)">h</span>';
+      var sleepResult = processSleepData(sleepData);
+      if (sleepResult) {
+        var vDisplay = sleepResult.totalHours + '<span style="font-size:13px;color:var(--muted)">h </span>' + Math.round(sleepResult.totalMinutes) + '<span style="font-size:13px;color:var(--muted)">m</span>';
+        document.getElementById('stat-sleep').innerHTML = vDisplay;
+        // Weekly average from all sessions
+        var totalSleepMins = sleepResult.sessions.reduce(function(s, sess) {
+          var c = computeSessionMinutes(sess); return s + c.actualSleepMinutes;
+        }, 0);
+        var avgH = Math.round((totalSleepMins / sleepResult.sessions.length / 60) * 10) / 10;
+        var lastH = Math.round((sleepResult.totalHours + sleepResult.totalMinutes / 60) * 10) / 10;
+        var diff = Math.round((lastH - avgH) * 10) / 10;
         var el = document.getElementById('stat-sleep-delta');
-        el.textContent = Math.abs(diff)<0.1 ? '— avg '+avg+'h' : (diff>0?'↑ +'+diff+'h vs avg':'↓ '+diff+'h vs avg');
-        el.className = 'stat-card-delta ' + (Math.abs(diff)<0.1?'neutral':diff>0?'up':'down');
-        healthSummary.sleep = { hours: v, avg: avg };
+        el.textContent = Math.abs(diff) < 0.1 ? '— avg ' + avgH + 'h' : (diff > 0 ? '↑ +' + diff + 'h vs avg' : '↓ ' + diff + 'h vs avg');
+        el.className = 'stat-card-delta ' + (Math.abs(diff) < 0.1 ? 'neutral' : diff > 0 ? 'up' : 'down');
+        healthSummary.sleep = { hours: lastH, avg: avgH };
       } else { document.getElementById('stat-sleep').textContent = '—'; document.getElementById('stat-sleep-delta').textContent = 'No data'; }
     } else { document.getElementById('stat-sleep').textContent = '—'; document.getElementById('stat-sleep-delta').textContent = 'No data'; }
 
