@@ -418,6 +418,7 @@ function buildInsightSentence(metrics, result) {
 function mapSleepStage(value) {
   if (!value) return 'core';
   var stage = value.toLowerCase();
+  if (stage.includes('inbed') || stage.includes('in_bed') || stage.includes('in bed')) return null;
   if (stage.includes('deep')) return 'deep';
   if (stage.includes('rem')) return 'rem';
   if (stage.includes('awake')) return 'awake';
@@ -463,8 +464,9 @@ function computeSessionMinutes(session) {
   var total = 0;
   for (var i = 0; i < session.samples.length; i++) {
     var s = session.samples[i];
-    var duration = (new Date(s.end_date) - new Date(s.start_date)) / (1000 * 60);
     var stage = mapSleepStage(s.value || s.text_value);
+    if (stage === null) continue;
+    var duration = (new Date(s.end_date) - new Date(s.start_date)) / (1000 * 60);
     stages[stage] += duration;
     total += duration;
   }
