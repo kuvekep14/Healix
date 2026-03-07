@@ -1553,7 +1553,7 @@ async function saveProfile() {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
     window.userProfileData = Object.assign(window.userProfileData || {}, data);
     alert('Profile saved.');
-  } catch(e) { alert('Could not save profile.'); console.error(e); }
+  } catch(e) { alert('Could not save profile: ' + e.message); console.error('Profile save error:', e); }
 }
 
 // ── MODALS ──
