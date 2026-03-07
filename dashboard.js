@@ -34,11 +34,11 @@ async function init() {
     var user = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
     if (!user || !user.id) { localStorage.removeItem('healix_session'); window.location.href = 'login.html'; return; }
     currentUser = user;
+    // Set initial name from auth metadata, will be overwritten by profile data if available
     var name = (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0];
     var firstName = name.split(' ')[0];
     document.getElementById('sb-name').textContent = name;
     document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
-    document.getElementById('p-name').value = name;
     document.getElementById('page-title').textContent = greet() + ', ' + firstName;
 
     // Fetch profile from Supabase before loading dashboard so DOB/weight are available
@@ -51,6 +51,13 @@ async function init() {
         window.userProfileData = profileData[0];
         console.log('[Healix] profile loaded:', Object.keys(window.userProfileData), 'birth_date:', window.userProfileData.birth_date);
         populateProfileForm(profileData[0]);
+        // Update sidebar and greeting with profile name
+        var profileName = [profileData[0].first_name, profileData[0].last_name].filter(Boolean).join(' ');
+        if (profileName) {
+          document.getElementById('sb-name').textContent = profileName;
+          document.getElementById('sb-avatar').textContent = profileName.charAt(0).toUpperCase();
+          document.getElementById('page-title').textContent = greet() + ', ' + profileData[0].first_name;
+        }
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
@@ -1479,7 +1486,8 @@ async function saveFamilyHistory() {
 }
 
 function populateProfileForm(profile) {
-  if (profile.full_name) document.getElementById('p-name').value = profile.full_name;
+  var fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+  if (fullName) document.getElementById('p-name').value = fullName;
   if (profile.birth_date) document.getElementById('p-dob').value = profile.birth_date;
   if (profile.gender) document.getElementById('p-sex').value = profile.gender;
   if (profile.primary_goal) document.getElementById('p-goal').value = profile.primary_goal;
@@ -1529,9 +1537,13 @@ async function saveProfile() {
   if (!currentUser) return;
   var heightCm = parseHeight(document.getElementById('p-height').value);
   var weightKg = parseWeight(document.getElementById('p-weight').value);
+  var nameParts = document.getElementById('p-name').value.trim().split(/\s+/);
+  var firstName = nameParts[0] || '';
+  var lastName = nameParts.slice(1).join(' ') || '';
   var data = {
-    full_name: document.getElementById('p-name').value,
-    primary_goal: document.getElementById('p-goal').value,
+    first_name: firstName,
+    last_name: lastName,
+    primary_goal: document.getElementById('p-goal').value || null,
     birth_date: document.getElementById('p-dob').value || null,
     gender: document.getElementById('p-sex').value || null,
     height_cm: heightCm,
