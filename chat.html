@@ -131,7 +131,7 @@ textarea::placeholder { color: var(--muted); }
         <div class="stat-card"><div class="stat-card-label">Sleep</div><div class="stat-card-val" id="stat-sleep">—</div><div class="stat-card-delta" id="stat-sleep-delta">Loading...</div></div>
         <div class="stat-card"><div class="stat-card-label">Steps</div><div class="stat-card-val" id="stat-steps">—</div><div class="stat-card-delta" id="stat-steps-delta">Loading...</div></div>
         <div class="stat-card"><div class="stat-card-label">Heart Rate</div><div class="stat-card-val" id="stat-hr">—</div><div class="stat-card-delta" id="stat-hr-delta">Loading...</div></div>
-        <div class="stat-card"><div class="stat-card-label">Active Cal</div><div class="stat-card-val" id="stat-cal">—</div><div class="stat-card-delta" id="stat-cal-delta">Loading...</div></div>
+        <div class="stat-card"><div class="stat-card-label">Calories</div><div class="stat-card-val" id="stat-cal">—</div><div class="stat-card-delta" id="stat-cal-delta">Loading...</div></div>
       </div>
       <div class="mini-chart" id="mini-chart">
         <div class="mini-bar" style="height:20%"></div><div class="mini-bar" style="height:20%"></div><div class="mini-bar" style="height:20%"></div><div class="mini-bar" style="height:20%"></div><div class="mini-bar" style="height:20%"></div><div class="mini-bar" style="height:20%"></div><div class="mini-bar today" style="height:20%"></div>
@@ -301,19 +301,7 @@ async function loadHealthData() {
       healthSummary.heart_rate = { bpm: hr, avg: hrAvg };
     } else { document.getElementById('stat-hr').textContent = '—'; document.getElementById('stat-hr-delta').textContent = 'No data'; }
 
-    // CALORIES
-    var calData = byType['active_energy'] || byType['HKQuantityTypeIdentifierActiveEnergyBurned'] || byType['active_calories'] || [];
-    if (calData.length > 0) {
-      var cal = Math.round(calData.filter(function(r){return r.start_date&&r.start_date.startsWith(todayStr);}).reduce(function(s,r){return s+parseFloat(r.value||0);},0));
-      if (cal===0) cal = Math.round(parseFloat(calData[0].value||0));
-      var calAvg = Math.round(calData.reduce(function(s,r){return s+parseFloat(r.value||0);},0)/7);
-      var calDiff = Math.round(((cal-calAvg)/Math.max(calAvg,1))*100);
-      document.getElementById('stat-cal').innerHTML = cal + '<span style="font-size:13px;color:var(--muted)">kcal</span>';
-      var cel = document.getElementById('stat-cal-delta');
-      cel.textContent = Math.abs(calDiff)<5?'— avg '+calAvg:(calDiff>0?'↑ +'+calDiff+'% vs avg':'↓ '+calDiff+'% vs avg');
-      cel.className = 'stat-card-delta '+(Math.abs(calDiff)<5?'neutral':calDiff>0?'up':'down');
-      healthSummary.calories = { today: cal, avg: calAvg };
-    } else { document.getElementById('stat-cal').textContent = '—'; document.getElementById('stat-cal-delta').textContent = 'No data'; }
+    // CALORIES CONSUMED (from meals) - loaded separately in loadCaloriesConsumed()
 
   } catch(e) { console.error('Health data error:', e); setStatFallback(); }
 }
@@ -357,7 +345,35 @@ async function loadMealData() {
   } catch(e) { document.getElementById('meal-list').innerHTML = '<div class="sidebar-empty">Could not load meals</div>'; }
 }
 
-setTimeout(function(){ loadHealthData(); loadMealData(); }, 500);
+async function loadCaloriesConsumed() {
+  var session = getSession(); if (!session) return;
+  var token = session.access_token;
+  var todayStr = new Date().toISOString().split('T')[0];
+  try {
+    var meals = await supabaseRequest('/rest/v1/meals?select=calories,logged_at,created_at&order=logged_at.desc,created_at.desc&limit=50', 'GET', null, token);
+    if (!meals || meals.error || meals.length===0) { document.getElementById('stat-cal').textContent = '—'; document.getElementById('stat-cal-delta').textContent = 'No meals'; return; }
+    var todayCals = 0; var totalCals = 0; var days = {};
+    meals.forEach(function(m) {
+      var d = (m.logged_at||m.created_at||'').split('T')[0];
+      var c = parseFloat(m.calories||0);
+      if (d===todayStr) todayCals += c;
+      totalCals += c;
+      days[d] = (days[d]||0) + c;
+    });
+    var dayCount = Object.keys(days).length || 1;
+    var avg = Math.round(totalCals / dayCount);
+    if (todayCals > 0) {
+      document.getElementById('stat-cal').innerHTML = Math.round(todayCals) + '<span style="font-size:13px;color:var(--muted)">kcal</span>';
+      var diff = Math.round(((todayCals-avg)/Math.max(avg,1))*100);
+      var cel = document.getElementById('stat-cal-delta');
+      cel.textContent = Math.abs(diff)<5?'— avg '+avg:(diff>0?'↑ +'+diff+'% vs avg':'↓ '+diff+'% vs avg');
+      cel.className = 'stat-card-delta '+(Math.abs(diff)<5?'neutral':diff>0?'up':'down');
+    } else { document.getElementById('stat-cal').textContent = '—'; document.getElementById('stat-cal-delta').textContent = 'No meals today'; }
+    healthSummary.calories = { today: Math.round(todayCals), avg: avg };
+  } catch(e) { document.getElementById('stat-cal').textContent = '—'; document.getElementById('stat-cal-delta').textContent = 'No data'; }
+}
+
+setTimeout(function(){ loadHealthData(); loadMealData(); loadCaloriesConsumed(); }, 500);
 
 // CONTEXT CHIPS
 document.querySelectorAll('.ctx-chip').forEach(function(chip){
