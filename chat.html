@@ -193,8 +193,8 @@ textarea::placeholder { color: var(--muted); }
   </div>
 </div>
 <script>
-var SUPABASE_URL =  + SUPABASE_URL + ;
-var SUPABASE_ANON_KEY =  + SUPABASE_ANON_KEY + ;
+var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
+var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
 
 function supabaseRequest(endpoint, method, body, token) {
   return fetch(SUPABASE_URL + endpoint, {
@@ -368,7 +368,7 @@ function renderActiveContext() {
   var el = document.getElementById('active-ctx-display'); var active = getActiveContexts();
   if (!active.length) { el.innerHTML = ''; return; }
   var labels = {wearable:'Wearable',meals:'Meals',bloodwork:'Bloodwork',sleep:'Sleep',activity:'Activity'};
-  el.innerHTML = active.map(function(ctx){ return '<div class="active-ctx">'+labels[ctx]+'<span class="active-ctx-remove" onclick="removeCtx(''+ctx+'')">×</span></div>'; }).join('');
+  el.innerHTML = active.map(function(ctx){ return '<div class="active-ctx">'+labels[ctx]+'<span class="active-ctx-remove" onclick="removeCtx(\''+ctx+'\')">×</span></div>'; }).join('');
 }
 renderActiveContext();
 function removeCtx(ctx) { var c = document.querySelector('.ctx-chip[data-ctx="'+ctx+'"]'); if(c) c.classList.remove('active'); renderActiveContext(); }
@@ -383,7 +383,7 @@ dropZone.addEventListener('drop', function(e){ e.preventDefault(); dropZone.styl
 function addFileToList(file) {
   var list = document.getElementById('uploaded-files'); var icon = file.type==='application/pdf'?'📄':'🖼';
   var id = 'file-'+Date.now(); var el = document.createElement('div'); el.className='uploaded-file'; el.id=id;
-  el.innerHTML='<span>'+icon+'</span><span class="uploaded-file-name">'+file.name+'</span><span class="uploaded-file-remove" onclick="removeFile(''+id+'')">×</span>';
+  el.innerHTML='<span>'+icon+'</span><span class="uploaded-file-name">'+file.name+'</span><span class="uploaded-file-remove" onclick="removeFile(\''+id+'\')">×</span>';
   list.appendChild(el);
 }
 function removeFile(id) { var el=document.getElementById(id); if(el) el.remove(); }
@@ -450,8 +450,7 @@ function addMessage(role, text) {
   var container = document.getElementById('chat-messages'); var isUser = role==='user';
   var el = document.createElement('div'); el.className = 'message '+role;
   // Convert markdown-style bold to HTML
-  var html = text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/
-/g,'<br>');
+  var html = text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
   el.innerHTML = '<div class="message-avatar">'+(isUser?'A':'H')+'</div><div class="message-body"><div class="message-name">'+(isUser?'You':'Healix')+'</div><div class="message-bubble">'+html+'</div></div>';
   container.appendChild(el); container.scrollTop = container.scrollHeight;
   messages.push({role:role,text:text});
