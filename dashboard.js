@@ -2076,9 +2076,12 @@ function onFitnessTestChange() {
 
   document.getElementById('ft-time-fields').style.display = isMileTime ? 'block' : 'none';
   document.getElementById('ft-amrap-fields').style.display = isAMRAP ? 'block' : 'none';
-  // Show plain value field for non-AMRAP, non-time, non-reps-only tests
-  var showVal = !isMileTime && !isAMRAP && !isRepsOnly;
+  // Show value field for reps-only tests too (just relabel it)
+  var showVal = !isMileTime && !isAMRAP;
   document.getElementById('ft-value-row').style.display = showVal ? 'flex' : 'none';
+  if (isRepsOnly) {
+    document.getElementById('ft-unit-display').textContent = 'reps';
+  }
 
   if (norm) {
     document.getElementById('ft-val-label').textContent = norm.label;
