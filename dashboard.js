@@ -17,7 +17,12 @@ function supabaseRequest(endpoint, method, body, token) {
       'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY)
     },
     body: body ? JSON.stringify(body) : undefined
-  }).then(function(r) { return r.json(); });
+  }).then(function(r) {
+    if (!r.ok) return r.text().then(function(t) { throw new Error(r.status + ': ' + t); });
+    var ct = r.headers.get('content-type') || '';
+    if (ct.indexOf('json') === -1) return null;
+    return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
+  });
 }
 
 // ── AUTH ──
