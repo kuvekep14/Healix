@@ -358,8 +358,24 @@ function renderDriverCards(metrics, result) {
     var debtLabel = slpData.debt <= 1 ? 'Minimal debt' : slpData.debt <= 3 ? 'Mild debt' : slpData.debt <= 7 ? 'Moderate debt' : 'High debt';
     var slpVal = slpData.latest + 'h last night';
     setDriver('sleep', slpVal, slpScore, '');
+    var statusText = debtLabel + ' · ' + slpData.debt + 'h';
+    if (slpData.efficiency) statusText += ' · ' + slpData.efficiency + '% eff';
     var slpSt = document.getElementById('drv-sleep-status');
-    if (slpSt) slpSt.textContent = debtLabel + ' · ' + slpData.debt + 'h';
+    if (slpSt) slpSt.textContent = statusText;
+    var slpDetail = document.getElementById('drv-sleep-detail');
+    if (slpDetail && slpData.bedtime && slpData.wakeTime) {
+      var detailParts = [slpData.bedtime + ' – ' + slpData.wakeTime];
+      if (slpData.stages) {
+        if (slpData.stages.deep) detailParts.push('Deep ' + slpData.stages.deep.pct + '%');
+        if (slpData.stages.rem) detailParts.push('REM ' + slpData.stages.rem.pct + '%');
+      }
+      slpDetail.textContent = detailParts.join(' · ');
+    }
+    var slpTrend = document.getElementById('drv-sleep-trend');
+    if (slpTrend && slpData.trend) {
+      var arrow = slpData.trend.direction === 'improving' ? '↑' : slpData.trend.direction === 'declining' ? '↓' : '→';
+      slpTrend.textContent = arrow + ' ' + Math.abs(slpData.trend.deltaHours) + 'h vs last wk';
+    }
   } else {
     setDriver('sleep', null, 0, '');
   }
@@ -456,6 +472,27 @@ function computeSessionMinutes(session) {
   return { totalMinutes: total, actualSleepMinutes: actualSleep, stages: stages };
 }
 
+function calculateSleepTrend(sessions) {
+  var now = Date.now();
+  var msPerDay = 24 * 60 * 60 * 1000;
+  var thisWeek = [];
+  var lastWeek = [];
+  for (var i = 0; i < sessions.length; i++) {
+    var daysAgo = (now - sessions[i].startTime) / msPerDay;
+    if (daysAgo <= 7) {
+      thisWeek.push(computeSessionMinutes(sessions[i]).actualSleepMinutes / 60);
+    } else if (daysAgo <= 14) {
+      lastWeek.push(computeSessionMinutes(sessions[i]).actualSleepMinutes / 60);
+    }
+  }
+  if (thisWeek.length === 0 || lastWeek.length === 0) return null;
+  var thisWeekAvg = thisWeek.reduce(function(s, h) { return s + h; }, 0) / thisWeek.length;
+  var lastWeekAvg = lastWeek.reduce(function(s, h) { return s + h; }, 0) / lastWeek.length;
+  var deltaHours = Math.round((thisWeekAvg - lastWeekAvg) * 10) / 10;
+  var direction = deltaHours >= 0.25 ? 'improving' : deltaHours <= -0.25 ? 'declining' : 'stable';
+  return { thisWeekAvg: Math.round(thisWeekAvg * 10) / 10, lastWeekAvg: Math.round(lastWeekAvg * 10) / 10, deltaHours: deltaHours, direction: direction };
+}
+
 async function loadDashboardData() {
   if (!currentUser) return;
   var token = currentSession.access_token;
@@ -507,8 +544,21 @@ async function loadDashboardData() {
             return debt + (deficit > 0 ? deficit : 0);
           }, 0);
           sleepDebt = Math.round(sleepDebt * 10) / 10;
+          var totalHours = Math.round((mostRecent.actualSleepMinutes / 60) * 10) / 10;
+          var totalMinutes = Math.round(mostRecent.actualSleepMinutes);
+          var stageBreakdown = {};
+          var stageKeys = ['deep', 'rem', 'core', 'awake'];
+          for (var si = 0; si < stageKeys.length; si++) {
+            var sk = stageKeys[si];
+            var mins = Math.round(mostRecent.stages[sk]);
+            stageBreakdown[sk] = { minutes: mins, pct: mostRecent.totalMinutes > 0 ? Math.round((mostRecent.stages[sk] / mostRecent.totalMinutes) * 100) : 0 };
+          }
+          var efficiency = mostRecent.totalMinutes > 0 ? Math.round((mostRecent.actualSleepMinutes / mostRecent.totalMinutes) * 100) : 0;
+          var bedtime = new Date(sessions[0].startTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          var wakeTime = new Date(sessions[0].endTime).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          var trend = calculateSleepTrend(sessions);
           metrics.sleep = latestSleep;
-          metrics.sleepData = { latest: latestSleep, avg: avgSleep, nights: sessions.length, debt: sleepDebt };
+          metrics.sleepData = { latest: latestSleep, avg: avgSleep, nights: sessions.length, debt: sleepDebt, totalHours: totalHours, totalMinutes: totalMinutes, stages: stageBreakdown, efficiency: efficiency, bedtime: bedtime, wakeTime: wakeTime, trend: trend };
         }
       }
 
