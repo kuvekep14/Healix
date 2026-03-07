@@ -50,6 +50,7 @@ async function init() {
       if (profileData && Array.isArray(profileData) && profileData.length > 0) {
         window.userProfileData = profileData[0];
         console.log('[Healix] profile loaded:', Object.keys(window.userProfileData), 'birth_date:', window.userProfileData.birth_date);
+        populateProfileForm(profileData[0]);
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
@@ -1477,16 +1478,70 @@ async function saveFamilyHistory() {
   } catch(e) { alert('Could not save. Please try again.'); }
 }
 
+function populateProfileForm(profile) {
+  if (profile.full_name) document.getElementById('p-name').value = profile.full_name;
+  if (profile.birth_date) document.getElementById('p-dob').value = profile.birth_date;
+  if (profile.gender) document.getElementById('p-sex').value = profile.gender;
+  if (profile.primary_goal) document.getElementById('p-goal').value = profile.primary_goal;
+  // Height: stored as cm, display as feet/inches
+  if (profile.height_cm) {
+    var totalInches = profile.height_cm / 2.54;
+    var feet = Math.floor(totalInches / 12);
+    var inches = Math.round(totalInches % 12);
+    document.getElementById('p-height').value = feet + "'" + inches + '"';
+  }
+  // Weight: stored as kg, display as lbs
+  if (profile.current_weight_kg) {
+    document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
+  }
+}
+
+function parseHeight(val) {
+  // Parse formats: 5'11", 5'11, 5 11, 71 (inches), 180cm
+  if (!val) return null;
+  val = val.trim();
+  var cmMatch = val.match(/(\d+)\s*cm/i);
+  if (cmMatch) return parseFloat(cmMatch[1]);
+  var ftInMatch = val.match(/(\d+)\s*[''′]\s*(\d+)/);
+  if (ftInMatch) return (parseInt(ftInMatch[1]) * 12 + parseInt(ftInMatch[2])) * 2.54;
+  var ftOnly = val.match(/^(\d+)\s*[''′]$/);
+  if (ftOnly) return parseInt(ftOnly[1]) * 12 * 2.54;
+  var num = parseFloat(val);
+  if (!isNaN(num)) {
+    if (num > 100) return num; // Already cm
+    return num * 2.54; // Assume inches
+  }
+  return null;
+}
+
+function parseWeight(val) {
+  // Parse weight — assume lbs, convert to kg
+  if (!val) return null;
+  val = val.trim();
+  var kgMatch = val.match(/(\d+\.?\d*)\s*kg/i);
+  if (kgMatch) return parseFloat(kgMatch[1]);
+  var num = parseFloat(val);
+  if (!isNaN(num)) return num / 2.205; // lbs to kg
+  return null;
+}
+
 async function saveProfile() {
   if (!currentUser) return;
+  var heightCm = parseHeight(document.getElementById('p-height').value);
+  var weightKg = parseWeight(document.getElementById('p-weight').value);
   var data = {
     full_name: document.getElementById('p-name').value,
-    primary_goal: document.getElementById('p-goal').value
+    primary_goal: document.getElementById('p-goal').value,
+    birth_date: document.getElementById('p-dob').value || null,
+    gender: document.getElementById('p-sex').value || null,
+    height_cm: heightCm,
+    current_weight_kg: weightKg
   };
   try {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+    window.userProfileData = Object.assign(window.userProfileData || {}, data);
     alert('Profile saved.');
-  } catch(e) { alert('Could not save profile.'); }
+  } catch(e) { alert('Could not save profile.'); console.error(e); }
 }
 
 // ── MODALS ──
