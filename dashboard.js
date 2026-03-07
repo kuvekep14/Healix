@@ -2097,21 +2097,31 @@ function onFitnessTestChange() {
   var isRepsOnly = REPS_ONLY_TESTS.includes(key);
 
   document.getElementById('ft-time-fields').style.display = isMileTime ? 'block' : 'none';
-  document.getElementById('ft-amrap-fields').style.display = isAMRAP ? 'block' : 'none';
-  // Show value field for reps-only tests too (just relabel it)
-  var showVal = !isMileTime && !isAMRAP;
-  document.getElementById('ft-value-row').style.display = showVal ? 'flex' : 'none';
+  document.getElementById('ft-amrap-fields').style.display = (isAMRAP || isRepsOnly) ? 'block' : 'none';
+  document.getElementById('ft-value-row').style.display = (!isMileTime && !isAMRAP && !isRepsOnly) ? 'flex' : 'none';
+
+  // Configure AMRAP fields for reps-only (bodyweight) tests
+  var amrapLabel = document.getElementById('ft-amrap-label');
   if (isRepsOnly) {
-    document.getElementById('ft-unit-display').textContent = 'reps';
+    amrapLabel.textContent = 'Added weight (optional) & reps to failure';
+    document.getElementById('ft-amrap-weight').placeholder = '0';
+    document.getElementById('ft-amrap-weight').required = false;
+    document.getElementById('ft-amrap-wunit').textContent = 'lbs added (0 = bodyweight)';
+    document.getElementById('ft-amrap-reps').placeholder = 'reps';
+    document.getElementById('ft-amrap-1rm-preview').textContent = '';
+  } else if (isAMRAP) {
+    amrapLabel.textContent = 'Weight used & reps completed to failure';
+    document.getElementById('ft-amrap-weight').placeholder = 'e.g. 185';
+    document.getElementById('ft-amrap-weight').required = true;
+    document.getElementById('ft-amrap-wunit').textContent = 'lbs';
   }
 
   if (norm) {
     document.getElementById('ft-val-label').textContent = norm.label;
     document.getElementById('ft-unit-display').textContent = norm.unit;
-    // Update AMRAP sub hint
     var sub = document.getElementById('ft-modal-sub');
     if (isAMRAP) sub.textContent = 'Use a weight you can lift for 3-10 reps and go to failure. We calculate your estimated 1RM automatically.';
-    else if (isRepsOnly) sub.textContent = 'Max reps to failure with good form. Enter the total count below.';
+    else if (isRepsOnly) sub.textContent = 'Max reps to failure with good form. Add weight if using a belt or vest.';
     else sub.textContent = 'Record a benchmark result. Be consistent — same time of day, rested state.';
   }
 
@@ -2163,6 +2173,10 @@ async function saveFitnessTest() {
     var r = parseInt(document.getElementById('ft-amrap-reps').value);
     if (!w || !r || r > 30) { alert('Enter weight and reps (max 30 for accuracy).'); return; }
     rawValue = epley1RM(w, r);
+  } else if (REPS_ONLY_TESTS.includes(key)) {
+    var r = parseInt(document.getElementById('ft-amrap-reps').value);
+    if (!r || r <= 0) { alert('Enter reps completed.'); return; }
+    rawValue = r;
   } else {
     rawValue = parseFloat(document.getElementById('ft-value').value);
     if (isNaN(rawValue)) { alert('Enter a value.'); return; }
