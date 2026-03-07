@@ -260,21 +260,38 @@ async function loadHealthData() {
     var byType = {};
     data.forEach(function(row) { if (!byType[row.metric_type]) byType[row.metric_type] = []; byType[row.metric_type].push(row); });
 
-    // SLEEP
-    var sleepData = byType['sleep'] || byType['HKCategoryTypeIdentifierSleepAnalysis'] || byType['sleep_analysis'] || [];
+    // SLEEP — calculate duration from start_date/end_date (value is often NULL for sleep_analysis)
+    var sleepData = byType['sleep_analysis'] || byType['sleep'] || byType['HKCategoryTypeIdentifierSleepAnalysis'] || [];
     if (sleepData.length > 0) {
-      var v = parseFloat(sleepData[0].value); if (v > 24) v = v / 3600; v = Math.round(v * 10) / 10;
-      var avg = Math.round(sleepData.reduce(function(s,r){ var x=parseFloat(r.value); if(x>24)x=x/3600; return s+x; },0)/sleepData.length*10)/10;
-      var diff = Math.round((v-avg)*10)/10;
-      document.getElementById('stat-sleep').innerHTML = v + '<span style="font-size:13px;color:var(--muted)">h</span>';
-      var el = document.getElementById('stat-sleep-delta');
-      el.textContent = Math.abs(diff)<0.1 ? '— avg '+avg+'h' : (diff>0?'↑ +'+diff+'h vs avg':'↓ '+diff+'h vs avg');
-      el.className = 'stat-card-delta ' + (Math.abs(diff)<0.1?'neutral':diff>0?'up':'down');
-      healthSummary.sleep = { hours: v, avg: avg };
+      // Group sleep sessions by night (use start_date's date)
+      var sleepByNight = {};
+      sleepData.forEach(function(r) {
+        var nightDate = r.start_date ? r.start_date.split('T')[0] : null;
+        if (!nightDate) return;
+        if (!sleepByNight[nightDate]) sleepByNight[nightDate] = 0;
+        if (r.start_date && r.end_date) {
+          var dur = (new Date(r.end_date) - new Date(r.start_date)) / 3600000;
+          if (dur > 0 && dur < 24) sleepByNight[nightDate] += dur;
+        } else if (r.value) {
+          var x = parseFloat(r.value); if (x > 24) x = x / 3600;
+          if (x > 0 && x < 24) sleepByNight[nightDate] += x;
+        }
+      });
+      var nights = Object.keys(sleepByNight).sort().reverse();
+      if (nights.length > 0) {
+        var v = Math.round(sleepByNight[nights[0]] * 10) / 10;
+        var avg = Math.round(nights.reduce(function(s,n){ return s + sleepByNight[n]; }, 0) / nights.length * 10) / 10;
+        var diff = Math.round((v - avg) * 10) / 10;
+        document.getElementById('stat-sleep').innerHTML = v + '<span style="font-size:13px;color:var(--muted)">h</span>';
+        var el = document.getElementById('stat-sleep-delta');
+        el.textContent = Math.abs(diff)<0.1 ? '— avg '+avg+'h' : (diff>0?'↑ +'+diff+'h vs avg':'↓ '+diff+'h vs avg');
+        el.className = 'stat-card-delta ' + (Math.abs(diff)<0.1?'neutral':diff>0?'up':'down');
+        healthSummary.sleep = { hours: v, avg: avg };
+      } else { document.getElementById('stat-sleep').textContent = '—'; document.getElementById('stat-sleep-delta').textContent = 'No data'; }
     } else { document.getElementById('stat-sleep').textContent = '—'; document.getElementById('stat-sleep-delta').textContent = 'No data'; }
 
     // STEPS
-    var stepsData = byType['steps'] || byType['HKQuantityTypeIdentifierStepCount'] || byType['step_count'] || [];
+    var stepsData = byType['step_count'] || byType['steps'] || byType['HKQuantityTypeIdentifierStepCount'] || [];
     if (stepsData.length > 0) {
       var todaySteps = stepsData.filter(function(r){return r.start_date&&r.start_date.startsWith(todayStr);}).reduce(function(s,r){return s+parseFloat(r.value||0);},0);
       if (todaySteps===0) { var d=stepsData[0].start_date?stepsData[0].start_date.split('T')[0]:''; todaySteps=stepsData.filter(function(r){return r.start_date&&r.start_date.startsWith(d);}).reduce(function(s,r){return s+parseFloat(r.value||0);},0); }
@@ -289,7 +306,7 @@ async function loadHealthData() {
     } else { document.getElementById('stat-steps').textContent = '—'; document.getElementById('stat-steps-delta').textContent = 'No data'; }
 
     // HEART RATE
-    var hrData = byType['heart_rate'] || byType['HKQuantityTypeIdentifierHeartRate'] || byType['resting_heart_rate'] || [];
+    var hrData = byType['resting_heart_rate'] || byType['heart_rate'] || byType['HKQuantityTypeIdentifierHeartRate'] || [];
     if (hrData.length > 0) {
       var hr = Math.round(parseFloat(hrData[0].value));
       var hrAvg = Math.round(hrData.reduce(function(s,r){return s+parseFloat(r.value||0);},0)/hrData.length);
@@ -373,7 +390,102 @@ async function loadCaloriesConsumed() {
   } catch(e) { document.getElementById('stat-cal').textContent = '—'; document.getElementById('stat-cal-delta').textContent = 'No data'; }
 }
 
-setTimeout(function(){ loadHealthData(); loadMealData(); loadCaloriesConsumed(); }, 500);
+async function loadProfileData() {
+  var session = getSession(); if (!session) return;
+  var token = session.access_token;
+  try {
+    if (!currentUser) return;
+    var profile = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=*&limit=1', 'GET', null, token);
+    if (profile && profile[0]) {
+      healthSummary.profile = {};
+      var p = profile[0];
+      if (p.birth_date) {
+        var age = Math.floor((new Date() - new Date(p.birth_date)) / (365.25 * 24 * 3600 * 1000));
+        healthSummary.profile.age = age;
+      }
+      if (p.current_weight_kg) healthSummary.profile.weight_kg = Math.round(p.current_weight_kg * 10) / 10;
+      if (p.height_cm) healthSummary.profile.height_cm = Math.round(p.height_cm);
+      if (p.gender) healthSummary.profile.gender = p.gender;
+      if (p.health_goals) healthSummary.profile.goals = p.health_goals;
+      if (p.activity_level) healthSummary.profile.activity_level = p.activity_level;
+    }
+  } catch(e) { console.error('Profile load error:', e); }
+}
+
+async function loadWeightData() {
+  var session = getSession(); if (!session || !currentUser) return;
+  var token = session.access_token;
+  try {
+    var weights = await supabaseRequest('/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=14', 'GET', null, token);
+    if (weights && !weights.error && weights.length > 0) {
+      healthSummary.weight = {
+        current: Math.round(parseFloat(weights[0].value) * 10) / 10,
+        unit: weights[0].unit || 'lbs',
+        entries: weights.slice(0, 7).map(function(w) { return { value: Math.round(parseFloat(w.value) * 10) / 10, date: (w.logged_at || '').split('T')[0] }; })
+      };
+    }
+  } catch(e) { console.error('Weight load error:', e); }
+}
+
+async function loadWorkoutData() {
+  var session = getSession(); if (!session || !currentUser) return;
+  var token = session.access_token;
+  try {
+    var sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    var workouts = await supabaseRequest('/rest/v1/workout_logs?user_id=eq.' + currentUser.id + '&logged_at=gte.' + sevenDaysAgo.toISOString() + '&select=id,logged_at,total_volume&order=logged_at.desc', 'GET', null, token);
+    if (workouts && !workouts.error && workouts.length > 0) {
+      healthSummary.workouts = {
+        sessions_7d: workouts.length,
+        total_volume: Math.round(workouts.reduce(function(s, w) { return s + parseFloat(w.total_volume || 0); }, 0)),
+        avg_volume: Math.round(workouts.reduce(function(s, w) { return s + parseFloat(w.total_volume || 0); }, 0) / workouts.length)
+      };
+    }
+  } catch(e) { console.error('Workout load error:', e); }
+}
+
+async function loadDocumentData() {
+  var session = getSession(); if (!session || !currentUser) return;
+  var token = session.access_token;
+  try {
+    var docs = await supabaseRequest('/rest/v1/documents?user_id=eq.' + currentUser.id + '&select=id,file_name,doc_type,extracted_text,created_at&order=created_at.desc&limit=5', 'GET', null, token);
+    if (docs && !docs.error && docs.length > 0) {
+      healthSummary.documents = docs.filter(function(d) { return d.extracted_text; }).map(function(d) {
+        return { name: d.file_name, type: d.doc_type, text: d.extracted_text, date: (d.created_at || '').split('T')[0] };
+      });
+    }
+  } catch(e) { console.error('Document load error:', e); }
+}
+
+async function loadMealNutrients() {
+  var session = getSession(); if (!session || !currentUser) return;
+  var token = session.access_token;
+  try {
+    var meals = await supabaseRequest('/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=10', 'GET', null, token);
+    if (meals && !meals.error && meals.length > 0) {
+      healthSummary.detailed_meals = meals.map(function(m) {
+        var info = { description: m.meal_description, type: m.meal_type, time: m.meal_time || m.created_at };
+        if (m.data) {
+          try {
+            var d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data;
+            if (d.calories) info.calories = d.calories;
+            if (d.protein_g) info.protein_g = d.protein_g;
+            if (d.carbs_g) info.carbs_g = d.carbs_g;
+            if (d.fat_g) info.fat_g = d.fat_g;
+            if (d.analysis) info.analysis = d.analysis;
+          } catch(e) {}
+        }
+        return info;
+      });
+    }
+  } catch(e) { console.error('Meal nutrient load error:', e); }
+}
+
+async function loadAllChatContext() {
+  await loadUserProfile();
+  await Promise.all([loadHealthData(), loadMealData(), loadCaloriesConsumed(), loadProfileData(), loadWeightData(), loadWorkoutData(), loadDocumentData(), loadMealNutrients()]);
+  console.log('[Healix Chat] Context loaded:', Object.keys(healthSummary));
+}
+loadAllChatContext();
 
 // CONTEXT CHIPS
 document.querySelectorAll('.ctx-chip').forEach(function(chip){
@@ -417,23 +529,9 @@ var messages = []; var welcomeHidden = false; var currentConversationId = null;
 function hideWelcome() { if(!welcomeHidden){ var w=document.getElementById('chat-welcome'); if(w) w.style.display='none'; welcomeHidden=true; } }
 
 function buildSystemPrompt() {
-  var active = getActiveContexts();
-  var p = 'You are Healix, a personal health intelligence assistant. You are warm, precise, and data-driven — like a knowledgeable doctor friend.\n\n';
-  p += 'Today\'s health data for this user:\n';
-  if (active.includes('wearable')) {
-    if (healthSummary.sleep) p += '- Sleep last night: ' + healthSummary.sleep.hours + 'h (7-day avg: ' + healthSummary.sleep.avg + 'h)\n';
-    if (healthSummary.steps) p += '- Steps today: ' + healthSummary.steps.today + ' (7-day avg: ' + healthSummary.steps.avg + ')\n';
-    if (healthSummary.heart_rate) p += '- Heart rate: ' + healthSummary.heart_rate.bpm + 'bpm (avg: ' + healthSummary.heart_rate.avg + 'bpm)\n';
-    if (healthSummary.calories) p += '- Active calories: ' + healthSummary.calories.today + 'kcal (avg: ' + healthSummary.calories.avg + 'kcal)\n';
-  }
-  if (active.includes('meals') && healthSummary.meals && healthSummary.meals.length) {
-    p += '\nRecent meals:\n';
-    healthSummary.meals.forEach(function(m){ p += '- ' + (m.name||'Meal') + ' (' + (m.type||'') + ', ' + (m.calories||'?') + ' cal)\n'; });
-  }
-  if (!healthSummary.sleep && !healthSummary.steps && !healthSummary.meals) {
-    p += 'No health data loaded yet. Let the user know and offer general guidance.\n';
-  }
-  p += '\nBe concise and actionable. Use **bold** for key insights. Keep responses 2-4 sentences unless a detailed breakdown is warranted.';
+  // Note: This is used as a fallback. The edge function builds its own
+  // server-side system prompt with full health data access.
+  var p = 'You are Healix, a personal health intelligence assistant. Be warm, precise, and data-driven.\n';
   return p;
 }
 
@@ -450,8 +548,56 @@ async function sendMessage() {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + (currentSession ? currentSession.access_token : SUPABASE_ANON_KEY)
       },
-      body: JSON.stringify({ conversation_id: currentConversationId, user_message: text })
+      body: JSON.stringify({ conversation_id: currentConversationId, user_message: text, stream: true })
     });
+
+    // Handle streaming response
+    var contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/event-stream')) {
+      removeTyping();
+      var streamEl = addStreamingMessage();
+      var fullContent = '';
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      while (true) {
+        var result = await reader.read();
+        if (result.done) break;
+        buffer += decoder.decode(result.value, { stream: true });
+        var lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (!line.startsWith('data: ')) continue;
+          try {
+            var evt = JSON.parse(line.slice(6));
+            if (evt.type === 'content' && evt.content) {
+              fullContent += evt.content;
+              updateStreamingMessage(streamEl, fullContent);
+            } else if (evt.type === 'start' && evt.conversation_id) {
+              currentConversationId = evt.conversation_id;
+            } else if (evt.type === 'tool_call') {
+              // Show tool usage indicator while AI fetches data
+              if (!fullContent) updateStreamingMessage(streamEl, '<span style="color:var(--gold);font-size:12px;letter-spacing:.1em">PULLING ' + (evt.tool_name || 'DATA').toUpperCase() + '...</span>');
+            } else if (evt.type === 'done') {
+              if (evt.conversation_id) currentConversationId = evt.conversation_id;
+            } else if (evt.type === 'error') {
+              if (!fullContent) fullContent = 'Something went wrong. Please try again.';
+            }
+          } catch(pe) { /* skip non-JSON lines */ }
+        }
+      }
+      btn.disabled = false;
+      if (!fullContent) {
+        updateStreamingMessage(streamEl, 'Sorry, I had trouble responding. Please try again.');
+      }
+      // Store final message
+      messages.push({ role: 'ai', text: fullContent });
+      return;
+    }
+
+    // Fallback: non-streaming response
     var data = await response.json();
     removeTyping(); btn.disabled = false;
     if (data.content) {
@@ -470,6 +616,23 @@ async function sendMessage() {
     removeTyping(); btn.disabled = false;
     addMessage('ai', 'Something went wrong. Please try again.');
     console.error('AI error:', e);
+  }
+}
+
+function addStreamingMessage() {
+  var container = document.getElementById('chat-messages');
+  var el = document.createElement('div'); el.className = 'message ai';
+  el.innerHTML = '<div class="message-avatar">H</div><div class="message-body"><div class="message-name">Healix</div><div class="message-bubble"></div></div>';
+  container.appendChild(el); container.scrollTop = container.scrollHeight;
+  return el;
+}
+
+function updateStreamingMessage(el, text) {
+  var bubble = el.querySelector('.message-bubble');
+  if (bubble) {
+    bubble.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+    var container = document.getElementById('chat-messages');
+    container.scrollTop = container.scrollHeight;
   }
 }
 
