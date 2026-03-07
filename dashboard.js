@@ -360,7 +360,7 @@ async function loadDashboardData() {
   try {
     var daysAgo = new Date(); daysAgo.setDate(daysAgo.getDate() - 14);
     var healthData = await supabaseRequest(
-      '/rest/v1/apple_health_samples?select=metric_type,start_date,value&user_id=eq.' + currentUser.id + '&start_date=gte.' + daysAgo.toISOString().split('T')[0] + '&order=start_date.desc',
+      '/rest/v1/apple_health_samples?select=metric_type,start_date,end_date,value&user_id=eq.' + currentUser.id + '&start_date=gte.' + daysAgo.toISOString().split('T')[0] + '&order=start_date.desc',
       'GET', null, token
     );
     console.log('[Healix] healthData rows:', healthData ? (healthData.error ? 'ERROR:'+JSON.stringify(healthData.error) : healthData.length) : 'null');
@@ -372,12 +372,19 @@ async function loadDashboardData() {
       });
       console.log('[Healix] health metric types:', Object.keys(byType));
 
-      // Sleep
-      var sleepRows = (byType['sleep_analysis'] || []).filter(function(r) { return r.value !== null && !isNaN(parseFloat(r.value)); });
-      if (sleepRows.length > 0) {
-        var sv = parseFloat(sleepRows[0].value);
-        if (sv > 100) sv = sv / 3600;
-        metrics.sleep = Math.round(sv * 10) / 10;
+      // Sleep — calculate duration from start_date/end_date
+      var sleepRows = byType['sleep_analysis'] || [];
+      var todaySleepHours = 0;
+      sleepRows.forEach(function(r) {
+        if (r.start_date && r.end_date) {
+          var start = new Date(r.start_date).getTime();
+          var end = new Date(r.end_date).getTime();
+          var hours = (end - start) / (1000 * 60 * 60);
+          if (hours > 0 && hours < 24) todaySleepHours += hours;
+        }
+      });
+      if (todaySleepHours > 0) {
+        metrics.sleep = Math.round(todaySleepHours * 10) / 10;
       }
 
       // Steps
@@ -496,17 +503,26 @@ function setHTML(id, val) { var e = document.getElementById(id); if (e) e.innerH
 function setClass(id, cls) { var e = document.getElementById(id); if (e) e.className = cls; }
 
 function renderHealthStats(byType, today) {
-  // Sleep
-  var sleepKeys = ['sleep_analysis'];
-  var sleepData = [];
-  sleepKeys.forEach(function(k) { if (byType[k]) sleepData = sleepData.concat(byType[k]); });
-  var validSleepData = sleepData.filter(function(r) { return r.value !== null && r.value !== undefined && !isNaN(parseFloat(r.value)); });
-  if (validSleepData.length > 0) {
-    var v = parseFloat(validSleepData[0].value);
-    if (v > 100) v = v / 3600;
-    v = Math.round(v * 10) / 10;
-    var avg = validSleepData.reduce(function(s, r) { var x=parseFloat(r.value); if(x>100)x=x/3600; return s+x; }, 0) / validSleepData.length;
-    avg = Math.round(avg * 10) / 10;
+  // Sleep — calculate duration from start_date/end_date per night
+  var sleepData = byType['sleep_analysis'] || [];
+  // Group sleep samples by night (use start_date's date)
+  var sleepByNight = {};
+  sleepData.forEach(function(r) {
+    if (r.start_date && r.end_date) {
+      var start = new Date(r.start_date).getTime();
+      var end = new Date(r.end_date).getTime();
+      var hours = (end - start) / (1000 * 60 * 60);
+      if (hours > 0 && hours < 24) {
+        var night = r.start_date.split('T')[0];
+        sleepByNight[night] = (sleepByNight[night] || 0) + hours;
+      }
+    }
+  });
+  var nightKeys = Object.keys(sleepByNight).sort().reverse();
+  if (nightKeys.length > 0) {
+    var v = Math.round(sleepByNight[nightKeys[0]] * 10) / 10;
+    var totalSleep = nightKeys.reduce(function(s, k) { return s + sleepByNight[k]; }, 0);
+    var avg = Math.round((totalSleep / nightKeys.length) * 10) / 10;
     var diff = Math.round((v - avg) * 10) / 10;
     setHTML('d-sleep', v + '<span class="stat-item-unit">h</span>');
     setEl('d-sleep-d', diff > 0 ? '↑ +' + diff + 'h vs avg' : diff < 0 ? '↓ ' + diff + 'h vs avg' : '— avg ' + avg + 'h');
