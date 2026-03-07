@@ -381,6 +381,32 @@
           </div>
         </div>
 
+        <!-- Health Conditions -->
+        <div class="card">
+          <div class="profile-section-title">Health <em>Conditions</em></div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Select any conditions you have. This helps Healix tailor advice.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px" id="condition-presets"></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input class="modal-input" id="custom-condition" type="text" placeholder="Add other condition" style="flex:1">
+            <button class="save-btn" style="width:auto;padding:8px 14px;margin:0" onclick="addCustomTag('custom-condition','custom-condition-tags','condition')">Add</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px" id="custom-condition-tags"></div>
+          <button class="save-btn" onclick="saveMedicalProfile()" style="margin-top:16px">Save Conditions</button>
+        </div>
+
+        <!-- Allergies & Dietary Restrictions -->
+        <div class="card">
+          <div class="profile-section-title">Allergies & <em>Diet</em></div>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">Select any allergies or dietary restrictions.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px" id="allergy-presets"></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input class="modal-input" id="custom-allergy" type="text" placeholder="Add other allergy or restriction" style="flex:1">
+            <button class="save-btn" style="width:auto;padding:8px 14px;margin:0" onclick="addCustomTag('custom-allergy','custom-allergy-tags','allergy')">Add</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px" id="custom-allergy-tags"></div>
+          <button class="save-btn" onclick="saveMedicalProfile()" style="margin-top:16px">Save Allergies</button>
+        </div>
+
         <!-- Family Medical History -->
         <div class="card span-2">
           <div class="profile-section-title">Family Medical <em>History</em></div>

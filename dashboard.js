@@ -1479,10 +1479,10 @@ async function saveFamilyHistory() {
   if (!currentUser) return;
   try {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', {
-      family_history: familyHistory
+      family_history: JSON.stringify(familyHistory)
     }, currentSession.access_token);
     alert('Family history saved.');
-  } catch(e) { alert('Could not save. Please try again.'); }
+  } catch(e) { alert('Could not save family history: ' + e.message); console.error(e); }
 }
 
 function populateProfileForm(profile) {
@@ -1501,6 +1501,31 @@ function populateProfileForm(profile) {
   // Weight: stored as kg, display as lbs
   if (profile.current_weight_kg) {
     document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
+  }
+  // Load health conditions
+  if (profile.health_conditions) {
+    var conditions = profile.health_conditions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    conditions.forEach(function(c) {
+      // Activate preset tag if it matches
+      var preset = document.querySelector('#condition-presets [data-val="' + c + '"]');
+      if (preset) { preset.classList.add('active'); medicalProfile.conditions.push(c); }
+      else { medicalProfile.conditions.push(c); }
+    });
+    renderCustomTags('custom-condition-tags', medicalProfile.conditions.filter(function(c) {
+      return conditionPresets.indexOf(c) === -1;
+    }), 'condition');
+  }
+  // Load dietary restrictions / allergies
+  if (profile.dietary_restrictions) {
+    var allergies = profile.dietary_restrictions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    allergies.forEach(function(a) {
+      var preset = document.querySelector('#allergy-presets [data-val="' + a + '"]');
+      if (preset) { preset.classList.add('active'); medicalProfile.allergies.push(a); }
+      else { medicalProfile.allergies.push(a); }
+    });
+    renderCustomTags('custom-allergy-tags', medicalProfile.allergies.filter(function(a) {
+      return allergyPresets.indexOf(a) === -1;
+    }), 'allergy');
   }
 }
 
@@ -1638,14 +1663,11 @@ async function saveMedicalProfile() {
   if (!currentUser) return;
   try {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', {
-      allergies: medicalProfile.allergies,
-      conditions: medicalProfile.conditions,
-      medications: medicalProfile.medications
+      health_conditions: medicalProfile.conditions.join(', '),
+      dietary_restrictions: medicalProfile.allergies.join(', ')
     }, currentSession.access_token);
-    var btn = event.target;
-    btn.textContent = 'Saved ✓';
-    setTimeout(function() { btn.textContent = 'Save Medical Profile'; }, 2000);
-  } catch(e) { alert('Could not save. Please try again.'); }
+    alert('Saved.');
+  } catch(e) { alert('Could not save: ' + e.message); console.error(e); }
 }
 
 // ── FITNESS ASSESSMENT ──
