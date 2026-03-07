@@ -186,7 +186,7 @@ textarea::placeholder { color: var(--muted); }
         <button class="chat-send" id="send-btn" onclick="sendMessage()">Send</button>
       </div>
       <div class="chat-footer">
-        <span class="chat-hint">Press <kbd>⌘ Return</kbd> to send</span>
+        <span class="chat-hint">Press <kbd>Return</kbd> to send · <kbd>Shift Return</kbd> for new line</span>
         <span class="chat-model"><span class="model-dot"></span>Healix AI · Context active</span>
       </div>
     </div>
@@ -391,7 +391,7 @@ function removeFile(id) { var el=document.getElementById(id); if(el) el.remove()
 // TEXTAREA
 var textarea = document.getElementById('chat-input');
 textarea.addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,160)+'px'; });
-textarea.addEventListener('keydown', function(e){ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); sendMessage(); } });
+textarea.addEventListener('keydown', function(e){ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMessage(); } });
 
 // SUGGESTIONS
 function useSuggestion(el) { textarea.value=el.querySelector('.suggestion-text').textContent; textarea.dispatchEvent(new Event('input')); textarea.focus(); }
