@@ -397,7 +397,7 @@ textarea.addEventListener('keydown', function(e){ if((e.metaKey||e.ctrlKey)&&e.k
 function useSuggestion(el) { textarea.value=el.querySelector('.suggestion-text').textContent; textarea.dispatchEvent(new Event('input')); textarea.focus(); }
 
 // CHAT
-var messages = []; var welcomeHidden = false;
+var messages = []; var welcomeHidden = false; var currentConversationId = null;
 function hideWelcome() { if(!welcomeHidden){ var w=document.getElementById('chat-welcome'); if(w) w.style.display='none'; welcomeHidden=true; } }
 
 function buildSystemPrompt() {
@@ -428,29 +428,28 @@ async function sendMessage() {
   var btn = document.getElementById('send-btn'); btn.disabled = true;
   showTyping();
   try {
-    var apiMessages = messages.slice(0,-1).slice(-8).map(function(m){ return {role:m.role==='ai'?'assistant':'user',content:m.text}; });
-    apiMessages.push({role:'user',content:text});
     var response = await fetch(SUPABASE_URL + '/functions/v1/chat-with-ai', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
         'Authorization': 'Bearer ' + (currentSession ? currentSession.access_token : SUPABASE_ANON_KEY)
       },
-      body: JSON.stringify({ system: buildSystemPrompt(), messages: apiMessages })
+      body: JSON.stringify({ conversation_id: currentConversationId, user_message: text })
     });
-    var rawText = await response.text();
-    console.log('Edge Function status:', response.status, 'body:', rawText);
-    var data = JSON.parse(rawText);
+    var data = await response.json();
     removeTyping(); btn.disabled = false;
-    var reply = null;
-    if (data.choices && data.choices[0] && data.choices[0].message) { reply = data.choices[0].message.content; }
-    else if (data.reply) { reply = data.reply; }
-    else if (data.content && typeof data.content === 'string') { reply = data.content; }
-    else if (data.content && data.content[0] && data.content[0].text) { reply = data.content[0].text; }
-    else if (data.message) { reply = data.message; }
-    if (reply) { addMessage('ai', reply); }
-    else { addMessage('ai', 'Sorry, I had trouble responding. Please try again.'); console.error('Unexpected response:', data); }
+    if (data.content) {
+      addMessage('ai', data.content);
+      if (data.conversation_id) { currentConversationId = data.conversation_id; }
+    } else if (data.message) {
+      addMessage('ai', data.message);
+    } else if (data.error) {
+      addMessage('ai', 'Error: ' + data.error);
+      console.error('Edge Function error:', data);
+    } else {
+      addMessage('ai', 'Sorry, I had trouble responding. Please try again.');
+      console.error('Unexpected response:', data);
+    }
   } catch(e) {
     removeTyping(); btn.disabled = false;
     addMessage('ai', 'Something went wrong. Please try again.');
