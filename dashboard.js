@@ -61,6 +61,7 @@ async function init() {
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
+    loadMedicalProfileUI();
     loadDashboardData();
     loadFamilyHistoryForm();
     setWeightDateDefault();
@@ -2872,4 +2873,3 @@ function reloadPageData(page) {
 
 // ── INIT ──
 init();
-loadMedicalProfileUI();
