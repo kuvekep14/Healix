@@ -1505,12 +1505,17 @@ function populateProfileForm(profile) {
   }
   // Load health conditions
   if (profile.health_conditions) {
-    var conditions = profile.health_conditions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    conditions.forEach(function(c) {
-      // Activate preset tag if it matches
-      var preset = document.querySelector('#condition-presets [data-val="' + c + '"]');
-      if (preset) { preset.classList.add('active'); medicalProfile.conditions.push(c); }
-      else { medicalProfile.conditions.push(c); }
+    var conds = profile.health_conditions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    conds.forEach(function(c) {
+      // Fuzzy match: check if stored value starts with a preset name
+      var matched = false;
+      conditionPresets.forEach(function(p) {
+        if (c.toLowerCase().indexOf(p.toLowerCase()) === 0 || p.toLowerCase().indexOf(c.toLowerCase()) === 0) {
+          var preset = document.querySelector('#condition-presets [data-val="' + p + '"]');
+          if (preset) { preset.classList.add('active'); medicalProfile.conditions.push(p); matched = true; }
+        }
+      });
+      if (!matched) medicalProfile.conditions.push(c);
     });
     renderCustomTags('custom-condition-tags', medicalProfile.conditions.filter(function(c) {
       return conditionPresets.indexOf(c) === -1;
@@ -1520,9 +1525,14 @@ function populateProfileForm(profile) {
   if (profile.dietary_restrictions) {
     var allergies = profile.dietary_restrictions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
     allergies.forEach(function(a) {
-      var preset = document.querySelector('#allergy-presets [data-val="' + a + '"]');
-      if (preset) { preset.classList.add('active'); medicalProfile.allergies.push(a); }
-      else { medicalProfile.allergies.push(a); }
+      var matched = false;
+      allergyPresets.forEach(function(p) {
+        if (a.toLowerCase().indexOf(p.toLowerCase()) === 0 || p.toLowerCase().indexOf(a.toLowerCase()) === 0) {
+          var preset = document.querySelector('#allergy-presets [data-val="' + p + '"]');
+          if (preset) { preset.classList.add('active'); medicalProfile.allergies.push(p); matched = true; }
+        }
+      });
+      if (!matched) medicalProfile.allergies.push(a);
     });
     renderCustomTags('custom-allergy-tags', medicalProfile.allergies.filter(function(a) {
       return allergyPresets.indexOf(a) === -1;
