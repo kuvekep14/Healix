@@ -1374,25 +1374,36 @@ function drillToDay(dateStr) {
 }
 
 
+function setMealDateTimeDefault() {
+  var now = new Date();
+  // Format as YYYY-MM-DDTHH:MM for datetime-local input
+  var y = now.getFullYear();
+  var mo = String(now.getMonth() + 1).padStart(2, '0');
+  var d = String(now.getDate()).padStart(2, '0');
+  var h = String(now.getHours()).padStart(2, '0');
+  var mi = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('ml-datetime').value = y + '-' + mo + '-' + d + 'T' + h + ':' + mi;
+}
+
 async function saveMeal() {
   var name = document.getElementById('ml-name').value;
   var type = document.getElementById('ml-type').value;
+  var dt = document.getElementById('ml-datetime').value;
   var cals = document.getElementById('ml-cals').value;
   var prot = document.getElementById('ml-protein').value;
   var carbs = document.getElementById('ml-carbs').value;
   var fat = document.getElementById('ml-fat').value;
   if (!name) { alert('Please enter a meal name.'); return; }
+  var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
   try {
     var mealRes = await supabaseRequest('/rest/v1/meal_log', 'POST', {
       user_id: currentUser.id, meal_type: type,
-      meal_description: name, meal_time: new Date().toISOString()
+      meal_description: name, meal_time: mealTime
     }, currentSession.access_token);
-    // Note: full nutrient logging happens via mobile app AI analysis
-    // Web manual entry stores basic meal info only
     closeModal('meal-modal');
     ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
     loadDashboardData();
-  } catch(e) { alert('Could not save meal. Please try again.'); }
+  } catch(e) { alert('Could not save meal: ' + e.message); }
 }
 
 // ── DOCUMENTS ──

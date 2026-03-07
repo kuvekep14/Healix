@@ -219,7 +219,7 @@
         <div class="meals-log" id="meals-list">
           <div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>
         </div>
-        <button class="add-meal-btn" onclick="openModal('meal-modal')" style="margin-top:12px">+ Log a Meal</button>
+        <button class="add-meal-btn" onclick="setMealDateTimeDefault(); openModal('meal-modal')" style="margin-top:12px">+ Log a Meal</button>
 
         <!-- Micronutrients panel -->
         <div id="meals-micro-panel" style="margin-top:24px;display:none">
@@ -537,6 +537,12 @@
           <option value="snack">Snack</option>
         </select>
       </div>
+      <div class="modal-field">
+        <label class="modal-label">Date & Time</label>
+        <input class="modal-input" id="ml-datetime" type="datetime-local">
+      </div>
+    </div>
+    <div class="modal-row">
       <div class="modal-field">
         <label class="modal-label">Calories</label>
         <input class="modal-input" id="ml-cals" type="number" placeholder="kcal">
