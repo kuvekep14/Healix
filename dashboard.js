@@ -1832,6 +1832,7 @@ async function loadDocumentsPage() {
       '/rest/v1/uploads?user_id=eq.' + currentUser.id + '&order=created_at.desc',
       'GET', null, currentSession.access_token
     );
+    console.log('[Healix] uploads fetch:', docs ? (docs.error ? 'ERROR:'+JSON.stringify(docs.error) : docs.length + ' docs') : 'null');
     if (!docs || docs.error || docs.length === 0) {
       grid.innerHTML = '<div class="empty-state" style="grid-column:span 3;padding:40px"><div class="empty-state-icon">📄</div><div class="empty-state-text">No documents uploaded yet.<br>Upload bloodwork or lab results for AI analysis.</div></div>';
       return;
@@ -1883,7 +1884,7 @@ async function handleDocUpload(input) {
 
     try {
       // Upload file to Supabase Storage
-      var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + encodeURIComponent(path), {
+      var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + path, {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer ' + currentSession.access_token,
