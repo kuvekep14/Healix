@@ -8,14 +8,16 @@ function getSession() {
   try { var s = localStorage.getItem('healix_session'); return s ? JSON.parse(s) : null; } catch(e) { return null; }
 }
 
-function supabaseRequest(endpoint, method, body, token) {
+function supabaseRequest(endpoint, method, body, token, extraHeaders) {
+  var headers = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY)
+  };
+  if (extraHeaders) { Object.keys(extraHeaders).forEach(function(k) { headers[k] = extraHeaders[k]; }); }
   return fetch(SUPABASE_URL + endpoint, {
     method: method || 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': 'Bearer ' + (token || SUPABASE_ANON_KEY)
-    },
+    headers: headers,
     body: body ? JSON.stringify(body) : undefined
   }).then(function(r) {
     if (!r.ok) return r.text().then(function(t) { throw new Error(r.status + ': ' + t); });
@@ -1843,8 +1845,8 @@ async function loadDocumentsPage() {
       var sizeStr = doc.file_size > 1024*1024 ? (doc.file_size/(1024*1024)).toFixed(1) + ' MB' : (doc.file_size/1024).toFixed(0) + ' KB';
       var dateStr = new Date(doc.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
       var tag = doc.document_type === 'blood_work' ? 'Bloodwork' : doc.file_type === 'application/pdf' ? 'PDF' : 'Image';
-      var statusStyle = doc.status === 'error' ? 'background:rgba(220,50,50,0.15);color:#e55' : '';
-      var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:#e55;margin-top:4px">Processing error</div>' : '';
+      var statusStyle = doc.status === 'error' ? 'background:rgba(220,50,50,0.15);color:#e55' : doc.status === 'processing' ? 'background:rgba(184,151,90,0.12);color:var(--gold-light)' : '';
+      var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:#e55;margin-top:4px">Processing error</div>' : doc.status === 'processing' ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">Processing…</div>' : '';
       return '<div class="doc-card" style="' + statusStyle + '">'
         + '<div class="doc-card-icon">' + icon + '</div>'
         + '<div class="doc-card-name">' + (doc.title || 'Untitled') + '</div>'
@@ -1900,24 +1902,40 @@ async function handleDocUpload(input) {
         throw new Error('Storage: ' + uploadRes.status + ' ' + errText);
       }
 
-      // Insert metadata row in uploads table
-      await supabaseRequest('/rest/v1/uploads', 'POST', {
+      // Insert metadata row in uploads table (status: processing)
+      var inserted = await supabaseRequest('/rest/v1/uploads', 'POST', {
         user_id: currentUser.id,
         title: file.name.replace(/\.[^.]+$/, ''),
         file_url: path,
         file_type: file.type,
         file_size: file.size,
-        status: 'ready',
-        metadata: JSON.stringify({ original_filename: file.name }),
-        document_type: file.name.toLowerCase().includes('blood') ? 'blood_work' : null
-      }, currentSession.access_token);
+        status: 'processing',
+        metadata: JSON.stringify({ original_filename: file.name })
+      }, currentSession.access_token, { 'Prefer': 'return=representation' });
 
-      // Update temp card to success
+      var upload_id = inserted && inserted[0] && inserted[0].id;
+
+      // Update temp card to processing
       var tempCard = document.getElementById(tempId);
       if (tempCard) {
         var icon = file.type === 'application/pdf' ? '📄' : '🖼';
-        tempCard.style.opacity = '1';
+        tempCard.style.opacity = '0.8';
         tempCard.querySelector('.doc-card-icon').textContent = icon;
+        tempCard.querySelector('.doc-card-meta').textContent = 'Processing…';
+      }
+
+      // Call process-document edge function
+      if (upload_id) {
+        try {
+          await supabaseRequest('/functions/v1/process-document', 'POST', { upload_id: upload_id }, currentSession.access_token);
+        } catch(procErr) {
+          console.error('process-document error:', procErr);
+        }
+      }
+
+      // Update temp card to success
+      if (tempCard) {
+        tempCard.style.opacity = '1';
         tempCard.querySelector('.doc-card-meta').textContent = 'Uploaded just now';
       }
     } catch(e) {

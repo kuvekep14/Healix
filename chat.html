@@ -529,7 +529,7 @@ async function loadDocumentData() {
   var session = getSession(); if (!session || !currentUser) return;
   var token = session.access_token;
   try {
-    var docs = await supabaseRequest('/rest/v1/uploads?user_id=eq.' + currentUser.id + '&select=id,title,document_type,content,created_at&status=eq.ready&order=created_at.desc&limit=5', 'GET', null, token);
+    var docs = await supabaseRequest('/rest/v1/uploads?user_id=eq.' + currentUser.id + '&status=eq.ready&select=id,title,document_type,content,created_at&order=created_at.desc&limit=5', 'GET', null, token);
     if (docs && !docs.error && docs.length > 0) {
       healthSummary.documents = docs.filter(function(d) { return d.content; }).map(function(d) {
         return { name: d.title, type: d.document_type, text: d.content, date: (d.created_at || '').split('T')[0] };
@@ -587,6 +587,7 @@ async function loadMealNutrients() {
   } catch(e) { console.error('Meal nutrient load error:', e); }
 }
 
+// Sidebar display only — chat context is built server-side by the edge function
 async function loadAllChatContext() {
   await loadUserProfile();
   await Promise.all([loadHealthData(), loadMealData(), loadCaloriesConsumed(), loadProfileData(), loadWeightData(), loadWorkoutData(), loadDocumentData(), loadMealNutrients()]);
