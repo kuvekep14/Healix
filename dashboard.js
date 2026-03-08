@@ -416,13 +416,13 @@ function buildInsightSentence(metrics, result) {
 
 // ── Sleep processing functions (session-based) ──
 function mapSleepStage(value) {
-  if (!value) return 'core';
+  if (!value) return null;
   var stage = value.toLowerCase();
-  if (stage.includes('inbed') || stage.includes('in_bed') || stage.includes('in bed')) return null;
   if (stage.includes('deep')) return 'deep';
   if (stage.includes('rem')) return 'rem';
+  if (stage.includes('core')) return 'core';
   if (stage.includes('awake')) return 'awake';
-  return 'core';
+  return null;
 }
 
 function identifySleepSessions(samples) {
