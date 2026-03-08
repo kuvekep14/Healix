@@ -425,19 +425,21 @@ async function loadMealData() {
   var session = getSession(); if (!session) return;
   var token = session.access_token;
   try {
-    var meals = await supabaseRequest('/rest/v1/meals?select=id,name,meal_type,calories,logged_at,created_at&order=logged_at.desc,created_at.desc&limit=5', 'GET', null, token);
+    var meals = await supabaseRequest('/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=5', 'GET', null, token);
     var list = document.getElementById('meal-list'); if (!list) return;
     if (!meals || meals.error || meals.length===0) { list.innerHTML = '<div class="sidebar-empty">No meals logged yet</div>'; return; }
     var mealEmojis = {breakfast:'🍳',lunch:'🥗',dinner:'🍽',snack:'🍎',default:'🥘'};
     var today = new Date().toDateString(); var yesterday = new Date(Date.now()-86400000).toDateString();
     list.innerHTML = meals.map(function(meal){
-      var dt = new Date(meal.logged_at||meal.created_at);
+      var d = typeof meal.data === 'string' ? JSON.parse(meal.data || '{}') : (meal.data || {});
+      var dt = new Date(meal.meal_time||meal.created_at);
       var dateStr = dt.toDateString()===today?'Today':dt.toDateString()===yesterday?'Yesterday':dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
       var emoji = mealEmojis[meal.meal_type]||mealEmojis.default;
-      return '<div class="meal-item"><div class="meal-emoji">'+emoji+'</div><div class="meal-info"><div class="meal-name">'+(meal.name||'Meal')+'</div><div class="meal-time">'+(meal.meal_type?meal.meal_type.charAt(0).toUpperCase()+meal.meal_type.slice(1):'')+' · '+dateStr+'</div></div><div class="meal-cals">'+(meal.calories?Math.round(meal.calories):'—')+'</div></div>';
+      var cals = d.calories ? Math.round(d.calories) : '—';
+      return '<div class="meal-item"><div class="meal-emoji">'+emoji+'</div><div class="meal-info"><div class="meal-name">'+(meal.meal_description||'Meal')+'</div><div class="meal-time">'+(meal.meal_type?meal.meal_type.charAt(0).toUpperCase()+meal.meal_type.slice(1):'')+' · '+dateStr+'</div></div><div class="meal-cals">'+cals+'</div></div>';
     }).join('');
     // Store for AI
-    healthSummary.meals = meals.map(function(m){ return {name:m.name,type:m.meal_type,calories:m.calories,time:m.logged_at}; });
+    healthSummary.meals = meals.map(function(m){ var d = typeof m.data === 'string' ? JSON.parse(m.data || '{}') : (m.data || {}); return {name:m.meal_description,type:m.meal_type,calories:d.calories,time:m.meal_time}; });
   } catch(e) { document.getElementById('meal-list').innerHTML = '<div class="sidebar-empty">Could not load meals</div>'; }
 }
 
@@ -446,12 +448,13 @@ async function loadCaloriesConsumed() {
   var token = session.access_token;
   var todayStr = new Date().toISOString().split('T')[0];
   try {
-    var meals = await supabaseRequest('/rest/v1/meals?select=calories,logged_at,created_at&order=logged_at.desc,created_at.desc&limit=50', 'GET', null, token);
+    var meals = await supabaseRequest('/rest/v1/meal_log?select=meal_time,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=50', 'GET', null, token);
     if (!meals || meals.error || meals.length===0) { document.getElementById('stat-cal').textContent = '—'; document.getElementById('stat-cal-delta').textContent = 'No meals'; return; }
     var todayCals = 0; var totalCals = 0; var days = {};
     meals.forEach(function(m) {
-      var d = (m.logged_at||m.created_at||'').split('T')[0];
-      var c = parseFloat(m.calories||0);
+      var d = (m.meal_time||m.created_at||'').split('T')[0];
+      var mData = typeof m.data === 'string' ? JSON.parse(m.data || '{}') : (m.data || {});
+      var c = parseFloat(mData.calories||0);
       if (d===todayStr) todayCals += c;
       totalCals += c;
       days[d] = (days[d]||0) + c;
