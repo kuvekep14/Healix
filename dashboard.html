@@ -137,9 +137,9 @@
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
             <div class="driver-status" id="drv-strength-status"></div>
           </div>
-          <div class="driver-card" id="drv-aerobic" onclick="showPage('dashboard',null)">
+          <div class="driver-card" id="drv-aerobic" onclick="showPage('strength','vo2max')">
             <div class="driver-icon">◎</div>
-            <div class="driver-label">Aerobic</div>
+            <div class="driver-label">VO2 Max</div>
             <div class="driver-val" id="drv-aerobic-val">—</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
             <div class="driver-status" id="drv-aerobic-status"></div>
@@ -229,6 +229,23 @@
           <div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>
         </div>
         <button class="add-meal-btn" onclick="setMealDateTimeDefault(); openModal('meal-modal')" style="margin-top:12px">+ Log a Meal</button>
+
+        <!-- Supplements section -->
+        <div id="supplements-section" style="margin-top:20px">
+          <div class="card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <div class="card-label" style="margin-bottom:0">My Supplements</div>
+              <button onclick="openModal('supplement-modal')" style="font-size:11px;color:var(--gold);cursor:pointer;background:none;border:none;font-family:var(--B);letter-spacing:.05em">+ ADD</button>
+            </div>
+            <div id="supplements-stack" style="margin-top:12px">
+              <div style="font-size:12px;color:var(--muted)">No supplements added yet.</div>
+            </div>
+            <div id="supplements-suggestions" style="display:none;margin-top:12px;border-top:1px solid var(--gold-border);padding-top:12px">
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Detected from your meals</div>
+              <div id="supp-suggestions-list"></div>
+            </div>
+          </div>
+        </div>
 
         <!-- Micronutrients panel -->
         <div id="meals-micro-panel" style="margin-top:24px;display:none">
@@ -473,6 +490,37 @@
         </optgroup>
       </select>
     </div>
+    <div id="vo2-calculator" style="display:none;background:var(--dark-2);border:1px solid var(--gold-border);border-radius:10px;padding:16px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:var(--cream);margin-bottom:10px">Rockport Walk Test Calculator</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <div style="flex:1;min-width:100px">
+          <label style="font-size:11px;color:var(--muted)">Weight (lbs)</label>
+          <input class="modal-input" id="vo2-weight" type="number" placeholder="160" step="any" oninput="calcVO2()">
+        </div>
+        <div style="flex:1;min-width:80px">
+          <label style="font-size:11px;color:var(--muted)">Age</label>
+          <input class="modal-input" id="vo2-age" type="number" placeholder="30" oninput="calcVO2()">
+        </div>
+        <div style="flex:1;min-width:80px">
+          <label style="font-size:11px;color:var(--muted)">Sex</label>
+          <select class="modal-input" id="vo2-sex" onchange="calcVO2()" style="cursor:pointer">
+            <option value="1">Male</option>
+            <option value="0">Female</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="flex:1;min-width:100px">
+          <label style="font-size:11px;color:var(--muted)">Walk time (min)</label>
+          <input class="modal-input" id="vo2-time" type="number" placeholder="14.5" step="any" oninput="calcVO2()">
+        </div>
+        <div style="flex:1;min-width:100px">
+          <label style="font-size:11px;color:var(--muted)">Finish HR (bpm)</label>
+          <input class="modal-input" id="vo2-hr" type="number" placeholder="140" oninput="calcVO2()">
+        </div>
+      </div>
+      <div id="vo2-result" style="font-size:14px;color:var(--gold);font-weight:600"></div>
+    </div>
     <div class="modal-row" id="ft-value-row">
       <div class="modal-field" style="flex:2">
         <label class="modal-label" id="ft-val-label">Value</label>
@@ -574,6 +622,28 @@
     <div class="modal-actions">
       <button class="modal-btn-secondary" onclick="closeModal('meal-modal')">Cancel</button>
       <button class="modal-btn-primary" onclick="saveMeal()">Log Meal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SUPPLEMENT MODAL ── -->
+<div class="modal-overlay" id="supplement-modal" onclick="closeModalOutside(event, 'supplement-modal')">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModal('supplement-modal')">✕</button>
+    <div class="modal-title">Add a <em>Supplement</em></div>
+    <div class="modal-sub">Define a supplement you take regularly. We'll look up its nutrient profile automatically.</div>
+    <div class="modal-field">
+      <label class="modal-label">Supplement Name</label>
+      <input class="modal-input" id="supp-name" type="text" placeholder="e.g. Centrum Men's Multivitamin">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Dosage</label>
+      <input class="modal-input" id="supp-dosage" type="text" placeholder="e.g. 2 gummies, 1 capsule, 5g">
+    </div>
+    <div id="supp-status" style="font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" onclick="closeModal('supplement-modal')">Cancel</button>
+      <button class="modal-btn-primary" id="supp-save-btn" onclick="saveSupplement()">Add Supplement</button>
     </div>
   </div>
 </div>

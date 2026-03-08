@@ -102,7 +102,7 @@ function showPage(id, btn) {
 //   Resting HR:   25%  — strongest single cardio mortality predictor
 //   Weight trend: 20%  — metabolic health proxy
 //   Strength:     10%  — functional capacity / muscle mass
-//   Aerobic:       5%  — VO2 proxy via active calories (placeholder until VO2 data)
+//   Aerobic:       5%  — VO2 max from fitness test
 //
 // Until blood work connected, HR/weight/strength/aerobic redistribute proportionally.
 
@@ -139,15 +139,22 @@ function scoreStrength(strengthData) {
   return 15;
 }
 
-function scoreAerobic(activeCal) {
-  // Active calories as VO2 proxy — rough but directional
-  // 600+ kcal/day active = excellent aerobic output
-  if (activeCal >= 700) return 100;
-  if (activeCal >= 500) return 80;
-  if (activeCal >= 350) return 62;
-  if (activeCal >= 200) return 44;
-  if (activeCal >= 100) return 28;
-  return 12;
+function scoreVO2(vo2, profile) {
+  // Score VO2 max using fitness test percentile norms
+  // Returns 0-100 based on age/sex percentile
+  if (!vo2 || vo2 <= 0) return null;
+  var norm = FITNESS_NORMS && FITNESS_NORMS.vo2max;
+  if (!norm) return Math.min(100, Math.max(10, Math.round(vo2 * 2)));
+  var sex = (profile && profile.sex) || 'male';
+  var age = (profile && profile.age) || 35;
+  var bracket = age < 30 ? '18-29' : age < 40 ? '30-39' : age < 50 ? '40-49' : age < 60 ? '50-59' : '60+';
+  var table = (norm.norms[sex] || norm.norms.male || {})[bracket];
+  if (!table) return Math.min(100, Math.max(10, Math.round(vo2 * 2)));
+  // table is [[threshold, percentile], ...] sorted desc by threshold
+  for (var i = 0; i < table.length; i++) {
+    if (vo2 >= table[i][0]) return table[i][1];
+  }
+  return 5;
 }
 
 function scoreSleep(sleepData) {
@@ -238,9 +245,12 @@ function calcVitalityAge(metrics) {
     scores.push({ name: 'sleep', label: 'Sleep', score: slpScore, weight: 0.15 });
   }
 
-  // Aerobic — 5% (or 8% without bloodwork)
-  if (metrics.activeCal !== null) {
-    scores.push({ name: 'aerobic', label: 'Aerobic', score: scoreAerobic(metrics.activeCal), weight: 0.05 });
+  // Aerobic — 5% (VO2 max from fitness test)
+  if (metrics.vo2max !== null) {
+    var vo2Score = scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge });
+    if (vo2Score !== null) {
+      scores.push({ name: 'aerobic', label: 'Aerobic', score: vo2Score, weight: 0.05 });
+    }
   }
 
   if (scores.length === 0) return null;
@@ -335,15 +345,15 @@ function renderDriverCards(metrics, result) {
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
   var wtScore  = metrics.weightScore !== null ? scoreWeightTrend(metrics.weightScore) : 0;
   var strScore = metrics.strengthData !== null ? (scoreStrength(metrics.strengthData) || 0) : 0;
-  var aerScore = metrics.activeCal !== null ? scoreAerobic(metrics.activeCal) : 0;
+  var aerScore = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || 0) : 0;
 
   var hrVal  = metrics.hr !== null ? metrics.hr + ' bpm' : null;
   var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
   var strVal = metrics.strengthData !== null
     ? metrics.strengthData.sessions7d + (metrics.strengthData.sessions7d === 1 ? ' session' : ' sessions') + ' / wk'
     : null;
-  var aerVal = metrics.activeCal !== null
-    ? metrics.activeCal + ' kcal'
+  var aerVal = metrics.vo2max !== null
+    ? metrics.vo2max + ' ml/kg/min'
     : null;
 
   setDriver('heart',     hrVal,  hrScore,  '');
@@ -509,7 +519,8 @@ async function loadDashboardData() {
   }
   console.log('[Healix] Dashboard loading — realAge:', realAge, 'profile:', window.userProfileData ? Object.keys(window.userProfileData) : 'null');
 
-  var metrics = { hr: null, activeCal: null, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
+  var sex = (window.userProfileData && window.userProfileData.sex) || 'male';
+  var metrics = { hr: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
 
   // 1. Health data (last 14 days for context)
   try {
@@ -575,12 +586,6 @@ async function loadDashboardData() {
       var hrRows = (byType['resting_heart_rate'] || []).concat(byType['heart_rate'] || []);
       if (hrRows.length > 0) metrics.hr = Math.round(parseFloat(hrRows[0].value));
 
-      // Active cal
-      var calRows = byType['active_energy_burned'] || [];
-      var todayCal = calRows.filter(function(r) { return r.start_date && r.start_date.startsWith(today); })
-        .reduce(function(s, r) { return s + parseFloat(r.value||0); }, 0);
-      if (todayCal === 0 && calRows.length > 0) todayCal = parseFloat(calRows[0].value || 0);
-      if (todayCal > 0) metrics.activeCal = Math.round(todayCal);
     }
   } catch(e) { console.error('Health error:', e); }
 
@@ -654,6 +659,17 @@ async function loadDashboardData() {
       metrics.weightScore = 60;
     }
   } catch(e) {}
+
+  // 5. VO2 Max — latest fitness test result
+  try {
+    var vo2Tests = await supabaseRequest(
+      '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&test_key=eq.vo2max&order=tested_at.desc&limit=1',
+      'GET', null, token
+    );
+    if (vo2Tests && !vo2Tests.error && vo2Tests.length > 0) {
+      metrics.vo2max = parseFloat(vo2Tests[0].raw_value);
+    }
+  } catch(e) { console.error('VO2 fetch error:', e); }
 
   // Bloodwork — placeholder until document parsing is wired up
   metrics.bloodwork = null;
@@ -1201,6 +1217,7 @@ async function loadMealsPage() {
 
     if (mealsView === 'day') {
       renderMealsDayView(meals, nutrients, today);
+      loadSupplements();
     } else {
       renderMealsAggregateView(meals, nutrients, range);
     }
@@ -1327,8 +1344,8 @@ function renderMealsDayView(meals, nutrients, today) {
   // meal_nutrient table may have stale or partial data so we skip it for macro totals.
   renderMacrosFromMealData(dayMeals);
 
-  // Micronutrients — always read from meal_log.data (meal_nutrient table not available)
-  renderMicronutrientsFromMealData(dayMeals);
+  // Micronutrients — includes supplement contributions when available
+  renderMicronutrientsWithSupplements(dayMeals);
 }
 
 function renderMealsAggregateView(meals, nutrients, range) {
@@ -1544,6 +1561,232 @@ async function saveMeal() {
     ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
     loadDashboardData();
   } catch(e) { alert('Could not save meal: ' + e.message); }
+}
+
+// ── SUPPLEMENTS ──
+var userSupplements = [];
+var supplementLogsToday = {}; // { supplementId: true }
+
+async function loadSupplements() {
+  if (!currentUser || !currentSession) return;
+  var token = currentSession.access_token;
+  var today = localDateStr(mealsDate);
+  try {
+    var supps = await supabaseRequest(
+      '/rest/v1/user_supplements?user_id=eq.' + currentUser.id + '&is_active=eq.true&order=sort_order,created_at',
+      'GET', null, token
+    );
+    userSupplements = Array.isArray(supps) ? supps : [];
+
+    // Fetch today's logs
+    supplementLogsToday = {};
+    if (userSupplements.length > 0) {
+      var logs = await supabaseRequest(
+        '/rest/v1/supplement_logs?user_id=eq.' + currentUser.id + '&logged_date=eq.' + today,
+        'GET', null, token
+      );
+      if (Array.isArray(logs)) {
+        logs.forEach(function(l) { supplementLogsToday[l.supplement_id] = l.id; });
+      }
+    }
+    renderSupplements();
+
+    // Auto-detect from meal history if no supplements defined
+    if (userSupplements.length === 0 && window._healixMeals && window._healixMeals.length > 0) {
+      detectSupplementsFromHistory(window._healixMeals);
+    }
+  } catch(e) { console.error('[Healix] loadSupplements error:', e); }
+}
+
+function renderSupplements() {
+  var container = document.getElementById('supplements-stack');
+  if (!container) return;
+  if (userSupplements.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted)">No supplements added yet. Tap + ADD to define your stack.</div>';
+    return;
+  }
+  container.innerHTML = userSupplements.map(function(s) {
+    var taken = !!supplementLogsToday[s.id];
+    var dosageText = s.dosage ? ' <span style="font-size:11px;color:var(--muted)">(' + s.dosage + ')</span>' : '';
+    return '<button class="supp-pill' + (taken ? ' taken' : '') + '" onclick="toggleSupplement(\'' + s.id + '\')">'
+      + '<span class="supp-check">' + (taken ? '✓' : '○') + '</span>'
+      + '<span>' + s.name + dosageText + '</span>'
+      + '<span class="supp-remove" onclick="event.stopPropagation(); removeSupplement(\'' + s.id + '\')">✕</span>'
+      + '</button>';
+  }).join('');
+}
+
+async function toggleSupplement(suppId) {
+  if (!currentUser || !currentSession) return;
+  var token = currentSession.access_token;
+  var today = localDateStr(mealsDate);
+  try {
+    if (supplementLogsToday[suppId]) {
+      // Remove log
+      await supabaseRequest(
+        '/rest/v1/supplement_logs?id=eq.' + supplementLogsToday[suppId],
+        'DELETE', null, token
+      );
+      delete supplementLogsToday[suppId];
+    } else {
+      // Add log
+      var result = await supabaseRequest('/rest/v1/supplement_logs', 'POST', {
+        user_id: currentUser.id,
+        supplement_id: suppId,
+        logged_date: today
+      }, token);
+      // Fetch the created ID
+      var logs = await supabaseRequest(
+        '/rest/v1/supplement_logs?user_id=eq.' + currentUser.id + '&supplement_id=eq.' + suppId + '&logged_date=eq.' + today,
+        'GET', null, token
+      );
+      if (Array.isArray(logs) && logs.length > 0) {
+        supplementLogsToday[suppId] = logs[0].id;
+      }
+    }
+    renderSupplements();
+    // Re-render micronutrients to include/exclude supplement contributions
+    if (window._healixMeals) {
+      renderMicronutrientsWithSupplements(window._healixMeals);
+    }
+  } catch(e) { console.error('[Healix] toggleSupplement error:', e); }
+}
+
+async function saveSupplement() {
+  var nameEl = document.getElementById('supp-name');
+  var dosageEl = document.getElementById('supp-dosage');
+  var statusEl = document.getElementById('supp-status');
+  var saveBtn = document.getElementById('supp-save-btn');
+  var name = nameEl.value.trim();
+  var dosage = dosageEl.value.trim();
+  if (!name) { alert('Please enter a supplement name.'); return; }
+
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Looking up nutrient profile...';
+  saveBtn.disabled = true;
+
+  try {
+    // Call analyze-meal-ai to get nutrient profile
+    var nutrientProfile = null;
+    try {
+      var desc = dosage ? dosage + ' ' + name : name;
+      var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+        body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
+      });
+      if (aiRes.ok) {
+        var aiData = await aiRes.json();
+        if (aiData && aiData.total_nutrition) {
+          nutrientProfile = aiData.total_nutrition;
+        }
+      }
+    } catch(e) { console.warn('[Healix] Could not fetch nutrient profile:', e); }
+
+    statusEl.textContent = 'Saving supplement...';
+
+    await supabaseRequest('/rest/v1/user_supplements', 'POST', {
+      user_id: currentUser.id,
+      name: name,
+      dosage: dosage || null,
+      nutrient_profile: nutrientProfile,
+      is_active: true,
+      sort_order: userSupplements.length
+    }, currentSession.access_token);
+
+    closeModal('supplement-modal');
+    nameEl.value = '';
+    dosageEl.value = '';
+    statusEl.style.display = 'none';
+    saveBtn.disabled = false;
+    await loadSupplements();
+  } catch(e) {
+    statusEl.textContent = 'Error: ' + e.message;
+    saveBtn.disabled = false;
+  }
+}
+
+async function removeSupplement(suppId) {
+  if (!confirm('Remove this supplement from your stack?')) return;
+  try {
+    await supabaseRequest(
+      '/rest/v1/user_supplements?id=eq.' + suppId,
+      'PATCH', { is_active: false }, currentSession.access_token
+    );
+    await loadSupplements();
+    if (window._healixMeals) renderMicronutrientsWithSupplements(window._healixMeals);
+  } catch(e) { console.error('[Healix] removeSupplement error:', e); }
+}
+
+function getSupplementMicroTotals() {
+  var totals = {};
+  userSupplements.forEach(function(s) {
+    if (!supplementLogsToday[s.id]) return; // not taken today
+    if (!s.nutrient_profile) return;
+    Object.values(s.nutrient_profile).forEach(function(cat) {
+      if (!Array.isArray(cat)) return;
+      cat.forEach(function(item) {
+        var def = MICRO_ALIAS_MAP[item.name];
+        if (!def) return;
+        var val = parseFloat(item.value || 0);
+        if (!val) return;
+        if (def.iuToMcg && item.unit && item.unit.toLowerCase().indexOf('iu') !== -1) {
+          val = val / def.iuToMcg;
+        }
+        totals[def.key] = (totals[def.key] || 0) + val;
+      });
+    });
+  });
+  return totals;
+}
+
+function renderMicronutrientsWithSupplements(meals) {
+  var panel = document.getElementById('meals-micro-panel');
+  if (!panel) return;
+  var mealTotals = getMicroTotalsFromMeals(meals);
+  var suppTotals = getSupplementMicroTotals();
+  // Merge supplement totals into meal totals
+  Object.keys(suppTotals).forEach(function(k) {
+    mealTotals[k] = (mealTotals[k] || 0) + suppTotals[k];
+  });
+  var hasAny = Object.keys(mealTotals).length > 0;
+  panel.style.display = hasAny ? 'block' : 'none';
+  if (hasAny) renderMicroPanel(mealTotals, 'meals-micro-content');
+}
+
+function detectSupplementsFromHistory(meals) {
+  var keywords = ['supplement', 'vitamin', 'gummy', 'gummies', 'capsule', 'tablet',
+    'creatine', 'fish oil', 'omega', 'multivitamin', 'probiotic', 'magnesium supplement',
+    'zinc supplement', 'emergen-c', 'collagen', 'centrum', 'melatonin', 'ashwagandha',
+    'protein powder', 'whey protein'];
+  var found = {};
+  meals.forEach(function(m) {
+    if (!m.meal_description) return;
+    var desc = m.meal_description.toLowerCase();
+    keywords.forEach(function(kw) {
+      if (desc.indexOf(kw) !== -1 && !found[kw]) {
+        // Extract a meaningful name from the description
+        found[kw] = m.meal_description.length > 60 ? m.meal_description.substring(0, 57) + '...' : m.meal_description;
+      }
+    });
+  });
+  var suggestions = Object.values(found);
+  if (suggestions.length === 0) return;
+
+  var sugSection = document.getElementById('supplements-suggestions');
+  var sugList = document.getElementById('supp-suggestions-list');
+  if (!sugSection || !sugList) return;
+  sugSection.style.display = 'block';
+  sugList.innerHTML = suggestions.slice(0, 5).map(function(s) {
+    return '<button class="supp-suggestion" onclick="prefillSupplement(this)" data-desc="' + s.replace(/"/g, '&quot;') + '">'
+      + '<span>+</span> ' + s + '</button>';
+  }).join('');
+}
+
+function prefillSupplement(el) {
+  var desc = el.getAttribute('data-desc');
+  document.getElementById('supp-name').value = desc;
+  openModal('supplement-modal');
 }
 
 // ── DOCUMENTS ──
@@ -1935,7 +2178,15 @@ var FITNESS_NORMS = {
   },
   vo2max: {
     label: 'VO2 Max', unit: 'ml/kg/min', higherBetter: true,
-    hint: 'From a VO2 max test, Apple Watch estimate, or Garmin / Polar reading.',
+    hint: 'At-home test: run/walk 1 mile as fast as you can, then use the calculator below. Or enter a value from Apple Watch, Garmin, or a lab test.',
+    protocol: 'Rockport 1-Mile Walk Test — the easiest at-home VO2 max estimate:\n\n'
+      + '1. Find a flat 1-mile route (4 laps on a standard track)\n'
+      + '2. Walk the mile as fast as possible without jogging\n'
+      + '3. Record your time in minutes (e.g. 14:30 = 14.5)\n'
+      + '4. Take your heart rate immediately at the finish (count 15 sec × 4)\n'
+      + '5. Enter the result from the formula below\n\n'
+      + 'Formula: VO2 max = 132.853 - (0.0769 × weight in lbs) - (0.3877 × age) + (6.315 × gender, where male=1, female=0) - (3.2649 × time in min) - (0.1565 × finish HR)\n\n'
+      + 'Or use a Cooper 12-min run: run as far as you can in 12 minutes, then VO2 max = (distance in metres - 504.9) / 44.73',
     norms: {
       male: {
         '18-29': [[60,99],[52,90],[48,80],[45,70],[43,60],[41,50],[39,40],[37,30],[34,20],[29,10]],
@@ -2229,16 +2480,38 @@ function epley1RM(weight, reps) {
   return Math.round(weight * (1 + reps / 30));
 }
 
+function calcVO2() {
+  var w = parseFloat(document.getElementById('vo2-weight').value);
+  var age = parseFloat(document.getElementById('vo2-age').value);
+  var sex = parseFloat(document.getElementById('vo2-sex').value);
+  var time = parseFloat(document.getElementById('vo2-time').value);
+  var hr = parseFloat(document.getElementById('vo2-hr').value);
+  var result = document.getElementById('vo2-result');
+  if (!w || !age || !time || !hr) { result.textContent = ''; return; }
+  // Rockport formula
+  var vo2 = 132.853 - (0.0769 * w) - (0.3877 * age) + (6.315 * sex) - (3.2649 * time) - (0.1565 * hr);
+  vo2 = Math.round(vo2 * 10) / 10;
+  if (vo2 > 0) {
+    result.textContent = 'Estimated VO2 Max: ' + vo2 + ' ml/kg/min';
+    document.getElementById('ft-value').value = vo2;
+  } else {
+    result.textContent = 'Check your values — result seems too low.';
+  }
+}
+
 function onFitnessTestChange() {
   var key = document.getElementById('ft-test').value;
   var norm = FITNESS_NORMS[key];
   var isMileTime = key === 'mile_time';
   var isAMRAP = AMRAP_TESTS.includes(key);
   var isRepsOnly = REPS_ONLY_TESTS.includes(key);
+  var isVO2 = key === 'vo2max';
 
   document.getElementById('ft-time-fields').style.display = isMileTime ? 'block' : 'none';
   document.getElementById('ft-amrap-fields').style.display = (isAMRAP || isRepsOnly) ? 'block' : 'none';
   document.getElementById('ft-value-row').style.display = (!isMileTime && !isAMRAP && !isRepsOnly) ? 'flex' : 'none';
+  var vo2Calc = document.getElementById('vo2-calculator');
+  if (vo2Calc) vo2Calc.style.display = isVO2 ? 'block' : 'none';
 
   // Configure AMRAP fields for reps-only (bodyweight) tests
   var amrapLabel = document.getElementById('ft-amrap-label');
@@ -2262,6 +2535,7 @@ function onFitnessTestChange() {
     var sub = document.getElementById('ft-modal-sub');
     if (isAMRAP) sub.textContent = 'Use a weight you can lift for 3-10 reps and go to failure. We calculate your estimated 1RM automatically.';
     else if (isRepsOnly) sub.textContent = 'Max reps to failure with good form. Add weight if using a belt or vest.';
+    else if (norm.protocol) sub.innerHTML = '<div style="white-space:pre-line;line-height:1.6">' + norm.protocol + '</div>';
     else sub.textContent = 'Record a benchmark result. Be consistent — same time of day, rested state.';
   }
 
@@ -2291,6 +2565,20 @@ function openLogTestModal(preselect) {
   document.getElementById('ft-amrap-reps').value = '';
   document.getElementById('ft-amrap-1rm-preview').textContent = '';
   document.getElementById('ft-notes').value = '';
+  // Reset VO2 calculator
+  document.getElementById('vo2-result').textContent = '';
+  document.getElementById('vo2-time').value = '';
+  document.getElementById('vo2-hr').value = '';
+  // Pre-fill VO2 calculator from profile
+  var p = window.userProfileData || {};
+  if (p.current_weight_kg) document.getElementById('vo2-weight').value = Math.round(p.current_weight_kg * 2.205);
+  var dobStr = p.birth_date || p.dob;
+  if (dobStr) {
+    var dob = new Date(dobStr);
+    if (!isNaN(dob)) document.getElementById('vo2-age').value = Math.floor((new Date() - dob) / (365.25 * 24 * 3600 * 1000));
+  }
+  if (p.sex === 'female') document.getElementById('vo2-sex').value = '0';
+  else document.getElementById('vo2-sex').value = '1';
   if (preselect) document.getElementById('ft-test').value = preselect;
   onFitnessTestChange();
   openModal('fitness-modal');

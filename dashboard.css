@@ -645,6 +645,32 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 }
 .add-meal-btn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-faint); }
 
+/* ── SUPPLEMENTS ── */
+.supp-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; margin: 4px 6px 4px 0;
+  border: 1px solid var(--gold-border); background: transparent;
+  color: var(--cream-dim); font-family: var(--B); font-size: 13px;
+  cursor: pointer; transition: all .2s; border-radius: 4px; position: relative;
+}
+.supp-pill:hover { border-color: rgba(184,151,90,0.4); }
+.supp-pill.taken { background: var(--gold-faint); border-color: var(--gold); color: var(--cream); }
+.supp-pill .supp-check { font-size: 11px; opacity: 0.3; }
+.supp-pill.taken .supp-check { opacity: 1; color: var(--gold); }
+.supp-pill .supp-remove {
+  font-size: 10px; color: var(--muted); margin-left: 4px;
+  opacity: 0; transition: opacity .2s; background: none; border: none; cursor: pointer; padding: 0;
+}
+.supp-pill:hover .supp-remove { opacity: 1; }
+.supp-suggestion {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; margin: 4px 6px 4px 0;
+  border: 1px dashed var(--gold-border); background: transparent;
+  color: var(--muted); font-family: var(--B); font-size: 12px;
+  cursor: pointer; transition: all .2s; border-radius: 4px;
+}
+.supp-suggestion:hover { border-color: var(--gold); color: var(--cream-dim); }
+
 /* ── PROFILE PAGE ── */
 .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .profile-section-title { font-family: var(--F); font-size: 22px; font-weight: 300; margin-bottom: 16px; }
