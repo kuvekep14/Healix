@@ -658,7 +658,13 @@ async function loadDashboardData() {
       metrics.weightVal = Math.round(window.userProfileData.current_weight_kg * 2.205);
       metrics.weightScore = 60;
     }
-  } catch(e) {}
+  } catch(e) {
+    // weight_logs table may not exist — fall back to profile
+    if (window.userProfileData && window.userProfileData.current_weight_kg) {
+      metrics.weightVal = Math.round(window.userProfileData.current_weight_kg * 2.205);
+      metrics.weightScore = 60;
+    }
+  }
 
   // 5. VO2 Max — latest fitness test result
   try {
