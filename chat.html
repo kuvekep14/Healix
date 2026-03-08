@@ -529,13 +529,38 @@ async function loadDocumentData() {
   var session = getSession(); if (!session || !currentUser) return;
   var token = session.access_token;
   try {
-    var docs = await supabaseRequest('/rest/v1/documents?user_id=eq.' + currentUser.id + '&select=id,file_name,doc_type,extracted_text,created_at&order=created_at.desc&limit=5', 'GET', null, token);
+    var docs = await supabaseRequest('/rest/v1/uploads?user_id=eq.' + currentUser.id + '&select=id,title,document_type,content,created_at&status=eq.ready&order=created_at.desc&limit=5', 'GET', null, token);
     if (docs && !docs.error && docs.length > 0) {
-      healthSummary.documents = docs.filter(function(d) { return d.extracted_text; }).map(function(d) {
-        return { name: d.file_name, type: d.doc_type, text: d.extracted_text, date: (d.created_at || '').split('T')[0] };
+      healthSummary.documents = docs.filter(function(d) { return d.content; }).map(function(d) {
+        return { name: d.title, type: d.document_type, text: d.content, date: (d.created_at || '').split('T')[0] };
       });
     }
   } catch(e) { console.error('Document load error:', e); }
+
+  // Also load parsed bloodwork for AI context
+  try {
+    var bw = await supabaseRequest('/rest/v1/blood_work_samples?user_id=eq.' + currentUser.id + '&order=test_date.desc,created_at.desc&limit=100', 'GET', null, token);
+    if (bw && !bw.error && bw.length > 0) {
+      var latestDate = bw[0].test_date;
+      var latest = bw.filter(function(s) { return s.test_date === latestDate; });
+      healthSummary.bloodwork = {
+        test_date: latestDate,
+        lab: latest[0].lab_name,
+        results: latest.filter(function(s) { return s.value !== null || s.value_text; }).map(function(s) {
+          return {
+            name: s.biomarker_name,
+            value: s.value !== null ? parseFloat(s.value) : s.value_text,
+            unit: s.unit,
+            ref_min: s.reference_range_min ? parseFloat(s.reference_range_min) : null,
+            ref_max: s.reference_range_max ? parseFloat(s.reference_range_max) : null,
+            flagged: s.is_flagged,
+            flag: s.flag
+          };
+        })
+      };
+      console.log('[Healix Chat] Bloodwork loaded:', healthSummary.bloodwork.results.length, 'biomarkers from', latestDate);
+    }
+  } catch(e) { console.error('Bloodwork load error:', e); }
 }
 
 async function loadMealNutrients() {
