@@ -683,6 +683,7 @@ async function loadDashboardData() {
       '/rest/v1/blood_work_samples?user_id=eq.' + currentUser.id + '&order=test_date.desc,created_at.desc&limit=100',
       'GET', null, token
     );
+    console.log('[Healix] blood_work_samples:', bwData ? (bwData.error ? 'ERROR:'+JSON.stringify(bwData.error) : bwData.length + ' rows') : 'null');
     if (bwData && !bwData.error && bwData.length > 0) {
       var BIOMARKER_MAP = {
         'Glucose': 'glucose', 'Fasting Glucose': 'glucose',
