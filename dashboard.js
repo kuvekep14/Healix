@@ -2178,15 +2178,7 @@ var FITNESS_NORMS = {
   },
   vo2max: {
     label: 'VO2 Max', unit: 'ml/kg/min', higherBetter: true,
-    hint: 'At-home test: run/walk 1 mile as fast as you can, then use the calculator below. Or enter a value from Apple Watch, Garmin, or a lab test.',
-    protocol: 'Rockport 1-Mile Walk Test — the easiest at-home VO2 max estimate:\n\n'
-      + '1. Find a flat 1-mile route (4 laps on a standard track)\n'
-      + '2. Walk the mile as fast as possible without jogging\n'
-      + '3. Record your time in minutes (e.g. 14:30 = 14.5)\n'
-      + '4. Take your heart rate immediately at the finish (count 15 sec × 4)\n'
-      + '5. Enter the result from the formula below\n\n'
-      + 'Formula: VO2 max = 132.853 - (0.0769 × weight in lbs) - (0.3877 × age) + (6.315 × gender, where male=1, female=0) - (3.2649 × time in min) - (0.1565 × finish HR)\n\n'
-      + 'Or use a Cooper 12-min run: run as far as you can in 12 minutes, then VO2 max = (distance in metres - 504.9) / 44.73',
+    hint: 'Use the calculator below to estimate from an at-home test, or enter a value from Apple Watch, Garmin, or a lab test.',
     norms: {
       male: {
         '18-29': [[60,99],[52,90],[48,80],[45,70],[43,60],[41,50],[39,40],[37,30],[34,20],[29,10]],
@@ -2480,6 +2472,28 @@ function epley1RM(weight, reps) {
   return Math.round(weight * (1 + reps / 30));
 }
 
+function selectVO2Method(method) {
+  var rockport = document.getElementById('vo2-rockport');
+  var cooper = document.getElementById('vo2-cooper');
+  var btnR = document.getElementById('vo2-pick-rockport');
+  var btnC = document.getElementById('vo2-pick-cooper');
+  if (method === 'cooper') {
+    rockport.style.display = 'none';
+    cooper.style.display = 'block';
+    btnR.style.background = 'transparent';
+    btnR.style.borderColor = 'var(--gold-border)';
+    btnC.style.background = 'var(--gold-faint)';
+    btnC.style.borderColor = 'var(--gold)';
+  } else {
+    rockport.style.display = 'block';
+    cooper.style.display = 'none';
+    btnR.style.background = 'var(--gold-faint)';
+    btnR.style.borderColor = 'var(--gold)';
+    btnC.style.background = 'transparent';
+    btnC.style.borderColor = 'var(--gold-border)';
+  }
+}
+
 function calcVO2() {
   var w = parseFloat(document.getElementById('vo2-weight').value);
   var age = parseFloat(document.getElementById('vo2-age').value);
@@ -2488,8 +2502,23 @@ function calcVO2() {
   var hr = parseFloat(document.getElementById('vo2-hr').value);
   var result = document.getElementById('vo2-result');
   if (!w || !age || !time || !hr) { result.textContent = ''; return; }
-  // Rockport formula
   var vo2 = 132.853 - (0.0769 * w) - (0.3877 * age) + (6.315 * sex) - (3.2649 * time) - (0.1565 * hr);
+  vo2 = Math.round(vo2 * 10) / 10;
+  if (vo2 > 0) {
+    result.textContent = 'Estimated VO2 Max: ' + vo2 + ' ml/kg/min';
+    document.getElementById('ft-value').value = vo2;
+  } else {
+    result.textContent = 'Check your values — result seems too low.';
+  }
+}
+
+function calcVO2Cooper() {
+  var dist = parseFloat(document.getElementById('vo2-cooper-dist').value);
+  var unit = document.getElementById('vo2-cooper-unit').value;
+  var result = document.getElementById('vo2-cooper-result');
+  if (!dist || dist <= 0) { result.textContent = ''; return; }
+  var metres = unit === 'miles' ? dist * 1609.34 : dist;
+  var vo2 = (metres - 504.9) / 44.73;
   vo2 = Math.round(vo2 * 10) / 10;
   if (vo2 > 0) {
     result.textContent = 'Estimated VO2 Max: ' + vo2 + ' ml/kg/min';
@@ -2535,8 +2564,7 @@ function onFitnessTestChange() {
     var sub = document.getElementById('ft-modal-sub');
     if (isAMRAP) sub.textContent = 'Use a weight you can lift for 3-10 reps and go to failure. We calculate your estimated 1RM automatically.';
     else if (isRepsOnly) sub.textContent = 'Max reps to failure with good form. Add weight if using a belt or vest.';
-    else if (norm.protocol) sub.innerHTML = '<div style="white-space:pre-line;line-height:1.6">' + norm.protocol + '</div>';
-    else sub.textContent = 'Record a benchmark result. Be consistent — same time of day, rested state.';
+    else sub.textContent = norm.hint || 'Record a benchmark result. Be consistent — same time of day, rested state.';
   }
 
   // Live 1RM preview for AMRAP tests
@@ -2565,10 +2593,13 @@ function openLogTestModal(preselect) {
   document.getElementById('ft-amrap-reps').value = '';
   document.getElementById('ft-amrap-1rm-preview').textContent = '';
   document.getElementById('ft-notes').value = '';
-  // Reset VO2 calculator
+  // Reset VO2 calculators
   document.getElementById('vo2-result').textContent = '';
   document.getElementById('vo2-time').value = '';
   document.getElementById('vo2-hr').value = '';
+  document.getElementById('vo2-cooper-dist').value = '';
+  document.getElementById('vo2-cooper-result').textContent = '';
+  selectVO2Method('rockport');
   // Pre-fill VO2 calculator from profile
   var p = window.userProfileData || {};
   if (p.current_weight_kg) document.getElementById('vo2-weight').value = Math.round(p.current_weight_kg * 2.205);
