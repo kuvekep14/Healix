@@ -1857,7 +1857,7 @@ async function loadDocumentsPage() {
   }
 }
 
-var DOC_BUCKET = 'documents';
+var DOC_BUCKET = 'uploads';
 
 async function handleDocUpload(input) {
   var files = Array.from(input.files);
