@@ -677,8 +677,33 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('VO2 fetch error:', e); }
 
-  // Bloodwork — placeholder until document parsing is wired up
-  metrics.bloodwork = null;
+  // 6. Bloodwork — fetch from blood_work_samples table
+  try {
+    var bwData = await supabaseRequest(
+      '/rest/v1/blood_work_samples?user_id=eq.' + currentUser.id + '&order=test_date.desc,created_at.desc&limit=100',
+      'GET', null, token
+    );
+    if (bwData && !bwData.error && bwData.length > 0) {
+      var BIOMARKER_MAP = {
+        'Glucose': 'glucose', 'Fasting Glucose': 'glucose',
+        'Hemoglobin A1c': 'hba1c', 'HbA1c': 'hba1c', 'A1C': 'hba1c',
+        'LDL Chol Calc (NIH)': 'ldl', 'LDL Cholesterol': 'ldl', 'LDL-C': 'ldl',
+        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl',
+        'hs-CRP': 'crp', 'CRP': 'crp', 'C-Reactive Protein': 'crp',
+        'Creatinine': 'creatinine'
+      };
+      // Use only the most recent test date
+      var latestDate = bwData[0].test_date;
+      var latestSamples = bwData.filter(function(s) { return s.test_date === latestDate; });
+      var bw = {};
+      latestSamples.forEach(function(sample) {
+        var key = BIOMARKER_MAP[sample.biomarker_name];
+        if (key && sample.value !== null) bw[key] = parseFloat(sample.value);
+      });
+      metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
+      console.log('[Healix] bloodwork mapped:', JSON.stringify(bw));
+    }
+  } catch(e) { console.error('Bloodwork fetch error:', e); metrics.bloodwork = null; }
 
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
@@ -1799,48 +1824,114 @@ function prefillSupplement(el) {
 var uploadedDocs = [];
 
 async function loadDocumentsPage() {
-  // For now show local uploads — full Supabase storage integration needs storage bucket config
   var grid = document.getElementById('docs-grid');
-  if (uploadedDocs.length === 0) {
+  if (!currentUser) return;
+  grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:24px 0">Loading…</div>';
+  try {
+    var docs = await supabaseRequest(
+      '/rest/v1/uploads?user_id=eq.' + currentUser.id + '&order=created_at.desc',
+      'GET', null, currentSession.access_token
+    );
+    if (!docs || docs.error || docs.length === 0) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:span 3;padding:40px"><div class="empty-state-icon">📄</div><div class="empty-state-text">No documents uploaded yet.<br>Upload bloodwork or lab results for AI analysis.</div></div>';
+      return;
+    }
+    grid.innerHTML = docs.map(function(doc) {
+      var icon = doc.file_type === 'application/pdf' ? '📄' : '🖼';
+      var sizeStr = doc.file_size > 1024*1024 ? (doc.file_size/(1024*1024)).toFixed(1) + ' MB' : (doc.file_size/1024).toFixed(0) + ' KB';
+      var dateStr = new Date(doc.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+      var tag = doc.document_type === 'blood_work' ? 'Bloodwork' : doc.file_type === 'application/pdf' ? 'PDF' : 'Image';
+      var statusStyle = doc.status === 'error' ? 'background:rgba(220,50,50,0.15);color:#e55' : '';
+      var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:#e55;margin-top:4px">Processing error</div>' : '';
+      return '<div class="doc-card" style="' + statusStyle + '">'
+        + '<div class="doc-card-icon">' + icon + '</div>'
+        + '<div class="doc-card-name">' + (doc.title || 'Untitled') + '</div>'
+        + '<div class="doc-card-meta">' + sizeStr + ' · ' + dateStr + '</div>'
+        + '<div class="doc-card-tag">' + tag + '</div>'
+        + statusLabel
+        + '</div>';
+    }).join('');
+  } catch(e) {
+    console.error('Documents load error:', e);
     grid.innerHTML = '<div class="empty-state" style="grid-column:span 3;padding:40px"><div class="empty-state-icon">📄</div><div class="empty-state-text">No documents uploaded yet.<br>Upload bloodwork or lab results for AI analysis.</div></div>';
-    return;
   }
-  grid.innerHTML = uploadedDocs.map(function(doc) {
-    var icon = doc.type === 'application/pdf' ? '📄' : '🖼';
-    return '<div class="doc-card">'
-      + '<div class="doc-card-icon">' + icon + '</div>'
-      + '<div class="doc-card-name">' + doc.name + '</div>'
-      + '<div class="doc-card-meta">' + doc.size + ' · ' + doc.date + '</div>'
-      + '<div class="doc-card-tag">' + (doc.category || 'Document') + '</div>'
-      + '</div>';
-  }).join('');
 }
 
-function handleDocUpload(input) {
+var DOC_BUCKET = 'documents';
+
+async function handleDocUpload(input) {
   var files = Array.from(input.files);
-  files.forEach(function(file) {
-    var sizeStr = file.size > 1024*1024 ? (file.size/(1024*1024)).toFixed(1) + ' MB' : (file.size/1024).toFixed(0) + ' KB';
-    uploadedDocs.push({
-      name: file.name, size: sizeStr, type: file.type,
-      date: new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}),
-      category: file.name.toLowerCase().includes('blood') ? 'Bloodwork'
-        : file.name.toLowerCase().includes('xray') || file.name.toLowerCase().includes('x-ray') ? 'Imaging'
-        : 'Medical Record'
-    });
-    // Update dashboard doc list
-    var docList = document.getElementById('d-docs');
-    if (docList) {
-      var icon = file.type === 'application/pdf' ? '📄' : '🖼';
-      docList.innerHTML += '<div class="doc-item">'
-        + '<div class="doc-icon">' + icon + '</div>'
-        + '<div class="doc-info"><div class="doc-name">' + file.name + '</div>'
-        + '<div class="doc-meta">' + sizeStr + ' · Just now</div></div>'
-        + '<div class="doc-action">✕</div>'
-        + '</div>';
+  if (!files.length || !currentUser) return;
+  var grid = document.getElementById('docs-grid');
+
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var path = currentUser.id + '/' + Date.now() + '_' + safeName;
+
+    // Optimistic UI — show uploading card
+    var tempId = 'upload-temp-' + Date.now() + i;
+    var emptyState = grid.querySelector('.empty-state');
+    if (emptyState) emptyState.remove();
+    grid.insertAdjacentHTML('afterbegin',
+      '<div class="doc-card" id="' + tempId + '" style="opacity:0.6">'
+      + '<div class="doc-card-icon">⏳</div>'
+      + '<div class="doc-card-name">' + file.name + '</div>'
+      + '<div class="doc-card-meta">Uploading…</div>'
+      + '</div>'
+    );
+
+    try {
+      // Upload file to Supabase Storage
+      var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + encodeURIComponent(path), {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + currentSession.access_token,
+          'apikey': SUPABASE_ANON_KEY,
+          'Content-Type': file.type,
+          'x-upsert': 'true'
+        },
+        body: file
+      });
+      if (!uploadRes.ok) {
+        var errText = await uploadRes.text();
+        throw new Error('Storage: ' + uploadRes.status + ' ' + errText);
+      }
+
+      // Insert metadata row in uploads table
+      await supabaseRequest('/rest/v1/uploads', 'POST', {
+        user_id: currentUser.id,
+        title: file.name.replace(/\.[^.]+$/, ''),
+        file_url: path,
+        file_type: file.type,
+        file_size: file.size,
+        status: 'ready',
+        metadata: JSON.stringify({ original_filename: file.name }),
+        document_type: file.name.toLowerCase().includes('blood') ? 'blood_work' : null
+      }, currentSession.access_token);
+
+      // Update temp card to success
+      var tempCard = document.getElementById(tempId);
+      if (tempCard) {
+        var icon = file.type === 'application/pdf' ? '📄' : '🖼';
+        tempCard.style.opacity = '1';
+        tempCard.querySelector('.doc-card-icon').textContent = icon;
+        tempCard.querySelector('.doc-card-meta').textContent = 'Uploaded just now';
+      }
+    } catch(e) {
+      console.error('Upload error:', e);
+      var tempCard = document.getElementById(tempId);
+      if (tempCard) {
+        tempCard.style.opacity = '1';
+        tempCard.style.background = 'rgba(220,50,50,0.1)';
+        tempCard.querySelector('.doc-card-icon').textContent = '⚠';
+        tempCard.querySelector('.doc-card-meta').textContent = 'Upload failed';
+      }
     }
-  });
+  }
   input.value = '';
-  if (document.getElementById('page-documents').classList.contains('active')) loadDocumentsPage();
+  // Refresh from server
+  loadDocumentsPage();
 }
 
 // ── FAMILY HISTORY ──
