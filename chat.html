@@ -704,6 +704,7 @@ async function sendMessage() {
     });
 
     // Handle streaming response
+    console.log('[Chat] Response:', response.status, response.headers.get('content-type'));
     var contentType = response.headers.get('content-type') || '';
     if (contentType.includes('text/event-stream')) {
       removeTyping();
@@ -745,15 +746,20 @@ async function sendMessage() {
             } else if (evt.type === 'done') {
               if (evt.conversation_id) currentConversationId = evt.conversation_id;
             } else if (evt.type === 'error') {
-              if (!fullContent) fullContent = 'Something went wrong. Please try again.';
+              console.error('Stream error from server:', evt.error || evt);
+              if (!fullContent) {
+                fullContent = evt.error || 'Something went wrong. Please try again.';
+                updateStreamingMessage(streamEl, fullContent);
+              }
             }
           } catch(pe) { /* skip non-JSON lines */ }
         }
       }
       btn.disabled = false;
       if (!fullContent) {
-        updateStreamingMessage(streamEl, 'Sorry, I had trouble responding. Please try again.');
+        fullContent = 'Sorry, I had trouble responding. Please try again.';
       }
+      updateStreamingMessage(streamEl, chartHtml + fullContent);
       // Store final message
       messages.push({ role: 'ai', text: fullContent });
       return;
