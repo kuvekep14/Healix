@@ -102,43 +102,42 @@ function showPage(id, btn) {
 // Weights (when all data present):
 //   Blood work:   40%  — most objective biological age signal
 //   Resting HR:   25%  — strongest single cardio mortality predictor
-//   Weight trend: 20%  — metabolic health proxy
+//   Weight (BMI): 20%  — metabolic health proxy
 //   Strength:     10%  — functional capacity / muscle mass
 //   Aerobic:       5%  — VO2 max from fitness test
 //
 // Until blood work connected, HR/weight/strength/aerobic redistribute proportionally.
 
 function scoreHR(hr) {
-  // Clinical resting HR ranges (AHA / cardiology guidelines)
-  // Elite athlete: <50, Excellent: 50-59, Good: 60-64, Average: 65-74, Poor: 75+
-  if (hr < 50)  return 100;
-  if (hr < 55)  return 90;
-  if (hr < 60)  return 78;
-  if (hr < 65)  return 63;
-  if (hr < 70)  return 50;
-  if (hr < 75)  return 37;
-  if (hr < 85)  return 22;
+  // Mortality-calibrated Gaussian curve (Copenhagen Heart Study, UK Biobank, HUNT)
+  // Optimal zone 50-62 bpm; σ ≈ 15 bpm outside optimal band
+  if (hr < 40) return 65; // extreme bradycardia — uncertainty flag
+  if (hr >= 50 && hr <= 62) return 100; // optimal zone
+  var center = hr < 50 ? 50 : 62;
+  var sigma = 15;
+  var z = (hr - center) / sigma;
+  return Math.max(5, Math.round(100 * Math.exp(-0.5 * z * z)));
+}
+
+function scoreWeight(weightKg, heightCm) {
+  // BMI-based J-shaped mortality scoring (Global BMI Mortality Collaboration)
+  if (!weightKg || !heightCm) return null;
+  var bmi = weightKg / Math.pow(heightCm / 100, 2);
+  if (bmi < 16.5) return 10;
+  if (bmi < 18.5) return 45;
+  if (bmi < 20)   return 80;
+  if (bmi <= 25)   return 95;  // optimal
+  if (bmi <= 27.5) return 78;
+  if (bmi <= 30)   return 60;
+  if (bmi <= 35)   return 38;
+  if (bmi <= 40)   return 20;
   return 10;
 }
 
-function scoreWeightTrend(weightScore) {
-  // weightScore: 80 = stable/declining, 60 = neutral, 40 = gaining
-  // No free points — neutral is average, not good
-  if (weightScore >= 80) return 75;
-  if (weightScore >= 60) return 50;
-  return 25;
-}
-
 function scoreStrength(strengthData) {
-  // strengthData: { sessions7d, avgVolume } from workout logs
-  // 3+ sessions/week with progressive load = excellent
+  // Fitness test percentile average — percentile maps directly to 0-100 score
   if (!strengthData) return null;
-  var s = strengthData.sessions7d || 0;
-  if (s >= 4) return 95;
-  if (s >= 3) return 80;
-  if (s >= 2) return 60;
-  if (s >= 1) return 40;
-  return 15;
+  return strengthData.avgPercentile || 50;
 }
 
 function scoreVO2(vo2, profile) {
@@ -160,59 +159,93 @@ function scoreVO2(vo2, profile) {
 }
 
 function scoreSleep(sleepData) {
-  // sleepData: { latest: hours, avg: hours, nights: count, debt: hours }
-  // Sleep score considers: duration adequacy, consistency, and accumulated debt
+  // Reweighted sleep scoring with asymmetric duration curve (Windred et al. 2023)
+  // Oversleeping penalized more than undersleeping (9h RR 1.21 vs 5h RR 1.04)
   if (!sleepData || !sleepData.nights) return null;
 
-  // Duration score (0-40): How close to optimal 7-9h range
+  // Duration score (0-35): Asymmetric curve, nadir at 6.5-7.5h
   var dur = sleepData.avg;
   var durScore;
-  if (dur >= 7 && dur <= 9) durScore = 40;
-  else if (dur >= 6.5 && dur <= 9.5) durScore = 30;
-  else if (dur >= 6 && dur <= 10) durScore = 20;
-  else if (dur >= 5) durScore = 10;
-  else durScore = 0;
+  if (dur >= 6.5 && dur <= 7.5) durScore = 35;       // optimal nadir
+  else if (dur >= 6 && dur < 6.5) durScore = 28;      // slightly short
+  else if (dur > 7.5 && dur <= 8) durScore = 30;      // slightly long
+  else if (dur >= 5.5 && dur < 6) durScore = 20;      // short
+  else if (dur > 8 && dur <= 8.5) durScore = 22;      // long
+  else if (dur >= 5 && dur < 5.5) durScore = 12;      // very short
+  else if (dur > 8.5 && dur <= 9) durScore = 14;      // very long — penalized more
+  else if (dur > 9) durScore = 5;                      // extreme long — highest risk
+  else durScore = 5;                                   // extreme short (<5h)
 
-  // Debt score (0-40): Accumulated sleep debt over rolling window
-  // Debt = sum of (7h target - actual) for nights below target, capped at 0
+  // Debt score (0-30): Accumulated sleep debt
   var debt = sleepData.debt || 0;
   var debtScore;
-  if (debt <= 1) debtScore = 40;       // minimal debt
-  else if (debt <= 3) debtScore = 30;   // mild
-  else if (debt <= 7) debtScore = 18;   // moderate
-  else if (debt <= 14) debtScore = 8;   // severe
-  else debtScore = 0;                   // extreme
+  if (debt <= 1) debtScore = 30;
+  else if (debt <= 3) debtScore = 22;
+  else if (debt <= 7) debtScore = 13;
+  else if (debt <= 14) debtScore = 5;
+  else debtScore = 0;
 
-  // Consistency score (0-20): Number of nights with data in last 7 days
-  var consScore = Math.min(20, Math.round((sleepData.nights / 7) * 20));
+  // Consistency score (0-35): Major weight increase per Windred et al. 2023
+  var consScore = Math.min(35, Math.round((sleepData.nights / 7) * 35));
 
   return durScore + debtScore + consScore;
 }
 
 function scoreBloodwork(bw) {
-  // bw: { glucose, hba1c, ldl, hdl, crp, creatinine } — parsed from documents
   // Returns 0-100 composite or null if no data
+  // U-shaped risk curves for biomarkers where clinically appropriate
   if (!bw || Object.keys(bw).length === 0) return null;
-  var pts = [], max = [];
-  if (bw.glucose !== null) {
-    // Fasting glucose: <85 optimal, 85-99 normal, 100-125 pre-diabetic, 126+ diabetic
-    pts.push(bw.glucose < 85 ? 100 : bw.glucose < 100 ? 78 : bw.glucose < 126 ? 40 : 10);
-    max.push(100);
+  var pts = [];
+  if (bw.glucose != null) {
+    // U-shaped: hypoglycemia risk below 70, optimal 70-85, escalating risk above
+    if (bw.glucose < 70) pts.push(65);
+    else if (bw.glucose < 85) pts.push(100);
+    else if (bw.glucose < 100) pts.push(78);
+    else if (bw.glucose < 126) pts.push(40);
+    else pts.push(10);
   }
-  if (bw.hba1c !== null) {
-    pts.push(bw.hba1c < 5.2 ? 100 : bw.hba1c < 5.7 ? 80 : bw.hba1c < 6.5 ? 40 : 10);
-    max.push(100);
+  if (bw.hba1c != null) {
+    // U-shaped: low HbA1c (<4.6) associated with increased mortality
+    if (bw.hba1c < 4.6) pts.push(85);
+    else if (bw.hba1c < 5.4) pts.push(100);
+    else if (bw.hba1c < 5.7) pts.push(75);
+    else if (bw.hba1c < 6.5) pts.push(40);
+    else pts.push(10);
   }
-  if (bw.ldl !== null) {
-    pts.push(bw.ldl < 100 ? 100 : bw.ldl < 130 ? 75 : bw.ldl < 160 ? 45 : 15);
-    max.push(100);
+  if (bw.ldl != null) {
+    // AHA high-risk target <70; more granular tiers
+    if (bw.ldl < 70) pts.push(100);
+    else if (bw.ldl < 100) pts.push(90);
+    else if (bw.ldl < 130) pts.push(70);
+    else if (bw.ldl < 160) pts.push(45);
+    else if (bw.ldl < 190) pts.push(25);
+    else pts.push(10);
   }
-  if (bw.hdl !== null) {
-    pts.push(bw.hdl >= 60 ? 100 : bw.hdl >= 40 ? 70 : 30);
-    max.push(100);
+  if (bw.hdl != null) {
+    // Ceiling at 90 — paradoxical mortality increase above 90 mg/dL
+    if (bw.hdl > 90) pts.push(78);
+    else if (bw.hdl >= 60) pts.push(100);
+    else if (bw.hdl >= 40) pts.push(70);
+    else pts.push(30);
+  }
+  if (bw.crp != null) {
+    // hs-CRP inflammation marker
+    if (bw.crp < 0.5) pts.push(100);
+    else if (bw.crp < 1.0) pts.push(85);
+    else if (bw.crp < 2.0) pts.push(65);
+    else if (bw.crp < 3.0) pts.push(40);
+    else pts.push(15);
+  }
+  if (bw.triglycerides != null) {
+    // AHA optimal <100
+    if (bw.triglycerides < 100) pts.push(100);
+    else if (bw.triglycerides < 150) pts.push(80);
+    else if (bw.triglycerides < 200) pts.push(55);
+    else if (bw.triglycerides < 500) pts.push(25);
+    else pts.push(10);
   }
   if (pts.length === 0) return null;
-  return Math.round(pts.reduce(function(a,b){return a+b;},0) / pts.length);
+  return Math.round(pts.reduce(function(a, b) { return a + b; }, 0) / pts.length);
 }
 
 function calcVitalityAge(metrics) {
@@ -230,9 +263,9 @@ function calcVitalityAge(metrics) {
     scores.push({ name: 'hr', label: 'Heart Rate', score: scoreHR(metrics.hr), weight: 0.25 });
   }
 
-  // Weight trend — 20% (or 33% without bloodwork)
+  // Weight (BMI) — 20% (or 33% without bloodwork)
   if (metrics.weightScore !== null) {
-    scores.push({ name: 'weight', label: 'Weight', score: scoreWeightTrend(metrics.weightScore), weight: 0.20 });
+    scores.push({ name: 'weight', label: 'Weight', score: metrics.weightScore, weight: 0.20 });
   }
 
   // Strength — 10% (or 17% without bloodwork)
@@ -345,14 +378,14 @@ function renderDriverCards(metrics, result) {
   }
 
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
-  var wtScore  = metrics.weightScore !== null ? scoreWeightTrend(metrics.weightScore) : 0;
+  var wtScore  = metrics.weightScore !== null ? metrics.weightScore : 0;
   var strScore = metrics.strengthData !== null ? (scoreStrength(metrics.strengthData) || 0) : 0;
   var aerScore = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || 0) : 0;
 
   var hrVal  = metrics.hr !== null ? metrics.hr + ' bpm' : null;
   var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
   var strVal = metrics.strengthData !== null
-    ? metrics.strengthData.sessions7d + (metrics.strengthData.sessions7d === 1 ? ' session' : ' sessions') + ' / wk'
+    ? metrics.strengthData.testCount + ' tests · ' + metrics.strengthData.avgPercentile + 'th pctl'
     : null;
   var aerVal = metrics.vo2max !== null
     ? metrics.vo2max + ' ml/kg/min'
@@ -418,8 +451,8 @@ function buildInsightSentence(metrics, result) {
   var secondary = '';
   if (!result.bloodworkConnected) {
     secondary = ' Uploading blood work will unlock the highest-weighted signal (40%).';
-  } else if (metrics.strengthData && metrics.strengthData.sessions7d === 0) {
-    secondary = ' No strength sessions logged this week.';
+  } else if (!metrics.strengthData) {
+    secondary = ' Log fitness tests to unlock your strength score.';
   }
 
   if (!primary) return null;
@@ -625,48 +658,30 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('Meal error:', e); }
 
-  // 3. Strength — count workout sessions in last 7 days
+  // 3. Strength — fitness test percentile average
   try {
-    var sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    var workouts = await supabaseRequest(
-      '/rest/v1/workout_logs?user_id=eq.' + currentUser.id + '&logged_at=gte.' + sevenDaysAgo.toISOString() + '&select=id,logged_at,total_volume&order=logged_at.desc',
+    var strengthTests = await supabaseRequest(
+      '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&test_key=in.(bench_1rm,squat_1rm,deadlift_1rm,pushup,pullup)&order=tested_at.desc&limit=20',
       'GET', null, token
     );
-    if (workouts && !workouts.error && workouts.length > 0) {
-      var totalVol = workouts.reduce(function(s, w) { return s + parseFloat(w.total_volume || 0); }, 0);
-      metrics.strengthData = { sessions7d: workouts.length, avgVolume: Math.round(totalVol / workouts.length) };
+    if (strengthTests && !strengthTests.error && strengthTests.length > 0) {
+      var percentiles = strengthTests.filter(function(t) { return t.percentile != null; }).map(function(t) { return parseFloat(t.percentile); });
+      var avgPctl = percentiles.length > 0 ? Math.round(percentiles.reduce(function(s, p) { return s + p; }, 0) / percentiles.length) : 50;
+      metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, tests: strengthTests };
     } else {
       metrics.strengthData = null;
     }
   } catch(e) { metrics.strengthData = null; }
 
-  // 4. Weight
+  // 4. Weight — BMI-based scoring from user profile
   try {
-    var weightData = await supabaseRequest(
-      '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=7',
-      'GET', null, token
-    );
-    if (weightData && !weightData.error && weightData.length > 0) {
-      var lbs = Math.round(parseFloat(weightData[0].value) * (weightData[0].unit === 'kg' ? 2.205 : 1));
-      metrics.weightVal = lbs;
-      // Weight score: stable or declining = good
-      if (weightData.length >= 2) {
-        var trend = parseFloat(weightData[0].value) - parseFloat(weightData[weightData.length-1].value);
-        metrics.weightScore = trend <= 0 ? 80 : trend < 2 ? 60 : 40;
-      } else {
-        metrics.weightScore = 60;
-      }
-    } else if (window.userProfileData && window.userProfileData.current_weight_kg) {
-      metrics.weightVal = Math.round(window.userProfileData.current_weight_kg * 2.205);
-      metrics.weightScore = 60;
+    var weightKg = window.userProfileData && window.userProfileData.current_weight_kg;
+    var heightCm = window.userProfileData && window.userProfileData.height_cm;
+    if (weightKg) {
+      metrics.weightVal = Math.round(weightKg * 2.205);
+      metrics.weightScore = scoreWeight(weightKg, heightCm);
     }
-  } catch(e) {
-    // weight_logs table may not exist — fall back to profile
-    if (window.userProfileData && window.userProfileData.current_weight_kg) {
-      metrics.weightVal = Math.round(window.userProfileData.current_weight_kg * 2.205);
-      metrics.weightScore = 60;
-    }
-  }
+  } catch(e) { /* weight/height not available */ }
 
   // 5. VO2 Max — latest fitness test result
   try {
