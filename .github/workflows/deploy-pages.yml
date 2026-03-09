@@ -1,0 +1,58 @@
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Checkout dev
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev
+        continue-on-error: true
+
+      - name: Build site
+        run: |
+          mkdir -p _site
+          cp -r main/* _site/
+          rm -rf _site/.github _site/.git
+          if [ -d dev ]; then
+            mkdir -p _site/dev
+            cp -r dev/* _site/dev/
+            rm -rf _site/dev/.github _site/dev/.git
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
