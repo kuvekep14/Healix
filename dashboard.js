@@ -8,6 +8,75 @@ function getSession() {
   try { var s = localStorage.getItem('healix_session'); return s ? JSON.parse(s) : null; } catch(e) { return null; }
 }
 
+// ── LOGOUT ──
+function logout() {
+  var session = getSession();
+  if (session && session.access_token) {
+    fetch(SUPABASE_URL + '/auth/v1/logout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + session.access_token
+      }
+    }).catch(function() {});
+  }
+  localStorage.removeItem('healix_session');
+  localStorage.removeItem('healix_last_activity');
+  window.location.href = 'login.html';
+}
+
+// ── TOKEN REFRESH ──
+function refreshSession() {
+  var session = getSession();
+  if (!session || !session.refresh_token) return Promise.reject('No refresh token');
+  return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ refresh_token: session.refresh_token })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.access_token) {
+      localStorage.setItem('healix_session', JSON.stringify({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+        user: data.user || session.user
+      }));
+      if (currentSession) currentSession.access_token = data.access_token;
+      return data.access_token;
+    }
+    throw new Error('Refresh failed');
+  });
+}
+
+// Proactively refresh token every 50 minutes (Supabase tokens expire in 60 min)
+setInterval(function() {
+  var session = getSession();
+  if (session && session.refresh_token) {
+    refreshSession().catch(function() { logout(); });
+  }
+}, 50 * 60 * 1000);
+
+// ── SESSION INACTIVITY TIMEOUT (30 min) ──
+var INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+function resetActivityTimer() {
+  localStorage.setItem('healix_last_activity', Date.now().toString());
+}
+function checkInactivity() {
+  var last = parseInt(localStorage.getItem('healix_last_activity') || '0', 10);
+  if (last && (Date.now() - last > INACTIVITY_TIMEOUT)) {
+    logout();
+  }
+}
+['click', 'keydown', 'scroll', 'mousemove', 'touchstart'].forEach(function(evt) {
+  document.addEventListener(evt, resetActivityTimer, { passive: true });
+});
+resetActivityTimer();
+setInterval(checkInactivity, 60 * 1000);
+
 function supabaseRequest(endpoint, method, body, token, extraHeaders) {
   var headers = {
     'Content-Type': 'application/json',
@@ -751,6 +820,11 @@ async function loadDashboardData() {
   }
 }
 
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
 function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; }
 function setHTML(id, val) { var e = document.getElementById(id); if (e) e.innerHTML = val; }
 function setClass(id, cls) { var e = document.getElementById(id); if (e) e.className = cls; }
