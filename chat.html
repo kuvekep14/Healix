@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Health Intelligence</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <style>
@@ -136,7 +137,7 @@ textarea::placeholder { color: var(--muted); }
   </div>
   <div class="topbar-right">
     <div class="topbar-chip">Beta</div>
-    <div class="topbar-avatar" id="topbar-avatar">?</div>
+    <div class="topbar-avatar" id="topbar-avatar" onclick="logout()">?</div>
   </div>
 </div>
 <div class="app-body">
@@ -224,6 +225,60 @@ var currentUser = null;
 var currentSession = null;
 var healthSummary = {};
 
+// ── LOGOUT ──
+function logout() {
+  var session = getSession();
+  if (session && session.access_token) {
+    fetch(SUPABASE_URL + '/auth/v1/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + session.access_token }
+    }).catch(function() {});
+  }
+  localStorage.removeItem('healix_session');
+  localStorage.removeItem('healix_last_activity');
+  window.location.href = 'login.html';
+}
+
+// ── TOKEN REFRESH ──
+function refreshSession() {
+  var session = getSession();
+  if (!session || !session.refresh_token) return Promise.reject('No refresh token');
+  return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ refresh_token: session.refresh_token })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.access_token) {
+      localStorage.setItem('healix_session', JSON.stringify({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000,
+        user: data.user || session.user
+      }));
+      if (currentSession) currentSession.access_token = data.access_token;
+      return data.access_token;
+    }
+    throw new Error('Refresh failed');
+  });
+}
+setInterval(function() {
+  var session = getSession();
+  if (session && session.refresh_token) refreshSession().catch(function() { logout(); });
+}, 50 * 60 * 1000);
+
+// ── SESSION INACTIVITY TIMEOUT (30 min) ──
+var INACTIVITY_TIMEOUT = 30 * 60 * 1000;
+function resetActivityTimer() { localStorage.setItem('healix_last_activity', Date.now().toString()); }
+function checkInactivity() {
+  var last = parseInt(localStorage.getItem('healix_last_activity') || '0', 10);
+  if (last && (Date.now() - last > INACTIVITY_TIMEOUT)) logout();
+}
+['click', 'keydown', 'scroll', 'mousemove', 'touchstart'].forEach(function(evt) {
+  document.addEventListener(evt, resetActivityTimer, { passive: true });
+});
+resetActivityTimer();
+setInterval(checkInactivity, 60 * 1000);
+
 function getSession() {
   try { var s = localStorage.getItem('healix_session'); return s ? JSON.parse(s) : null; } catch(e) { return null; }
 }
@@ -238,7 +293,15 @@ function updateWelcomeName(name) {
   var titleEl = document.getElementById('welcome-title');
   var nameEl = document.getElementById('welcome-name');
   var avatarEl = document.getElementById('topbar-avatar');
-  if (titleEl) titleEl.innerHTML = getTimeGreeting() + ',<br><em id="welcome-name">' + firstName + '.</em>';
+  if (titleEl) {
+    titleEl.textContent = '';
+    titleEl.appendChild(document.createTextNode(getTimeGreeting() + ', '));
+    titleEl.appendChild(document.createElement('br'));
+    var em = document.createElement('em');
+    em.id = 'welcome-name';
+    em.textContent = firstName + '.';
+    titleEl.appendChild(em);
+  }
   if (avatarEl) avatarEl.textContent = firstName.charAt(0).toUpperCase();
 }
 
@@ -436,7 +499,9 @@ async function loadMealData() {
       var dateStr = dt.toDateString()===today?'Today':dt.toDateString()===yesterday?'Yesterday':dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
       var emoji = mealEmojis[meal.meal_type]||mealEmojis.default;
       var cals = d.calories ? Math.round(d.calories) : '—';
-      return '<div class="meal-item"><div class="meal-emoji">'+emoji+'</div><div class="meal-info"><div class="meal-name">'+(meal.meal_description||'Meal')+'</div><div class="meal-time">'+(meal.meal_type?meal.meal_type.charAt(0).toUpperCase()+meal.meal_type.slice(1):'')+' · '+dateStr+'</div></div><div class="meal-cals">'+cals+'</div></div>';
+      var safeName = escapeHtml(meal.meal_description||'Meal');
+      var safeType = meal.meal_type ? escapeHtml(meal.meal_type.charAt(0).toUpperCase()+meal.meal_type.slice(1)) : '';
+      return '<div class="meal-item"><div class="meal-emoji">'+emoji+'</div><div class="meal-info"><div class="meal-name">'+safeName+'</div><div class="meal-time">'+safeType+' · '+escapeHtml(dateStr)+'</div></div><div class="meal-cals">'+cals+'</div></div>';
     }).join('');
     // Store for AI
     healthSummary.meals = meals.map(function(m){ var d = typeof m.data === 'string' ? JSON.parse(m.data || '{}') : (m.data || {}); return {name:m.meal_description,type:m.meal_type,calories:d.calories,time:m.meal_time}; });
@@ -813,6 +878,19 @@ async function sendMessage() {
   }
 }
 
+// ── HTML SANITIZATION ──
+function escapeHtml(str) {
+  var div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
+function safeMarkdown(text) {
+  // Escape HTML first, then apply safe markdown transforms
+  var safe = escapeHtml(text);
+  return safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+}
+
 function addStreamingMessage() {
   var container = document.getElementById('chat-messages');
   var el = document.createElement('div'); el.className = 'message ai';
@@ -824,14 +902,14 @@ function addStreamingMessage() {
 function updateStreamingMessage(el, text) {
   var bubble = el.querySelector('.message-bubble');
   if (bubble) {
-    // If text contains chart HTML, split at chart boundary and only format the text part
+    // If text contains chart HTML (trusted, generated client-side), split and only escape the text part
     var chartMatch = text.match(/^(<div class="nutrient-chart">[\s\S]*?<\/div><\/div>)([\s\S]*)$/);
     if (chartMatch) {
       var chartPart = chartMatch[1];
-      var textPart = chartMatch[2].replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+      var textPart = safeMarkdown(chartMatch[2]);
       bubble.innerHTML = chartPart + textPart;
     } else {
-      bubble.innerHTML = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+      bubble.innerHTML = safeMarkdown(text);
     }
     var container = document.getElementById('chat-messages');
     container.scrollTop = container.scrollHeight;
@@ -841,8 +919,7 @@ function updateStreamingMessage(el, text) {
 function addMessage(role, text) {
   var container = document.getElementById('chat-messages'); var isUser = role==='user';
   var el = document.createElement('div'); el.className = 'message '+role;
-  // Convert markdown-style bold to HTML
-  var html = text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+  var html = safeMarkdown(text);
   el.innerHTML = '<div class="message-avatar">'+(isUser?'A':'H')+'</div><div class="message-body"><div class="message-name">'+(isUser?'You':'Healix')+'</div><div class="message-bubble">'+html+'</div></div>';
   container.appendChild(el); container.scrollTop = container.scrollHeight;
   messages.push({role:role,text:text});

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Sign In</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <style>
@@ -282,6 +283,7 @@ function handleLogin() {
       localStorage.setItem('healix_session', JSON.stringify({
         access_token: data.access_token,
         refresh_token: data.refresh_token,
+        expires_at: Date.now() + (data.expires_in || 3600) * 1000,
         user: data.user
       }));
       // Redirect to chat
