@@ -342,7 +342,7 @@ async function loadHealthData() {
   var twentyOneDaysAgo = new Date(today); twentyOneDaysAgo.setDate(today.getDate() - 21);
   var sevenDaysAgoStr = twentyOneDaysAgo.toISOString().split('T')[0];
   try {
-    var params = new URLSearchParams({ select: 'metric_type,start_date,end_date,value,text_value', start_date: 'gte.' + sevenDaysAgoStr, order: 'start_date.desc' });
+    var params = new URLSearchParams({ select: 'metric_type,start_date,end_date,value,text_value,recorded_at', recorded_at: 'gte.' + twentyOneDaysAgo.toISOString(), order: 'recorded_at.desc' });
     var data = await supabaseRequest('/rest/v1/apple_health_samples?' + params.toString(), 'GET', null, token);
     if (!data || data.error) { setStatFallback(); return; }
     var byType = {};

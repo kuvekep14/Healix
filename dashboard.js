@@ -528,7 +528,7 @@ async function loadDashboardData() {
   try {
     var daysAgo = new Date(); daysAgo.setDate(daysAgo.getDate() - 21);
     var healthData = await supabaseRequest(
-      '/rest/v1/apple_health_samples?select=metric_type,start_date,end_date,value,text_value&user_id=eq.' + currentUser.id + '&start_date=gte.' + daysAgo.toISOString().split('T')[0] + '&order=start_date.desc',
+      '/rest/v1/apple_health_samples?select=metric_type,start_date,end_date,value,text_value,recorded_at&user_id=eq.' + currentUser.id + '&recorded_at=gte.' + daysAgo.toISOString() + '&order=recorded_at.desc',
       'GET', null, token
     );
     console.log('[Healix] healthData rows:', healthData ? (healthData.error ? 'ERROR:'+JSON.stringify(healthData.error) : healthData.length) : 'null');
@@ -688,12 +688,16 @@ async function loadDashboardData() {
     console.log('[Healix] blood_work_samples:', bwData ? (bwData.error ? 'ERROR:'+JSON.stringify(bwData.error) : bwData.length + ' rows') : 'null');
     if (bwData && !bwData.error && bwData.length > 0) {
       var BIOMARKER_MAP = {
-        'Glucose': 'glucose', 'Fasting Glucose': 'glucose',
-        'Hemoglobin A1c': 'hba1c', 'HbA1c': 'hba1c', 'A1C': 'hba1c',
+        'Glucose': 'glucose', 'Fasting Glucose': 'glucose', 'Glucose, Fasting': 'glucose',
+        'Glucose, Serum': 'glucose',
+        'Hemoglobin A1c': 'hba1c', 'HbA1c': 'hba1c', 'A1C': 'hba1c', 'Hemoglobin A1C': 'hba1c',
         'LDL Chol Calc (NIH)': 'ldl', 'LDL Cholesterol': 'ldl', 'LDL-C': 'ldl',
-        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl',
+        'LDL Cholesterol Calc': 'ldl',
+        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl', 'HDL': 'hdl',
         'hs-CRP': 'crp', 'CRP': 'crp', 'C-Reactive Protein': 'crp',
-        'Creatinine': 'creatinine'
+        'hsCRP': 'crp', 'C-Reactive Protein, Cardiac': 'crp',
+        'Triglycerides': 'triglycerides', 'Triglyceride': 'triglycerides', 'TG': 'triglycerides',
+        'Creatinine': 'creatinine', 'Creatinine, Serum': 'creatinine'
       };
       // Use only the most recent test date
       var latestDate = bwData[0].test_date;
@@ -701,6 +705,13 @@ async function loadDashboardData() {
       var bw = {};
       latestSamples.forEach(function(sample) {
         var key = BIOMARKER_MAP[sample.biomarker_name];
+        if (!key) {
+          var lowerName = sample.biomarker_name.toLowerCase();
+          var mapKeys = Object.keys(BIOMARKER_MAP);
+          for (var i = 0; i < mapKeys.length; i++) {
+            if (mapKeys[i].toLowerCase() === lowerName) { key = BIOMARKER_MAP[mapKeys[i]]; break; }
+          }
+        }
         if (key && sample.value !== null) bw[key] = parseFloat(sample.value);
       });
       metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
