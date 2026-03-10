@@ -129,6 +129,28 @@ async function init() {
           document.getElementById('sb-avatar').textContent = profileName.charAt(0).toUpperCase();
           document.getElementById('page-title').textContent = greet() + ', ' + profileData[0].first_name;
         }
+      } else {
+        // No profile row exists — create one so PATCH calls work later
+        var fullName = (user.user_metadata && user.user_metadata.full_name) || '';
+        var nameParts = fullName.split(' ');
+        try {
+          await supabaseRequest('/rest/v1/profiles', 'POST', {
+            auth_user_id: user.id,
+            first_name: nameParts[0] || '',
+            last_name: nameParts.slice(1).join(' ') || '',
+            email: user.email || ''
+          }, session.access_token, { 'Prefer': 'return=representation' });
+          console.log('[Healix] profile row created for new user');
+          // Re-fetch so userProfileData is populated
+          var newProfile = await supabaseRequest(
+            '/rest/v1/profiles?auth_user_id=eq.' + user.id + '&limit=1',
+            'GET', null, session.access_token
+          );
+          if (newProfile && newProfile.length > 0) {
+            window.userProfileData = newProfile[0];
+            populateProfileForm(newProfile[0]);
+          }
+        } catch(e) { console.warn('Profile creation error:', e); }
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 

@@ -230,25 +230,122 @@ function startCooldown(seconds) {
 }
 
 // Handle the confirmation redirect from Supabase
-// Supabase appends #access_token=... to the URL after email confirmation
+// Two possible flows:
+//   1. Implicit: #access_token=... in URL hash
+//   2. PKCE:     ?code=... in URL query params (newer Supabase default)
+
+function storeSessionAndRedirect(accessToken, refreshToken, expiresIn, user) {
+  localStorage.setItem('healix_session', JSON.stringify({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: Date.now() + (expiresIn || 3600) * 1000,
+    user: user || null
+  }));
+  localStorage.removeItem('healix_pending_email');
+  // Clear tokens from URL to prevent exposure in browser history
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  // Create profile row if it doesn't exist yet
+  if (accessToken) {
+    createProfileIfMissing(accessToken, user).then(function() {
+      window.location.href = 'dashboard.html';
+    }).catch(function() {
+      window.location.href = 'dashboard.html';
+    });
+  } else {
+    window.location.href = 'dashboard.html';
+  }
+}
+
+function createProfileIfMissing(token, user) {
+  // Check if a profile row exists; if not, create one
+  return fetch(SUPABASE_URL + '/rest/v1/profiles?auth_user_id=eq.' + (user && user.id ? user.id : 'unknown') + '&limit=1', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + token
+    }
+  }).then(function(r) { return r.json(); }).then(function(rows) {
+    if (rows && rows.length > 0) return; // profile exists
+    // Get user info to populate profile
+    return fetch(SUPABASE_URL + '/auth/v1/user', {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + token
+      }
+    }).then(function(r) { return r.json(); }).then(function(userData) {
+      if (!userData || !userData.id) return;
+      var fullName = (userData.user_metadata && userData.user_metadata.full_name) || '';
+      var parts = fullName.split(' ');
+      return fetch(SUPABASE_URL + '/rest/v1/profiles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + token,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          auth_user_id: userData.id,
+          first_name: parts[0] || '',
+          last_name: parts.slice(1).join(' ') || '',
+          email: userData.email || ''
+        })
+      });
+    });
+  });
+}
+
+// Flow 1: Implicit — #access_token in hash
 var hash = window.location.hash;
 if (hash && hash.includes('access_token')) {
   var params = new URLSearchParams(hash.replace('#', '?'));
   var accessToken = params.get('access_token');
   var refreshToken = params.get('refresh_token');
   if (accessToken) {
-    localStorage.setItem('healix_session', JSON.stringify({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_at: Date.now() + 3600 * 1000
-    }));
-    localStorage.removeItem('healix_pending_email');
-    // Clear tokens from URL to prevent exposure in browser history
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-    window.location.href = 'dashboard.html';
+    storeSessionAndRedirect(accessToken, refreshToken, 3600, null);
   }
+}
+
+// Flow 2: PKCE — ?code= in query params
+var queryParams = new URLSearchParams(window.location.search);
+var authCode = queryParams.get('code');
+if (authCode) {
+  fetch(SUPABASE_URL + '/auth/v1/token?grant_type=pkce', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ auth_code: authCode })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.access_token) {
+      storeSessionAndRedirect(data.access_token, data.refresh_token, data.expires_in, data.user);
+    } else {
+      // PKCE exchange failed — try as authorization_code grant
+      return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=authorization_code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ code: authCode })
+      }).then(function(r) { return r.json(); }).then(function(data2) {
+        if (data2.access_token) {
+          storeSessionAndRedirect(data2.access_token, data2.refresh_token, data2.expires_in, data2.user);
+        } else {
+          showAlert('Email confirmed but auto-login failed. Please sign in manually.', 'error');
+          console.error('PKCE exchange error:', data, data2);
+        }
+      });
+    }
+  }).catch(function(err) {
+    showAlert('Email confirmed but auto-login failed. Please sign in manually.', 'error');
+    console.error('PKCE fetch error:', err);
+  });
 }
 </script>
 </body>
