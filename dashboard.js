@@ -365,11 +365,9 @@ function calcVitalityAge(metrics) {
     scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.10 });
   }
 
-  // Sleep — 15%
-  var slpScore = scoreSleep(metrics.sleepData);
-  if (slpScore !== null) {
-    scores.push({ name: 'sleep', label: 'Sleep', score: slpScore, weight: 0.15 });
-  }
+  // Sleep — displayed on dashboard but NOT included in vitality age composite.
+  // Sleep is a lifestyle behavior that modulates HR, recovery, bloodwork, and strength
+  // rather than an independent biomarker. Kept as a driver card for visibility.
 
   // Aerobic — 5% (VO2 max from fitness test)
   if (metrics.vo2max !== null) {
