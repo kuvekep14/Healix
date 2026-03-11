@@ -2229,7 +2229,7 @@ async function handleDocUpload(input) {
         file_type: file.type,
         file_size: file.size,
         status: 'processing',
-        metadata: JSON.stringify({ original_filename: file.name })
+        metadata: { original_filename: file.name }
       }, currentSession.access_token, { 'Prefer': 'return=representation' });
 
       var upload_id = inserted && inserted[0] && inserted[0].id;
