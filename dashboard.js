@@ -1,6 +1,5 @@
 // ── SUPABASE ──
-var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
+// SUPABASE_URL and SUPABASE_ANON_KEY are set by config.js (loaded before this file)
 
 var currentUser = null, currentSession = null, currentTimeframe = 7;
 
@@ -155,6 +154,28 @@ async function init() {
     } catch(e) { console.warn('Profile fetch error:', e); }
 
     loadMedicalProfileUI();
+
+    // Render from cache instantly, then refresh from server
+    try {
+      var cached = localStorage.getItem('healix_dashboard_cache');
+      if (cached) {
+        var c = JSON.parse(cached);
+        // Use cache if less than 10 minutes old
+        if (c.cachedAt && (Date.now() - c.cachedAt < 10 * 60 * 1000)) {
+          renderVitalityAge(c.result, c.realAge);
+          renderDriverCards(c.metrics, c.result);
+          if (c.timestamps) {
+            renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', c.timestamps.heart_rate);
+            renderFreshnessIndicator('drv-sleep-freshness', 'sleep', c.timestamps.sleep);
+            renderFreshnessIndicator('drv-weight-freshness', 'weight', c.timestamps.weight);
+            renderFreshnessIndicator('drv-strength-freshness', 'strength', c.timestamps.strength);
+            renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', c.timestamps.vo2max);
+            renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', c.timestamps.bloodwork);
+          }
+        }
+      }
+    } catch(e) { /* cache parse error, ignore */ }
+
     loadDashboardData();
     loadFamilyHistoryForm();
     setWeightDateDefault();
@@ -183,6 +204,143 @@ function showPage(id, btn) {
   if (id === 'meals') { loadMealsPage(); }
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
+}
+
+// ── DATA FRESHNESS ──
+var FRESHNESS_THRESHOLDS = {
+  heart_rate:  { fresh: 24, warning: 48, stale: 72 },
+  sleep:       { fresh: 36, warning: 60, stale: 96 },
+  steps:       { fresh: 18, warning: 36, stale: 72 },
+  weight:      { fresh: 168, warning: 504, stale: 720 },
+  strength:    { fresh: 720, warning: 2160, stale: 4320 },
+  vo2max:      { fresh: 720, warning: 2160, stale: 4320 },
+  bloodwork:   { fresh: 2160, warning: 4320, stale: 8760 }
+};
+
+var FRESHNESS_CTA = {
+  heart_rate: { text: 'Open HealthBite to sync', href: null },
+  sleep:      { text: 'Open HealthBite to sync', href: null },
+  steps:      { text: 'Open HealthBite to sync', href: null },
+  weight:     { text: 'Log new weight', action: function() { openModal('weight-modal'); } },
+  strength:   { text: 'Log a new test', action: function() { showPage('strength', null); } },
+  vo2max:     { text: 'Log a new test', action: function() { showPage('strength', null); } },
+  bloodwork:  { text: 'Upload new labs', action: function() { showPage('documents', null); } }
+};
+
+function getFreshnessLevel(metricKey, timestamp) {
+  if (!timestamp) return null;
+  var thresholds = FRESHNESS_THRESHOLDS[metricKey];
+  if (!thresholds) return null;
+  var hoursAgo = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60);
+  if (hoursAgo <= thresholds.fresh) return 'fresh';
+  if (hoursAgo <= thresholds.warning) return 'warning';
+  return 'stale';
+}
+
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return '';
+  var ms = Date.now() - new Date(timestamp).getTime();
+  var mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins + 'm ago';
+  var hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + 'h ago';
+  var days = Math.floor(hours / 24);
+  if (days < 14) return days + 'd ago';
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function renderFreshnessIndicator(elementId, metricKey, timestamp) {
+  var el = document.getElementById(elementId);
+  if (!el) return;
+  if (!timestamp) { el.innerHTML = ''; return; }
+  var level = getFreshnessLevel(metricKey, timestamp);
+  if (!level || level === 'fresh') {
+    el.innerHTML = '<span class="freshness-dot fresh"></span><span class="freshness-text">' + formatRelativeTime(timestamp) + '</span>';
+    return;
+  }
+  var timeText = formatRelativeTime(timestamp);
+  var html = '<span class="freshness-dot ' + level + '"></span><span class="freshness-text">' + timeText;
+  if (level === 'stale') {
+    var cta = FRESHNESS_CTA[metricKey];
+    if (cta) {
+      html += ' · <span class="freshness-cta" onclick="event.stopPropagation()">' + cta.text + '</span>';
+    }
+  }
+  html += '</span>';
+  el.innerHTML = html;
+
+  // Attach CTA click handler
+  if (level === 'stale') {
+    var ctaEl = el.querySelector('.freshness-cta');
+    var ctaDef = FRESHNESS_CTA[metricKey];
+    if (ctaEl && ctaDef && ctaDef.action) {
+      ctaEl.onclick = function(e) { e.stopPropagation(); ctaDef.action(); };
+    }
+  }
+
+  // Add stale card treatment
+  var card = el.closest('.driver-card');
+  if (card) {
+    card.classList.toggle('data-stale', level === 'stale');
+  }
+}
+
+function renderSyncBanner(timestamps) {
+  var banner = document.getElementById('sync-banner');
+  if (!banner) return;
+  var hkMetrics = ['heart_rate', 'sleep', 'steps'];
+  var allStale = hkMetrics.every(function(key) {
+    var ts = timestamps[key];
+    if (!ts) return true;
+    var level = getFreshnessLevel(key, ts);
+    return level === 'warning' || level === 'stale';
+  });
+  banner.classList.toggle('visible', allStale);
+  if (allStale) {
+    var textEl = document.getElementById('sync-banner-text');
+    if (textEl) {
+      // Query health_sync_log for last sync info
+      supabaseRequest(
+        '/rest/v1/health_sync_log?select=sync_completed_at,device_name&user_id=eq.' + currentUser.id
+        + '&sync_status=eq.completed&order=sync_completed_at.desc&limit=1',
+        'GET', null, currentSession.access_token
+      ).then(function(rows) {
+        if (rows && rows.length > 0 && rows[0].sync_completed_at) {
+          var ago = formatRelativeTime(rows[0].sync_completed_at);
+          var device = rows[0].device_name ? ' from ' + rows[0].device_name : '';
+          textEl.textContent = 'Last sync ' + ago + device + '. Open HealthBite to refresh your data.';
+        }
+      }).catch(function() {});
+    }
+  }
+}
+
+function renderVitalityConfidence(timestamps) {
+  var el = document.getElementById('va-confidence');
+  if (!el) return;
+  var keys = ['heart_rate', 'sleep', 'steps', 'weight', 'strength', 'vo2max', 'bloodwork'];
+  var maxHours = 0;
+  var staleCount = 0;
+  keys.forEach(function(key) {
+    if (!timestamps[key]) return;
+    var hours = (Date.now() - new Date(timestamps[key]).getTime()) / (1000 * 60 * 60);
+    if (hours > maxHours) maxHours = hours;
+    var level = getFreshnessLevel(key, timestamps[key]);
+    if (level === 'warning' || level === 'stale') staleCount++;
+  });
+  if (staleCount === 0) {
+    el.textContent = '';
+    el.className = 'vitality-confidence';
+    return;
+  }
+  if (maxHours > 168) {
+    el.textContent = 'Some data is over a week old \u2014 scores may not reflect current health';
+    el.className = 'vitality-confidence amber';
+  } else {
+    var daysOld = Math.ceil(maxHours / 24);
+    el.textContent = 'Based on data up to ' + daysOld + ' day' + (daysOld > 1 ? 's' : '') + ' old';
+    el.className = 'vitality-confidence';
+  }
 }
 
 // ── LOAD DASHBOARD DATA ──
@@ -645,6 +803,7 @@ async function loadDashboardData() {
 
   var sex = (window.userProfileData && window.userProfileData.sex) || 'male';
   var metrics = { hr: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
+  var timestamps = {};
 
   // 1. Health data (last 14 days for context)
   try {
@@ -708,7 +867,18 @@ async function loadDashboardData() {
 
       // HR
       var hrRows = (byType['resting_heart_rate'] || []).concat(byType['heart_rate'] || []);
-      if (hrRows.length > 0) metrics.hr = Math.round(parseFloat(hrRows[0].value));
+      if (hrRows.length > 0) {
+        metrics.hr = Math.round(parseFloat(hrRows[0].value));
+        timestamps.heart_rate = hrRows[0].recorded_at;
+      }
+
+      // Timestamps for sleep and steps
+      if (sleepRows.length > 0 && sessions && sessions.length > 0) {
+        timestamps.sleep = new Date(sessions[0].endTime).toISOString();
+      }
+      if (stepsRows.length > 0) {
+        timestamps.steps = stepsRows[0].start_date || stepsRows[0].recorded_at;
+      }
 
     }
   } catch(e) { console.error('Health error:', e); }
@@ -757,6 +927,7 @@ async function loadDashboardData() {
       var percentiles = strengthTests.filter(function(t) { return t.percentile != null; }).map(function(t) { return parseFloat(t.percentile); });
       var avgPctl = percentiles.length > 0 ? Math.round(percentiles.reduce(function(s, p) { return s + p; }, 0) / percentiles.length) : 50;
       metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, tests: strengthTests };
+      timestamps.strength = strengthTests[0].tested_at;
     } else {
       metrics.strengthData = null;
     }
@@ -770,6 +941,14 @@ async function loadDashboardData() {
       metrics.weightVal = Math.round(weightKg * 2.205);
       metrics.weightScore = scoreWeight(weightKg, heightCm);
     }
+    // Get weight timestamp from latest weight log
+    var weightLogs = await supabaseRequest(
+      '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=1',
+      'GET', null, token
+    );
+    if (weightLogs && !weightLogs.error && weightLogs.length > 0) {
+      timestamps.weight = weightLogs[0].logged_at;
+    }
   } catch(e) { /* weight/height not available */ }
 
   // 5. VO2 Max — latest fitness test result
@@ -780,6 +959,7 @@ async function loadDashboardData() {
     );
     if (vo2Tests && !vo2Tests.error && vo2Tests.length > 0) {
       metrics.vo2max = parseFloat(vo2Tests[0].raw_value);
+      timestamps.vo2max = vo2Tests[0].tested_at;
     }
   } catch(e) { console.error('VO2 fetch error:', e); }
 
@@ -819,6 +999,7 @@ async function loadDashboardData() {
         if (key && sample.value !== null) bw[key] = parseFloat(sample.value);
       });
       metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
+      if (metrics.bloodwork) timestamps.bloodwork = bwData[0].test_date;
       console.log('[Healix] bloodwork mapped:', JSON.stringify(bw));
     }
   } catch(e) { console.error('Bloodwork fetch error:', e); metrics.bloodwork = null; }
@@ -838,6 +1019,23 @@ async function loadDashboardData() {
     txt.textContent = sentence;
     bar.style.display = 'flex';
   }
+
+  // Freshness indicators
+  renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', timestamps.heart_rate);
+  renderFreshnessIndicator('drv-sleep-freshness', 'sleep', timestamps.sleep);
+  renderFreshnessIndicator('drv-weight-freshness', 'weight', timestamps.weight);
+  renderFreshnessIndicator('drv-strength-freshness', 'strength', timestamps.strength);
+  renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', timestamps.vo2max);
+  renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', timestamps.bloodwork);
+  renderSyncBanner(timestamps);
+  renderVitalityConfidence(timestamps);
+
+  // Cache dashboard data in localStorage for instant render on next visit
+  try {
+    localStorage.setItem('healix_dashboard_cache', JSON.stringify({
+      metrics: metrics, timestamps: timestamps, result: result, realAge: realAge, cachedAt: Date.now()
+    }));
+  } catch(e) { /* localStorage full or unavailable */ }
 }
 
 function escapeHtml(str) {
