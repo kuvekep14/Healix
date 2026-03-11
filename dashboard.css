@@ -1,23 +1,6 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --cream: #F5F0E8;
-  --cream-dim: rgba(245,240,232,0.5);
-  --dark: #0B0B0B;
-  --dark-2: #0F0F0F;
-  --dark-3: #141414;
-  --dark-4: #1A1A1A;
-  --gold: #B8975A;
-  --gold-light: #D4B483;
-  --gold-faint: rgba(184,151,90,0.08);
-  --gold-border: rgba(184,151,90,0.18);
-  --muted: rgba(245,240,232,0.28);
-  --up: #6fcf8a;
-  --down: #e07070;
-  --neutral: rgba(245,240,232,0.4);
   --sidebar-w: 220px;
   --topbar-h: 60px;
-  --F: 'Cormorant Garamond', serif;
-  --B: 'DM Sans', sans-serif;
 }
 html, body { height: 100%; overflow: hidden; }
 body { font-family: var(--B); background: var(--dark); color: var(--cream); display: flex; }
@@ -137,11 +120,11 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   text-transform: uppercase; padding: 2px 8px; border-radius: 0;
   font-weight: 500;
 }
-.pct-elite { background: rgba(111,207,138,.15); color: #6fcf8a; border: 1px solid rgba(111,207,138,.3); }
+.pct-elite { background: rgba(111,207,138,.15); color: var(--up); border: 1px solid rgba(111,207,138,.3); }
 .pct-good  { background: rgba(184,151,90,.15);  color: var(--gold); border: 1px solid var(--gold-border); }
 .pct-avg   { background: rgba(245,240,232,.07); color: var(--cream-dim); border: 1px solid rgba(245,240,232,.1); }
-.pct-low   { background: rgba(224,112,112,.1);  color: #e07070; border: 1px solid rgba(224,112,112,.2); }
-.pct-poor  { background: rgba(224,112,112,.18); color: #e07070; border: 1px solid rgba(224,112,112,.3); }
+.pct-low   { background: rgba(224,112,112,.1);  color: var(--down); border: 1px solid rgba(224,112,112,.2); }
+.pct-poor  { background: rgba(224,112,112,.18); color: var(--down); border: 1px solid rgba(224,112,112,.3); }
 
 /* ── VITALITY AGE DASHBOARD ── */
 .vitality-page {
@@ -288,9 +271,9 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .macro-bar-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--cream-dim); margin-bottom: 4px; }
 .macro-bar-track { height: 3px; background: var(--dark-3); }
 .macro-bar-fill { height: 100%; background: var(--gold); transition: width .5s; }
-.macro-bar-fill.protein { background: #6fcf8a; }
-.macro-bar-fill.carbs { background: #B8975A; }
-.macro-bar-fill.fat { background: #e0a070; }
+.macro-bar-fill.protein { background: var(--up); }
+.macro-bar-fill.carbs { background: var(--gold); }
+.macro-bar-fill.fat { background: var(--warn); }
 
 /* Micro nutrients */
 .micro-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 20px; }
@@ -398,7 +381,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   padding: 3px 8px; flex-shrink: 0;
 }
 .risk-low { background: rgba(111,207,138,.12); color: var(--up); }
-.risk-moderate { background: rgba(224,160,112,.12); color: #e0a070; }
+.risk-moderate { background: rgba(224,160,112,.12); color: var(--warn); }
 .risk-high { background: rgba(224,112,112,.12); color: var(--down); }
 .insight-title { font-size: 13px; color: var(--cream); font-weight: 400; }
 .insight-body { font-size: 12px; color: var(--cream-dim); line-height: 1.6; }
@@ -431,7 +414,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   color: var(--cream); font-family: var(--B); font-size: 14px;
   padding: 12px 16px; outline: none; transition: border-color .2s;
 }
-.modal-input:focus { border-color: rgba(184,151,90,.5); }
+.modal-input:focus { border-color: var(--gold-focus); }
 .modal-row { display: flex; gap: 12px; }
 .modal-row .modal-field { flex: 1; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; }

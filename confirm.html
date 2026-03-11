@@ -6,22 +6,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co https://nuihvxluxdpdjgkvtdih.supabase.co http://127.0.0.1:54321; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Check Your Email</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --cream: #F5F0E8;
-  --cream-dim: rgba(245,240,232,0.5);
-  --dark: #0B0B0B;
-  --dark-2: #0F0F0F;
-  --dark-3: #141414;
-  --gold: #B8975A;
-  --gold-light: #D4B483;
-  --gold-faint: rgba(184,151,90,0.08);
-  --gold-border: rgba(184,151,90,0.18);
-  --muted: rgba(245,240,232,0.3);
-  --F: 'Cormorant Garamond', serif;
-  --B: 'DM Sans', sans-serif;
-}
 html, body { height: 100%; }
 body {
   font-family: var(--B); background: var(--dark); color: var(--cream);
@@ -109,8 +95,8 @@ main {
 /* Alert */
 .form-alert { padding: 12px 16px; border: 1px solid; font-size: 13px; line-height: 1.5; margin-bottom: 20px; display: none; text-align: left; }
 .form-alert.show { display: block; }
-.form-alert.success { border-color: rgba(111,207,138,.4); background: rgba(111,207,138,.06); color: #6fcf8a; }
-.form-alert.error { border-color: rgba(224,112,112,.4); background: rgba(224,112,112,.06); color: #e07070; }
+.form-alert.success { border-color: var(--success-border); background: var(--success-bg); color: var(--up); }
+.form-alert.error { border-color: var(--error-border); background: var(--error-bg); color: var(--error); }
 
 @media (max-width: 600px) {
   nav { padding: 20px 24px; }
