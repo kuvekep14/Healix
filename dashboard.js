@@ -2165,7 +2165,8 @@ async function loadDocumentsPage() {
       var tag = doc.document_type === 'blood_work' ? 'Bloodwork' : doc.file_type === 'application/pdf' ? 'PDF' : 'Image';
       var statusStyle = doc.status === 'error' ? 'background:rgba(220,50,50,0.15);color:#e55' : doc.status === 'processing' ? 'background:rgba(184,151,90,0.12);color:var(--gold-light)' : '';
       var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:#e55;margin-top:4px">Processing error</div>' : doc.status === 'processing' ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">Processing…</div>' : '';
-      return '<div class="doc-card" style="' + statusStyle + '">'
+      return '<div class="doc-card" style="position:relative;' + statusStyle + '">'
+        + '<button class="doc-card-delete" onclick="event.stopPropagation();deleteDocument(\'' + doc.id + '\',\'' + (doc.file_url || '').replace(/'/g, "\\'") + '\')" title="Delete document">&times;</button>'
         + '<div class="doc-card-icon">' + icon + '</div>'
         + '<div class="doc-card-name">' + (doc.title || 'Untitled') + '</div>'
         + '<div class="doc-card-meta">' + sizeStr + ' · ' + dateStr + '</div>'
@@ -2270,6 +2271,32 @@ async function handleDocUpload(input) {
   input.value = '';
   // Refresh from server
   loadDocumentsPage();
+}
+
+async function deleteDocument(uploadId, filePath) {
+  if (!confirm('Delete this document? This cannot be undone.')) return;
+  try {
+    // Delete file from storage bucket
+    if (filePath) {
+      await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + filePath, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': 'Bearer ' + currentSession.access_token,
+          'apikey': SUPABASE_ANON_KEY
+        }
+      });
+    }
+    // Delete row from uploads table
+    await supabaseRequest(
+      '/rest/v1/uploads?id=eq.' + uploadId,
+      'DELETE', null, currentSession.access_token
+    );
+    // Refresh the documents list
+    loadDocumentsPage();
+  } catch(e) {
+    console.error('Delete document error:', e);
+    alert('Failed to delete document. Please try again.');
+  }
 }
 
 // ── FAMILY HISTORY ──
