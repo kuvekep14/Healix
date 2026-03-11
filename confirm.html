@@ -3,25 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co https://nuihvxluxdpdjgkvtdih.supabase.co http://127.0.0.1:54321; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Check Your Email</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --cream: #F5F0E8;
-  --cream-dim: rgba(245,240,232,0.5);
-  --dark: #0B0B0B;
-  --dark-2: #0F0F0F;
-  --dark-3: #141414;
-  --gold: #B8975A;
-  --gold-light: #D4B483;
-  --gold-faint: rgba(184,151,90,0.08);
-  --gold-border: rgba(184,151,90,0.18);
-  --muted: rgba(245,240,232,0.3);
-  --F: 'Cormorant Garamond', serif;
-  --B: 'DM Sans', sans-serif;
-}
 html, body { height: 100%; }
 body {
   font-family: var(--B); background: var(--dark); color: var(--cream);
@@ -109,8 +95,8 @@ main {
 /* Alert */
 .form-alert { padding: 12px 16px; border: 1px solid; font-size: 13px; line-height: 1.5; margin-bottom: 20px; display: none; text-align: left; }
 .form-alert.show { display: block; }
-.form-alert.success { border-color: rgba(111,207,138,.4); background: rgba(111,207,138,.06); color: #6fcf8a; }
-.form-alert.error { border-color: rgba(224,112,112,.4); background: rgba(224,112,112,.06); color: #e07070; }
+.form-alert.success { border-color: var(--success-border); background: var(--success-bg); color: var(--up); }
+.form-alert.error { border-color: var(--error-border); background: var(--error-bg); color: var(--error); }
 
 @media (max-width: 600px) {
   nav { padding: 20px 24px; }
@@ -166,12 +152,8 @@ main {
   </div>
 </main>
 
+<script src="config.js"></script>
 <script>
-// ── SUPABASE CONFIG ──
-// TODO: Replace with your actual Supabase project URL and anon key
-var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
-
 // Show the email address they signed up with
 var pendingEmail = localStorage.getItem('healix_pending_email');
 if (pendingEmail) {
@@ -230,25 +212,122 @@ function startCooldown(seconds) {
 }
 
 // Handle the confirmation redirect from Supabase
-// Supabase appends #access_token=... to the URL after email confirmation
+// Two possible flows:
+//   1. Implicit: #access_token=... in URL hash
+//   2. PKCE:     ?code=... in URL query params (newer Supabase default)
+
+function storeSessionAndRedirect(accessToken, refreshToken, expiresIn, user) {
+  localStorage.setItem('healix_session', JSON.stringify({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    expires_at: Date.now() + (expiresIn || 3600) * 1000,
+    user: user || null
+  }));
+  localStorage.removeItem('healix_pending_email');
+  // Clear tokens from URL to prevent exposure in browser history
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+  // Create profile row if it doesn't exist yet
+  if (accessToken) {
+    createProfileIfMissing(accessToken, user).then(function() {
+      window.location.href = 'dashboard.html';
+    }).catch(function() {
+      window.location.href = 'dashboard.html';
+    });
+  } else {
+    window.location.href = 'dashboard.html';
+  }
+}
+
+function createProfileIfMissing(token, user) {
+  // Check if a profile row exists; if not, create one
+  return fetch(SUPABASE_URL + '/rest/v1/profiles?auth_user_id=eq.' + (user && user.id ? user.id : 'unknown') + '&limit=1', {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': 'Bearer ' + token
+    }
+  }).then(function(r) { return r.json(); }).then(function(rows) {
+    if (rows && rows.length > 0) return; // profile exists
+    // Get user info to populate profile
+    return fetch(SUPABASE_URL + '/auth/v1/user', {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + token
+      }
+    }).then(function(r) { return r.json(); }).then(function(userData) {
+      if (!userData || !userData.id) return;
+      var fullName = (userData.user_metadata && userData.user_metadata.full_name) || '';
+      var parts = fullName.split(' ');
+      return fetch(SUPABASE_URL + '/rest/v1/profiles', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + token,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          auth_user_id: userData.id,
+          first_name: parts[0] || '',
+          last_name: parts.slice(1).join(' ') || '',
+          email: userData.email || ''
+        })
+      });
+    });
+  });
+}
+
+// Flow 1: Implicit — #access_token in hash
 var hash = window.location.hash;
 if (hash && hash.includes('access_token')) {
   var params = new URLSearchParams(hash.replace('#', '?'));
   var accessToken = params.get('access_token');
   var refreshToken = params.get('refresh_token');
   if (accessToken) {
-    localStorage.setItem('healix_session', JSON.stringify({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      expires_at: Date.now() + 3600 * 1000
-    }));
-    localStorage.removeItem('healix_pending_email');
-    // Clear tokens from URL to prevent exposure in browser history
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-    window.location.href = 'dashboard.html';
+    storeSessionAndRedirect(accessToken, refreshToken, 3600, null);
   }
+}
+
+// Flow 2: PKCE — ?code= in query params
+var queryParams = new URLSearchParams(window.location.search);
+var authCode = queryParams.get('code');
+if (authCode) {
+  fetch(SUPABASE_URL + '/auth/v1/token?grant_type=pkce', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ auth_code: authCode })
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.access_token) {
+      storeSessionAndRedirect(data.access_token, data.refresh_token, data.expires_in, data.user);
+    } else {
+      // PKCE exchange failed — try as authorization_code grant
+      return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=authorization_code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ code: authCode })
+      }).then(function(r) { return r.json(); }).then(function(data2) {
+        if (data2.access_token) {
+          storeSessionAndRedirect(data2.access_token, data2.refresh_token, data2.expires_in, data2.user);
+        } else {
+          showAlert('Email confirmed but auto-login failed. Please sign in manually.', 'error');
+          console.error('PKCE exchange error:', data, data2);
+        }
+      });
+    }
+  }).catch(function(err) {
+    showAlert('Email confirmed but auto-login failed. Please sign in manually.', 'error');
+    console.error('PKCE fetch error:', err);
+  });
 }
 </script>
 </body>

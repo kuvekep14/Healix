@@ -3,26 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co https://nuihvxluxdpdjgkvtdih.supabase.co http://127.0.0.1:54321; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Sign In</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --cream: #F5F0E8;
-  --cream-dim: rgba(245,240,232,0.5);
-  --dark: #0B0B0B;
-  --dark-2: #0F0F0F;
-  --dark-3: #141414;
-  --gold: #B8975A;
-  --gold-light: #D4B483;
-  --gold-faint: rgba(184,151,90,0.08);
-  --gold-border: rgba(184,151,90,0.18);
-  --muted: rgba(245,240,232,0.3);
-  --error: #e07070;
-  --F: 'Cormorant Garamond', serif;
-  --B: 'DM Sans', sans-serif;
-}
 html, body { height: 100%; }
 body {
   font-family: var(--B); background: var(--dark); color: var(--cream);
@@ -79,7 +64,7 @@ body {
   padding: 14px 18px; outline: none; transition: border-color .2s;
 }
 .field-input::placeholder { color: var(--muted); }
-.field-input:focus { border-color: rgba(184,151,90,.5); }
+.field-input:focus { border-color: var(--gold-focus); }
 .field-input.error { border-color: var(--error); }
 .field-error { font-size: 11px; color: var(--error); margin-top: 6px; display: none; }
 .field-error.show { display: block; }
@@ -97,9 +82,10 @@ body {
   transition: background .25s, transform .2s, box-shadow .25s;
   margin-top: 8px; position: relative;
 }
-.submit-btn:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 10px 36px rgba(184,151,90,.25); }
+.submit-btn:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 10px 36px var(--gold-glow); }
 .submit-btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
 .submit-btn .btn-spinner { display: none; width: 14px; height: 14px; border: 2px solid rgba(11,11,11,.3); border-top-color: var(--dark); border-radius: 50%; animation: spin .6s linear infinite; margin: 0 auto; }
+
 .submit-btn.loading .btn-text { display: none; }
 .submit-btn.loading .btn-spinner { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -107,8 +93,8 @@ body {
 /* Alert */
 .form-alert { padding: 14px 18px; border: 1px solid; font-size: 13px; line-height: 1.5; margin-bottom: 20px; display: none; }
 .form-alert.show { display: block; }
-.form-alert.error { border-color: rgba(224,112,112,.4); background: rgba(224,112,112,.06); color: #e07070; }
-.form-alert.success { border-color: rgba(111,207,138,.4); background: rgba(111,207,138,.06); color: #6fcf8a; }
+.form-alert.error { border-color: var(--error-border); background: var(--error-bg); color: var(--error); }
+.form-alert.success { border-color: var(--success-border); background: var(--success-bg); color: var(--up); }
 
 /* Divider */
 .divider { display: flex; align-items: center; gap: 14px; margin: 24px 0; }
@@ -209,12 +195,8 @@ body {
   </div>
 </div>
 
+<script src="config.js"></script>
 <script>
-// ── SUPABASE CONFIG ──
-// TODO: Replace with your actual Supabase project URL and anon key
-var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
-
 function supabaseRequest(endpoint, method, body) {
   return fetch(SUPABASE_URL + endpoint, {
     method: method || 'POST',

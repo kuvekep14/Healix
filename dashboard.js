@@ -1,6 +1,5 @@
 // ── SUPABASE ──
-var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
-var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
+// SUPABASE_URL and SUPABASE_ANON_KEY are set by config.js (loaded before this file)
 
 var currentUser = null, currentSession = null, currentTimeframe = 7;
 
@@ -129,10 +128,54 @@ async function init() {
           document.getElementById('sb-avatar').textContent = profileName.charAt(0).toUpperCase();
           document.getElementById('page-title').textContent = greet() + ', ' + profileData[0].first_name;
         }
+      } else {
+        // No profile row exists — create one so PATCH calls work later
+        var fullName = (user.user_metadata && user.user_metadata.full_name) || '';
+        var nameParts = fullName.split(' ');
+        try {
+          await supabaseRequest('/rest/v1/profiles', 'POST', {
+            auth_user_id: user.id,
+            first_name: nameParts[0] || '',
+            last_name: nameParts.slice(1).join(' ') || '',
+            email: user.email || ''
+          }, session.access_token, { 'Prefer': 'return=representation' });
+          console.log('[Healix] profile row created for new user');
+          // Re-fetch so userProfileData is populated
+          var newProfile = await supabaseRequest(
+            '/rest/v1/profiles?auth_user_id=eq.' + user.id + '&limit=1',
+            'GET', null, session.access_token
+          );
+          if (newProfile && newProfile.length > 0) {
+            window.userProfileData = newProfile[0];
+            populateProfileForm(newProfile[0]);
+          }
+        } catch(e) { console.warn('Profile creation error:', e); }
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
     loadMedicalProfileUI();
+
+    // Render from cache instantly, then refresh from server
+    try {
+      var cached = localStorage.getItem('healix_dashboard_cache');
+      if (cached) {
+        var c = JSON.parse(cached);
+        // Use cache if less than 10 minutes old
+        if (c.cachedAt && (Date.now() - c.cachedAt < 10 * 60 * 1000)) {
+          renderVitalityAge(c.result, c.realAge);
+          renderDriverCards(c.metrics, c.result);
+          if (c.timestamps) {
+            renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', c.timestamps.heart_rate);
+            renderFreshnessIndicator('drv-sleep-freshness', 'sleep', c.timestamps.sleep);
+            renderFreshnessIndicator('drv-weight-freshness', 'weight', c.timestamps.weight);
+            renderFreshnessIndicator('drv-strength-freshness', 'strength', c.timestamps.strength);
+            renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', c.timestamps.vo2max);
+            renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', c.timestamps.bloodwork);
+          }
+        }
+      }
+    } catch(e) { /* cache parse error, ignore */ }
+
     loadDashboardData();
     loadFamilyHistoryForm();
     setWeightDateDefault();
@@ -161,6 +204,143 @@ function showPage(id, btn) {
   if (id === 'meals') { loadMealsPage(); }
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
+}
+
+// ── DATA FRESHNESS ──
+var FRESHNESS_THRESHOLDS = {
+  heart_rate:  { fresh: 24, warning: 48, stale: 72 },
+  sleep:       { fresh: 36, warning: 60, stale: 96 },
+  steps:       { fresh: 18, warning: 36, stale: 72 },
+  weight:      { fresh: 168, warning: 504, stale: 720 },
+  strength:    { fresh: 720, warning: 2160, stale: 4320 },
+  vo2max:      { fresh: 720, warning: 2160, stale: 4320 },
+  bloodwork:   { fresh: 2160, warning: 4320, stale: 8760 }
+};
+
+var FRESHNESS_CTA = {
+  heart_rate: { text: 'Open HealthBite to sync', href: null },
+  sleep:      { text: 'Open HealthBite to sync', href: null },
+  steps:      { text: 'Open HealthBite to sync', href: null },
+  weight:     { text: 'Log new weight', action: function() { openModal('weight-modal'); } },
+  strength:   { text: 'Log a new test', action: function() { showPage('strength', null); } },
+  vo2max:     { text: 'Log a new test', action: function() { showPage('strength', null); } },
+  bloodwork:  { text: 'Upload new labs', action: function() { showPage('documents', null); } }
+};
+
+function getFreshnessLevel(metricKey, timestamp) {
+  if (!timestamp) return null;
+  var thresholds = FRESHNESS_THRESHOLDS[metricKey];
+  if (!thresholds) return null;
+  var hoursAgo = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60);
+  if (hoursAgo <= thresholds.fresh) return 'fresh';
+  if (hoursAgo <= thresholds.warning) return 'warning';
+  return 'stale';
+}
+
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return '';
+  var ms = Date.now() - new Date(timestamp).getTime();
+  var mins = Math.floor(ms / 60000);
+  if (mins < 60) return mins + 'm ago';
+  var hours = Math.floor(mins / 60);
+  if (hours < 24) return hours + 'h ago';
+  var days = Math.floor(hours / 24);
+  if (days < 14) return days + 'd ago';
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function renderFreshnessIndicator(elementId, metricKey, timestamp) {
+  var el = document.getElementById(elementId);
+  if (!el) return;
+  if (!timestamp) { el.innerHTML = ''; return; }
+  var level = getFreshnessLevel(metricKey, timestamp);
+  if (!level || level === 'fresh') {
+    el.innerHTML = '<span class="freshness-dot fresh"></span><span class="freshness-text">' + formatRelativeTime(timestamp) + '</span>';
+    return;
+  }
+  var timeText = formatRelativeTime(timestamp);
+  var html = '<span class="freshness-dot ' + level + '"></span><span class="freshness-text">' + timeText;
+  if (level === 'stale') {
+    var cta = FRESHNESS_CTA[metricKey];
+    if (cta) {
+      html += ' · <span class="freshness-cta" onclick="event.stopPropagation()">' + cta.text + '</span>';
+    }
+  }
+  html += '</span>';
+  el.innerHTML = html;
+
+  // Attach CTA click handler
+  if (level === 'stale') {
+    var ctaEl = el.querySelector('.freshness-cta');
+    var ctaDef = FRESHNESS_CTA[metricKey];
+    if (ctaEl && ctaDef && ctaDef.action) {
+      ctaEl.onclick = function(e) { e.stopPropagation(); ctaDef.action(); };
+    }
+  }
+
+  // Add stale card treatment
+  var card = el.closest('.driver-card');
+  if (card) {
+    card.classList.toggle('data-stale', level === 'stale');
+  }
+}
+
+function renderSyncBanner(timestamps) {
+  var banner = document.getElementById('sync-banner');
+  if (!banner) return;
+  var hkMetrics = ['heart_rate', 'sleep', 'steps'];
+  var allStale = hkMetrics.every(function(key) {
+    var ts = timestamps[key];
+    if (!ts) return true;
+    var level = getFreshnessLevel(key, ts);
+    return level === 'warning' || level === 'stale';
+  });
+  banner.classList.toggle('visible', allStale);
+  if (allStale) {
+    var textEl = document.getElementById('sync-banner-text');
+    if (textEl) {
+      // Query health_sync_log for last sync info
+      supabaseRequest(
+        '/rest/v1/health_sync_log?select=sync_completed_at,device_name&user_id=eq.' + currentUser.id
+        + '&sync_status=eq.completed&order=sync_completed_at.desc&limit=1',
+        'GET', null, currentSession.access_token
+      ).then(function(rows) {
+        if (rows && rows.length > 0 && rows[0].sync_completed_at) {
+          var ago = formatRelativeTime(rows[0].sync_completed_at);
+          var device = rows[0].device_name ? ' from ' + rows[0].device_name : '';
+          textEl.textContent = 'Last sync ' + ago + device + '. Open HealthBite to refresh your data.';
+        }
+      }).catch(function() {});
+    }
+  }
+}
+
+function renderVitalityConfidence(timestamps) {
+  var el = document.getElementById('va-confidence');
+  if (!el) return;
+  var keys = ['heart_rate', 'sleep', 'steps', 'weight', 'strength', 'vo2max', 'bloodwork'];
+  var maxHours = 0;
+  var staleCount = 0;
+  keys.forEach(function(key) {
+    if (!timestamps[key]) return;
+    var hours = (Date.now() - new Date(timestamps[key]).getTime()) / (1000 * 60 * 60);
+    if (hours > maxHours) maxHours = hours;
+    var level = getFreshnessLevel(key, timestamps[key]);
+    if (level === 'warning' || level === 'stale') staleCount++;
+  });
+  if (staleCount === 0) {
+    el.textContent = '';
+    el.className = 'vitality-confidence';
+    return;
+  }
+  if (maxHours > 168) {
+    el.textContent = 'Some data is over a week old \u2014 scores may not reflect current health';
+    el.className = 'vitality-confidence amber';
+  } else {
+    var daysOld = Math.ceil(maxHours / 24);
+    el.textContent = 'Based on data up to ' + daysOld + ' day' + (daysOld > 1 ? 's' : '') + ' old';
+    el.className = 'vitality-confidence';
+  }
 }
 
 // ── LOAD DASHBOARD DATA ──
@@ -343,11 +523,9 @@ function calcVitalityAge(metrics) {
     scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.10 });
   }
 
-  // Sleep — 15%
-  var slpScore = scoreSleep(metrics.sleepData);
-  if (slpScore !== null) {
-    scores.push({ name: 'sleep', label: 'Sleep', score: slpScore, weight: 0.15 });
-  }
+  // Sleep — displayed on dashboard but NOT included in vitality age composite.
+  // Sleep is a lifestyle behavior that modulates HR, recovery, bloodwork, and strength
+  // rather than an independent biomarker. Kept as a driver card for visibility.
 
   // Aerobic — 5% (VO2 max from fitness test)
   if (metrics.vo2max !== null) {
@@ -625,6 +803,7 @@ async function loadDashboardData() {
 
   var sex = (window.userProfileData && window.userProfileData.sex) || 'male';
   var metrics = { hr: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
+  var timestamps = {};
 
   // 1. Health data (last 14 days for context)
   try {
@@ -688,7 +867,18 @@ async function loadDashboardData() {
 
       // HR
       var hrRows = (byType['resting_heart_rate'] || []).concat(byType['heart_rate'] || []);
-      if (hrRows.length > 0) metrics.hr = Math.round(parseFloat(hrRows[0].value));
+      if (hrRows.length > 0) {
+        metrics.hr = Math.round(parseFloat(hrRows[0].value));
+        timestamps.heart_rate = hrRows[0].recorded_at;
+      }
+
+      // Timestamps for sleep and steps
+      if (sleepRows.length > 0 && sessions && sessions.length > 0) {
+        timestamps.sleep = new Date(sessions[0].endTime).toISOString();
+      }
+      if (stepsRows.length > 0) {
+        timestamps.steps = stepsRows[0].start_date || stepsRows[0].recorded_at;
+      }
 
     }
   } catch(e) { console.error('Health error:', e); }
@@ -737,6 +927,7 @@ async function loadDashboardData() {
       var percentiles = strengthTests.filter(function(t) { return t.percentile != null; }).map(function(t) { return parseFloat(t.percentile); });
       var avgPctl = percentiles.length > 0 ? Math.round(percentiles.reduce(function(s, p) { return s + p; }, 0) / percentiles.length) : 50;
       metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, tests: strengthTests };
+      timestamps.strength = strengthTests[0].tested_at;
     } else {
       metrics.strengthData = null;
     }
@@ -750,6 +941,14 @@ async function loadDashboardData() {
       metrics.weightVal = Math.round(weightKg * 2.205);
       metrics.weightScore = scoreWeight(weightKg, heightCm);
     }
+    // Get weight timestamp from latest weight log
+    var weightLogs = await supabaseRequest(
+      '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=1',
+      'GET', null, token
+    );
+    if (weightLogs && !weightLogs.error && weightLogs.length > 0) {
+      timestamps.weight = weightLogs[0].logged_at;
+    }
   } catch(e) { /* weight/height not available */ }
 
   // 5. VO2 Max — latest fitness test result
@@ -760,6 +959,7 @@ async function loadDashboardData() {
     );
     if (vo2Tests && !vo2Tests.error && vo2Tests.length > 0) {
       metrics.vo2max = parseFloat(vo2Tests[0].raw_value);
+      timestamps.vo2max = vo2Tests[0].tested_at;
     }
   } catch(e) { console.error('VO2 fetch error:', e); }
 
@@ -799,6 +999,7 @@ async function loadDashboardData() {
         if (key && sample.value !== null) bw[key] = parseFloat(sample.value);
       });
       metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
+      if (metrics.bloodwork) timestamps.bloodwork = bwData[0].test_date;
       console.log('[Healix] bloodwork mapped:', JSON.stringify(bw));
     }
   } catch(e) { console.error('Bloodwork fetch error:', e); metrics.bloodwork = null; }
@@ -818,6 +1019,23 @@ async function loadDashboardData() {
     txt.textContent = sentence;
     bar.style.display = 'flex';
   }
+
+  // Freshness indicators
+  renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', timestamps.heart_rate);
+  renderFreshnessIndicator('drv-sleep-freshness', 'sleep', timestamps.sleep);
+  renderFreshnessIndicator('drv-weight-freshness', 'weight', timestamps.weight);
+  renderFreshnessIndicator('drv-strength-freshness', 'strength', timestamps.strength);
+  renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', timestamps.vo2max);
+  renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', timestamps.bloodwork);
+  renderSyncBanner(timestamps);
+  renderVitalityConfidence(timestamps);
+
+  // Cache dashboard data in localStorage for instant render on next visit
+  try {
+    localStorage.setItem('healix_dashboard_cache', JSON.stringify({
+      metrics: metrics, timestamps: timestamps, result: result, realAge: realAge, cachedAt: Date.now()
+    }));
+  } catch(e) { /* localStorage full or unavailable */ }
 }
 
 function escapeHtml(str) {
@@ -1841,7 +2059,8 @@ async function saveSupplement() {
 }
 
 async function removeSupplement(suppId) {
-  if (!confirm('Remove this supplement from your stack?')) return;
+  var confirmed = await confirmModal('Remove this supplement from your stack?', { title: 'Remove Supplement', confirmText: 'Remove', danger: true });
+  if (!confirmed) return;
   try {
     await supabaseRequest(
       '/rest/v1/user_supplements?id=eq.' + suppId,
@@ -1947,7 +2166,8 @@ async function loadDocumentsPage() {
       var tag = doc.document_type === 'blood_work' ? 'Bloodwork' : doc.file_type === 'application/pdf' ? 'PDF' : 'Image';
       var statusStyle = doc.status === 'error' ? 'background:rgba(220,50,50,0.15);color:#e55' : doc.status === 'processing' ? 'background:rgba(184,151,90,0.12);color:var(--gold-light)' : '';
       var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:#e55;margin-top:4px">Processing error</div>' : doc.status === 'processing' ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">Processing…</div>' : '';
-      return '<div class="doc-card" style="' + statusStyle + '">'
+      return '<div class="doc-card" style="position:relative;' + statusStyle + '">'
+        + '<button class="doc-card-delete" onclick="event.stopPropagation();deleteDocument(\'' + doc.id + '\',\'' + (doc.file_url || '').replace(/'/g, "\\'") + '\')" title="Delete document">&times;</button>'
         + '<div class="doc-card-icon">' + icon + '</div>'
         + '<div class="doc-card-name">' + (doc.title || 'Untitled') + '</div>'
         + '<div class="doc-card-meta">' + sizeStr + ' · ' + dateStr + '</div>'
@@ -2010,7 +2230,7 @@ async function handleDocUpload(input) {
         file_type: file.type,
         file_size: file.size,
         status: 'processing',
-        metadata: JSON.stringify({ original_filename: file.name })
+        metadata: { original_filename: file.name }
       }, currentSession.access_token, { 'Prefer': 'return=representation' });
 
       var upload_id = inserted && inserted[0] && inserted[0].id;
@@ -2052,6 +2272,33 @@ async function handleDocUpload(input) {
   input.value = '';
   // Refresh from server
   loadDocumentsPage();
+}
+
+async function deleteDocument(uploadId, filePath) {
+  var confirmed = await confirmModal('This document and its extracted data will be permanently deleted.', { title: 'Delete Document', confirmText: 'Delete', danger: true });
+  if (!confirmed) return;
+  try {
+    // Delete file from storage bucket
+    if (filePath) {
+      await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + filePath, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': 'Bearer ' + currentSession.access_token,
+          'apikey': SUPABASE_ANON_KEY
+        }
+      });
+    }
+    // Delete row from uploads table
+    await supabaseRequest(
+      '/rest/v1/uploads?id=eq.' + uploadId,
+      'DELETE', null, currentSession.access_token
+    );
+    // Refresh the documents list
+    loadDocumentsPage();
+  } catch(e) {
+    console.error('Delete document error:', e);
+    confirmModal('Failed to delete document. Please try again.', { title: 'Error', confirmText: 'OK', cancelText: '' });
+  }
 }
 
 // ── FAMILY HISTORY ──

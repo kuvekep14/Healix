@@ -1,0 +1,44 @@
+/* ── HEALIX THEME ──
+   Centralized design tokens. All pages import this file.
+   To tweak the theme, edit ONLY this file. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* ── Core palette ── */
+  --cream: #F5F0E8;
+  --cream-dim: rgba(245,240,232,0.5);
+  --cream-faint: rgba(245,240,232,0.08);
+
+  --dark: #0B0B0B;
+  --dark-2: #0F0F0F;
+  --dark-3: #141414;
+  --dark-4: #1A1A1A;
+
+  --gold: #B8975A;
+  --gold-light: #D4B483;
+  --gold-faint: rgba(184,151,90,0.08);
+  --gold-border: rgba(184,151,90,0.18);
+  --gold-focus: rgba(184,151,90,0.5);
+  --gold-glow: rgba(184,151,90,0.25);
+  --gold-hover: rgba(184,151,90,0.4);
+
+  --muted: rgba(245,240,232,0.3);
+  --neutral: rgba(245,240,232,0.4);
+
+  /* ── Status colors ── */
+  --up: #6fcf8a;
+  --down: #e07070;
+  --error: #e07070;
+  --warn: #e0a070;
+
+  /* ── Alert semantic tokens ── */
+  --error-border: rgba(224,112,112,0.4);
+  --error-bg: rgba(224,112,112,0.06);
+  --success-border: rgba(111,207,138,0.4);
+  --success-bg: rgba(111,207,138,0.06);
+
+  /* ── Typography ── */
+  --F: 'Cormorant Garamond', serif;
+  --B: 'DM Sans', sans-serif;
+}

@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co; img-src 'self' data:; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co https://nuihvxluxdpdjgkvtdih.supabase.co http://127.0.0.1:54321; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
@@ -86,6 +87,13 @@
     <div class="page active" id="page-dashboard">
       <div class="vitality-page">
 
+        <!-- Sync banner (shown when all HealthKit metrics are stale) -->
+        <div class="sync-banner" id="sync-banner">
+          <div class="sync-banner-dot"></div>
+          <div class="sync-banner-text" id="sync-banner-text">HealthBite hasn't synced recently. Open the app to refresh your data.</div>
+          <span class="sync-banner-cta">Open HealthBite</span>
+        </div>
+
         <!-- Hero: Vitality Age -->
         <div class="vitality-hero">
           <div class="vitality-hero-inner">
@@ -113,6 +121,9 @@
           </div>
         </div>
 
+        <!-- Vitality Age data confidence line -->
+        <div class="vitality-confidence" id="va-confidence"></div>
+
         <!-- AI sentence -->
         <div class="vitality-insight-bar" id="va-insight-bar" style="display:none">
           <span class="vitality-insight-icon">◈</span>
@@ -127,6 +138,7 @@
             <div class="driver-val" id="drv-heart-val">—</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
             <div class="driver-status" id="drv-heart-status"></div>
+            <div class="driver-freshness" id="drv-heart-freshness"></div>
           </div>
           <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
             <div class="driver-icon">◉</div>
@@ -134,6 +146,7 @@
             <div class="driver-val" id="drv-weight-val">—</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-weight-bar"></div></div>
             <div class="driver-status" id="drv-weight-status"></div>
+            <div class="driver-freshness" id="drv-weight-freshness"></div>
           </div>
           <div class="driver-card" id="drv-strength" onclick="showPage('strength',null)">
             <div class="driver-icon">◈</div>
@@ -141,6 +154,7 @@
             <div class="driver-val" id="drv-strength-val">—</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
             <div class="driver-status" id="drv-strength-status"></div>
+            <div class="driver-freshness" id="drv-strength-freshness"></div>
           </div>
           <div class="driver-card" id="drv-aerobic" onclick="showPage('strength','vo2max')">
             <div class="driver-icon">◎</div>
@@ -148,6 +162,7 @@
             <div class="driver-val" id="drv-aerobic-val">—</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
             <div class="driver-status" id="drv-aerobic-status"></div>
+            <div class="driver-freshness" id="drv-aerobic-freshness"></div>
           </div>
           <div class="driver-card" id="drv-sleep">
             <div class="driver-icon">◑</div>
@@ -157,6 +172,7 @@
             <div class="driver-status" id="drv-sleep-status"></div>
             <div class="driver-detail" id="drv-sleep-detail" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
             <div class="driver-detail" id="drv-sleep-trend" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+            <div class="driver-freshness" id="drv-sleep-freshness"></div>
           </div>
           <div class="driver-card" id="drv-bloodwork" onclick="showPage('documents',null)" style="opacity:0.6">
             <div class="driver-icon">◐</div>
@@ -164,6 +180,7 @@
             <div class="driver-val" id="drv-bloodwork-val" style="font-size:14px;color:var(--muted)">Not connected</div>
             <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
             <div class="driver-status" id="drv-bloodwork-status" style="color:var(--muted)">Upload labs →</div>
+            <div class="driver-freshness" id="drv-bloodwork-freshness"></div>
           </div>
         </div>
 
@@ -736,6 +753,8 @@
   </div>
 </div>
 
+<script src="config.js"></script>
+<script src="components/confirm-modal.js"></script>
 <script src="dashboard.js"></script>
 
 <datalist id="ex-presets"><option value="Bench Press"><option value="Overhead Press"><option value="Incline Press"><option value="Dumbbell Fly"><option value="Pull-ups"><option value="Chin-ups"><option value="Barbell Row"><option value="Cable Row"><option value="Lat Pulldown"><option value="Dumbbell Curl"><option value="Hammer Curl"><option value="Tricep Dip"><option value="Tricep Pushdown"><option value="Skull Crushers"><option value="Squat"><option value="Front Squat"><option value="Leg Press"><option value="Romanian Deadlift"><option value="Deadlift"><option value="Hip Thrust"><option value="Lunges"><option value="Leg Curl"><option value="Leg Extension"><option value="Plank"><option value="Cable Crunch"><option value="Ab Wheel"><option value="Face Pull"><option value="Running"><option value="Cycling"><option value="Row Machine"><option value="Jump Rope"></datalist>
