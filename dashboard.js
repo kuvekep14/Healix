@@ -2059,7 +2059,8 @@ async function saveSupplement() {
 }
 
 async function removeSupplement(suppId) {
-  if (!confirm('Remove this supplement from your stack?')) return;
+  var confirmed = await confirmModal('Remove this supplement from your stack?', { title: 'Remove Supplement', confirmText: 'Remove', danger: true });
+  if (!confirmed) return;
   try {
     await supabaseRequest(
       '/rest/v1/user_supplements?id=eq.' + suppId,
@@ -2274,7 +2275,8 @@ async function handleDocUpload(input) {
 }
 
 async function deleteDocument(uploadId, filePath) {
-  if (!confirm('Delete this document? This cannot be undone.')) return;
+  var confirmed = await confirmModal('This document and its extracted data will be permanently deleted.', { title: 'Delete Document', confirmText: 'Delete', danger: true });
+  if (!confirmed) return;
   try {
     // Delete file from storage bucket
     if (filePath) {
@@ -2295,7 +2297,7 @@ async function deleteDocument(uploadId, filePath) {
     loadDocumentsPage();
   } catch(e) {
     console.error('Delete document error:', e);
-    alert('Failed to delete document. Please try again.');
+    confirmModal('Failed to delete document. Please try again.', { title: 'Error', confirmText: 'OK', cancelText: '' });
   }
 }
 
