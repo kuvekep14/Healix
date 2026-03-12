@@ -31,7 +31,7 @@ nav.s { border-bottom-color: var(--gold-border); }
 .nav-links a::after { content: ''; position: absolute; bottom: -4px; left: 0; right: 0; height: 1px; background: var(--gold); transform: scaleX(0); transition: transform .3s; transform-origin: left; }
 .nav-links a:hover { color: var(--cream); }
 .nav-links a:hover::after { transform: scaleX(1); }
-.nav-cta { font-size: 11px; font-weight: 500; letter-spacing: .15em; text-transform: uppercase; color: var(--dark); background: var(--gold); padding: 13px 30px; border: none; cursor: pointer; transition: background .3s, transform .2s; }
+.nav-cta { font-size: 11px; font-weight: 500; letter-spacing: .15em; text-transform: uppercase; color: var(--dark); background: var(--gold); padding: 13px 30px; border: none; cursor: pointer; transition: background .3s, transform .2s; text-decoration: none; }
 .nav-cta:hover { background: var(--gold-light); transform: translateY(-1px); }
 .nav-login { font-size: 11px; font-weight: 400; letter-spacing: .15em; text-transform: uppercase; color: var(--cream-dim); text-decoration: none; padding: 13px 20px; transition: color .3s; }
 .nav-login:hover { color: var(--cream); }
@@ -53,23 +53,14 @@ nav.s { border-bottom-color: var(--gold-border); }
 .hero h1 em { font-style: italic; color: var(--gold); }
 .hero-sub { font-size: 17px; font-weight: 300; line-height: 1.75; color: var(--cream-dim); max-width: 500px; margin: 0 auto 56px; opacity: 0; animation: fU .9s .45s forwards; }
 .hero-acts { display: flex; gap: 20px; align-items: center; justify-content: center; opacity: 0; animation: fU .9s .6s forwards; }
-.btn-p { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: var(--gold); color: var(--dark); padding: 18px 48px; border: none; cursor: pointer; transition: all .3s; }
+.btn-p { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: var(--gold); color: var(--dark); padding: 18px 48px; border: none; cursor: pointer; transition: all .3s; text-decoration: none; }
 .btn-p:hover { background: var(--gold-light); transform: translateY(-2px); box-shadow: 0 12px 40px var(--gold-glow); }
-.btn-g { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--cream-dim); background: none; padding: 18px 32px; border: 1px solid var(--gold-border); cursor: pointer; transition: all .3s; }
+.btn-g { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--cream-dim); background: none; padding: 18px 32px; border: 1px solid var(--gold-border); cursor: pointer; transition: all .3s; text-decoration: none; }
 .btn-g:hover { color: var(--cream); border-color: rgba(245,240,232,.4); }
 .scroll-hint { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0; animation: fadeIn 1s 1.4s forwards; }
 .scroll-line { width: 1px; height: 48px; background: linear-gradient(to bottom, var(--gold), transparent); animation: sd 2s 1.5s infinite; }
 .scroll-lbl { font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
 @keyframes sd { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform: scaleY(1); transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
-
-/* STATS */
-.stats { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--gold-border); border-bottom: 1px solid var(--gold-border); }
-.stat { padding: 52px 44px; border-right: 1px solid var(--gold-border); text-align: center; transition: background .4s; position: relative; overflow: hidden; }
-.stat:last-child { border-right: none; }
-.stat:hover { background: var(--gold-faint); }
-.stat::before { content: attr(data-n); position: absolute; bottom: -10px; right: 12px; font-family: var(--F); font-size: 100px; font-weight: 300; color: rgba(184,151,90,.04); line-height: 1; pointer-events: none; }
-.stat-n { font-family: var(--F); font-size: 56px; font-weight: 300; color: var(--gold); line-height: 1; margin-bottom: 12px; }
-.stat-l { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); }
 
 /* SHARED */
 .wrap { max-width: 1160px; margin: 0 auto; }
@@ -92,7 +83,7 @@ nav.s { border-bottom-color: var(--gold-border); }
 /* INTEGRATIONS */
 .integ { padding: 140px 64px; }
 .integ-head { text-align: center; margin-bottom: 80px; }
-.integ-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-bottom: 64px; }
+.integ-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); }
 .ic { background: var(--dark); padding: 44px 36px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; transition: background .35s; position: relative; }
 .ic:hover { background: var(--dark-3); }
 .ic-icon { width: 64px; height: 64px; border: 1px solid var(--gold-border); display: grid; place-items: center; font-size: 26px; transition: border-color .3s, background .3s; }
@@ -100,13 +91,6 @@ nav.s { border-bottom-color: var(--gold-border); }
 .ic-name { font-family: var(--F); font-size: 20px; font-weight: 400; }
 .ic-type { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .ic-badge { position: absolute; top: 16px; right: 16px; font-size: 9px; letter-spacing: .15em; text-transform: uppercase; padding: 4px 10px; border: 1px solid var(--gold-border); color: var(--gold); }
-.integ-more { text-align: center; font-size: 13px; color: var(--muted); }
-.integ-more span { color: var(--gold); }
-.mq-wrap { overflow: hidden; border-top: 1px solid var(--gold-border); border-bottom: 1px solid var(--gold-border); padding: 20px 0; margin-top: 64px; }
-.mq-track { display: flex; gap: 60px; animation: mq 22s linear infinite; white-space: nowrap; }
-.mq-item { font-family: var(--F); font-size: 22px; font-weight: 300; font-style: italic; color: rgba(184,151,90,.28); flex-shrink: 0; }
-.mq-item.lit { color: var(--gold); font-style: normal; }
-@keyframes mq { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 /* INSIGHTS */
 .ins { padding: 140px 64px; background: var(--dark-2); }
@@ -116,86 +100,20 @@ nav.s { border-bottom-color: var(--gold-border); }
 .m-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 24px; border-bottom: 1px solid var(--gold-border); margin-bottom: 28px; }
 .m-title { font-family: var(--F); font-size: 18px; font-weight: 300; letter-spacing: .08em; }
 .m-date { font-size: 11px; color: var(--muted); letter-spacing: .08em; }
-.m-scores { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
-.m-score { background: rgba(255,255,255,.025); border: 1px solid var(--gold-border); padding: 18px 16px; text-align: center; }
-.m-s-lbl { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
-.m-s-val { font-family: var(--F); font-size: 32px; font-weight: 300; line-height: 1; }
-.m-s-del { font-size: 11px; color: var(--muted); margin-top: 4px; }
-.m-chart { margin-bottom: 20px; }
-.m-c-lbl { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
-.bars { display: flex; align-items: flex-end; gap: 6px; height: 64px; }
-.bar { flex: 1; background: rgba(184,151,90,.15); border-top: 1px solid rgba(184,151,90,.3); transition: background .3s; }
-.bar:hover { background: rgba(184,151,90,.3); }
-.bar.a { background: rgba(184,151,90,.5); border-top-color: var(--gold); }
-.daylbls { display: flex; gap: 6px; margin-top: 8px; }
-.dlbl { flex: 1; text-align: center; font-size: 9px; color: var(--muted); }
-.m-insight { background: rgba(184,151,90,.06); border: 1px solid rgba(184,151,90,.2); padding: 20px 22px; display: flex; gap: 16px; }
-.m-i-ico { font-size: 18px; flex-shrink: 0; margin-top: 2px; }
-.m-i-title { font-size: 13px; font-weight: 500; margin-bottom: 5px; }
-.m-i-body { font-size: 12px; line-height: 1.65; color: var(--cream-dim); }
-.m-tags { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-.m-tag { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--gold-border); padding: 5px 12px; color: var(--cream-dim); }
+
+/* Chat preview styles */
+.chat-preview { display: flex; flex-direction: column; gap: 16px; }
+.chat-preview-msg { padding: 16px 20px; font-size: 14px; line-height: 1.7; color: var(--cream-dim); border: 1px solid var(--gold-border); }
+.chat-preview-user { background: rgba(255,255,255,.03); border-color: rgba(245,240,232,.12); }
+.chat-preview-user .chat-preview-label { font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--cream); margin-bottom: 8px; font-weight: 500; }
+.chat-preview-ai { background: var(--dark-3); border-color: rgba(184,151,90,.25); }
+.chat-preview-ai .chat-preview-label { font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; font-weight: 500; }
+
 .feats { margin-top: 52px; display: flex; flex-direction: column; gap: 36px; }
 .feat { display: flex; gap: 28px; }
 .feat-n { font-family: var(--F); font-size: 14px; color: var(--gold); padding-top: 4px; flex-shrink: 0; width: 28px; }
 .feat h4 { font-family: var(--F); font-size: 24px; font-weight: 400; margin-bottom: 10px; line-height: 1.2; }
 .feat p { font-size: 14px; line-height: 1.75; color: var(--cream-dim); }
-
-/* TESTIMONIALS */
-.testi { padding: 140px 64px; }
-.testi-head { text-align: center; margin-bottom: 72px; }
-.testi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); }
-.tc { background: var(--dark); padding: 52px 44px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; transition: background .35s; }
-.tc:hover { background: var(--dark-3); }
-.tc-q { font-family: var(--F); font-size: 20px; font-weight: 300; font-style: italic; line-height: 1.55; }
-.tc-q::before { content: '\201C'; color: var(--gold); font-size: 48px; line-height: 0; vertical-align: -18px; margin-right: 4px; font-style: normal; }
-.tc-stars { color: var(--gold); font-size: 12px; letter-spacing: 2px; margin-bottom: 14px; }
-.tc-name { font-size: 13px; font-weight: 500; letter-spacing: .05em; margin-bottom: 4px; }
-.tc-role { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
-
-/* TEAM */
-.team { padding: 140px 64px; background: var(--dark-2); }
-.team-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-top: 80px; }
-.team-c { background: var(--dark-2); padding: 48px 36px; text-align: center; transition: background .35s; }
-.team-c:hover { background: var(--dark-3); }
-.avatar { width: 80px; height: 80px; border: 1px solid var(--gold-border); border-radius: 50%; margin: 0 auto 24px; display: grid; place-items: center; font-family: var(--F); font-size: 26px; font-weight: 300; color: var(--gold); background: var(--gold-faint); transition: border-color .3s; }
-.team-c:hover .avatar { border-color: var(--gold); }
-.t-name { font-family: var(--F); font-size: 22px; font-weight: 400; margin-bottom: 6px; }
-.t-role { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
-.t-bio { font-size: 13px; line-height: 1.7; color: var(--cream-dim); }
-.t-soc { display: flex; justify-content: center; gap: 12px; margin-top: 20px; }
-.t-soc a { width: 30px; height: 30px; border: 1px solid var(--gold-border); display: grid; place-items: center; font-size: 12px; color: var(--muted); text-decoration: none; transition: border-color .3s, color .3s; }
-.t-soc a:hover { border-color: var(--gold); color: var(--gold); }
-
-/* PRICING */
-.pricing { padding: 140px 64px; }
-.pricing-head { text-align: center; margin-bottom: 80px; }
-.ptoggle { display: inline-flex; border: 1px solid var(--gold-border); margin-top: 28px; overflow: hidden; }
-.tog { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; padding: 12px 28px; background: none; border: none; color: var(--muted); cursor: pointer; transition: all .25s; }
-.tog.on { background: var(--gold); color: var(--dark); }
-.pcards { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; margin-bottom: 48px; align-items: stretch; }
-.pc { background: var(--dark-2); border: 1px solid var(--gold-border); padding: 48px 40px; position: relative; transition: border-color .35s, transform .3s; display: flex; flex-direction: column; }
-.pc:hover { border-color: rgba(184,151,90,.4); transform: translateY(-2px); }
-.pc.feat { background: var(--dark-3); border-color: var(--gold); }
-.pc.feat:hover { transform: translateY(-4px); }
-.pbadge { display: inline-block; background: var(--gold); color: var(--dark); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; padding: 5px 14px; margin-bottom: 24px; }
-.ptier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 20px; }
-.pprice { font-family: var(--F); font-size: 72px; font-weight: 300; line-height: 1; margin-bottom: 4px; display: flex; align-items: flex-start; gap: 4px; }
-.pprice sup { font-size: 22px; margin-top: 12px; }
-.pprice-int { line-height: 1; }
-.pcad { font-size: 12px; color: var(--muted); margin-bottom: 36px; letter-spacing: .05em; }
-.pdiv { border: none; border-top: 1px solid var(--gold-border); margin-bottom: 28px; }
-.pfeats { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-bottom: 40px; flex: 1; }
-.pfeats li { font-size: 13px; color: var(--cream-dim); display: flex; gap: 12px; align-items: flex-start; line-height: 1.5; }
-.pfeats li .ck { color: var(--gold); flex-shrink: 0; font-size: 11px; margin-top: 2px; }
-.pfeats li.off { color: var(--muted); opacity: .5; }
-.pfeats li.off .ck { color: var(--muted); }
-.pbtn { width: 100%; padding: 15px; font-size: 10px; font-weight: 500; letter-spacing: .2em; text-transform: uppercase; border: 1px solid var(--gold-border); background: none; color: var(--cream-dim); cursor: pointer; transition: all .3s; text-decoration: none; display: block; text-align: center; }
-.pbtn:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-faint); }
-.pc.feat .pbtn { border-color: var(--gold); background: var(--gold); color: var(--dark); }
-.pc.feat .pbtn:hover { background: var(--gold-light); }
-.pnote { text-align: center; font-size: 13px; color: var(--muted); }
-.pnote span { color: var(--cream-dim); }
 
 /* FAQ */
 .faq { padding: 140px 64px; background: var(--dark-2); }
@@ -225,10 +143,13 @@ nav.s { border-bottom-color: var(--gold-border); }
 .cta-sub { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: var(--gold); color: var(--dark); border: none; padding: 18px 32px; cursor: pointer; transition: background .3s; white-space: nowrap; }
 .cta-sub:hover { background: var(--gold-light); }
 .cta-priv { font-size: 11px; color: var(--muted); margin-top: 16px; }
+.cta-success { display: none; font-size: 15px; color: var(--gold); letter-spacing: .05em; margin-top: 16px; }
+.cta-secondary { display: inline-block; margin-top: 24px; font-size: 13px; color: var(--cream-dim); text-decoration: underline; text-underline-offset: 3px; transition: color .3s; }
+.cta-secondary:hover { color: var(--cream); }
 
 /* FOOTER */
 footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
-.ft { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 60px; margin-bottom: 60px; }
+.ft { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 60px; margin-bottom: 60px; }
 .fb-logo { font-family: var(--F); font-size: 22px; font-weight: 300; letter-spacing: .2em; color: var(--cream); margin-bottom: 18px; }
 .fb-tag { font-size: 14px; color: var(--cream-dim); line-height: 1.7; max-width: 240px; }
 .fc h5 { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 24px; }
@@ -319,14 +240,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
 .hq-rec-tier { font-size: 10px; letter-spacing: .3em; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
 .hq-rec-headline { font-family: var(--F); font-size: 26px; font-weight: 300; margin-bottom: 10px; line-height: 1.2; }
 .hq-rec-desc { font-size: 14px; line-height: 1.75; color: var(--cream-dim); margin-bottom: 28px; }
-.hq-email-form { display: flex; gap: 0; margin-bottom: 16px; }
-.hq-email-input { flex: 1; background: rgba(255,255,255,.04); border: 1px solid var(--gold-border); border-right: none; color: var(--cream); font-family: var(--B); font-size: 14px; padding: 14px 18px; outline: none; transition: border-color .22s; }
-.hq-email-input::placeholder { color: var(--muted); }
-.hq-email-input:focus { border-color: rgba(184,151,90,.5); }
-.hq-email-submit { background: var(--gold); border: none; color: var(--dark); font-family: var(--B); font-size: 11px; font-weight: 500; letter-spacing: .15em; text-transform: uppercase; padding: 14px 28px; cursor: pointer; white-space: nowrap; transition: background .22s; flex-shrink: 0; }
-.hq-email-submit:hover { background: var(--gold-light); }
-.hq-email-thanks { display: none; font-size: 13px; color: var(--gold); letter-spacing: .05em; padding: 12px 0; }
-.hq-rec-note { font-size: 12px; color: var(--muted); line-height: 1.6; }
 .hq-cta-btn { display: block; text-align: center; background: var(--gold); color: var(--dark); font-family: var(--B); font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; padding: 17px 52px; text-decoration: none; border: none; cursor: pointer; transition: background .22s, transform .18s, box-shadow .22s; }
 .hq-cta-btn:hover { background: var(--gold-light); transform: translateY(-1px); box-shadow: 0 10px 36px var(--gold-glow); }
 .hq-result-actions { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -342,13 +255,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   /* HERO */
   .hero { padding: 120px 24px 80px; }
 
-  /* STATS */
-  .stats { grid-template-columns: 1fr 1fr; }
-  .stat { padding: 32px 20px; border-right: none; border-bottom: 1px solid var(--gold-border); }
-  .stat:nth-child(odd) { border-right: 1px solid var(--gold-border); }
-  .stat:last-child { border-bottom: none; }
-  .stat:nth-child(3) { border-bottom: 1px solid var(--gold-border); }
-
   /* HOW */
   .how { padding: 80px 24px; }
   .steps { grid-template-columns: 1fr; }
@@ -362,20 +268,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   /* INSIGHTS */
   .ins { padding: 80px 24px; }
   .ins-layout { grid-template-columns: 1fr; gap: 48px; }
-
-  /* TESTIMONIALS */
-  .testi { padding: 80px 24px; }
-  .testi-grid { grid-template-columns: 1fr; }
-
-  /* TEAM */
-  .team { padding: 80px 24px; }
-  .team-grid { grid-template-columns: 1fr 1fr; }
-
-  /* PRICING */
-  .pricing { padding: 80px 24px; }
-  .pcards { grid-template-columns: 1fr; }
-  .pc.feat { border-left: none; border-right: none; border-top: 1px solid var(--gold); border-bottom: 1px solid var(--gold); }
-  .pc { padding: 40px 28px; }
 
   /* FAQ */
   .faq { padding: 80px 24px; }
@@ -404,15 +296,10 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   .hq-email-form { flex-direction: column; }
   .hq-email-input { border-right: 1px solid var(--gold-border); border-bottom: none; }
   .hq-rec { padding: 28px 24px; }
-
-  /* MOCKUP */
-  .m-scores { grid-template-columns: 1fr 1fr 1fr; }
 }
 
 @media (max-width: 400px) {
-  .team-grid { grid-template-columns: 1fr; }
   .integ-grid { grid-template-columns: 1fr; }
-  .m-scores { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -423,9 +310,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   <a href="#" class="logo"><div class="logo-mark">H</div>HEALIX</a>
   <ul class="nav-links">
     <li><a href="#how">How it works</a></li>
-    <li><a href="#integ">Integrations</a></li>
     <li><a href="#quiz">Quiz</a></li>
-    <li><a href="#pricing">Pricing</a></li>
     <li><a href="#faq">FAQ</a></li>
   </ul>
   <a href="login.html" class="nav-cta">Log In</a>
@@ -436,12 +321,12 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   <div class="hbg"></div>
   <div class="hlines"></div>
   <div class="hero-content">
-    <div class="eyebrow"><span class="dot"></span> Beta now open — Premium free for all testers</div>
-    <h1>Your health,<br><em>finally understood.</em></h1>
-    <p class="hero-sub">Join the Healix beta and get full Premium access — completely free while we're in testing. All we ask for is your email and honest feedback.</p>
+    <div class="eyebrow"><span class="dot"></span> Beta now open — completely free</div>
+    <h1>AI that actually<br><em>knows your body.</em></h1>
+    <p class="hero-sub">Connect your wearable, upload bloodwork, and ask Healix anything. Real answers from an AI that sees your full health picture.</p>
     <div class="hero-acts">
-      <a href="signup.html" class="btn-p">Join Beta — Get Premium Free</a>
-      <button class="btn-g">See how it works ↓</button>
+      <a href="signup.html" class="btn-p">Sign Up Free</a>
+      <a href="#quiz" class="btn-g">Take the Quiz ↓</a>
     </div>
   </div>
   <div class="scroll-hint">
@@ -460,21 +345,21 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
     <div class="steps">
       <div class="sc reveal">
         <div class="si">01</div>
-        <h3>Connect your devices</h3>
-        <p>Link Apple Watch, Oura Ring, Garmin, Whoop, and 8+ more. Healix securely pulls every signal — sleep stages, HRV, SpO₂, activity — into one unified stream.</p>
-        <span class="sc-tag">Instant sync</span>
+        <h3>Upload bloodwork or connect a wearable</h3>
+        <p>Upload a blood panel PDF or connect Apple Watch, Oura, Garmin, or Whoop through the Healix app. Your data starts flowing immediately.</p>
+        <span class="sc-tag">5-minute setup</span>
       </div>
       <div class="sc reveal d1">
         <div class="si">02</div>
-        <h3>Enrich with context</h3>
-        <p>Add blood panels, nutrition logs, medication schedules, and daily notes. The fuller the picture, the more precise and personalized your insights become.</p>
-        <span class="sc-tag">AI-powered</span>
+        <h3>See your Vitality Age</h3>
+        <p>Healix calculates a single biological age score from your biomarkers — bloodwork, resting heart rate, weight, strength, and aerobic capacity. One number. Clinically weighted.</p>
+        <span class="sc-tag">Updated daily</span>
       </div>
       <div class="sc reveal d2">
         <div class="si">03</div>
-        <h3>Receive your insights</h3>
-        <p>Healix surfaces invisible patterns across all your data sources. Get daily, evidence-based insights in plain language — no charts to decode, no jargon to Google.</p>
-        <span class="sc-tag">Daily briefing</span>
+        <h3>Ask Healix anything</h3>
+        <p>Chat with an AI that has real context from your health data. Ask why your sleep dipped, what your blood panel means, or what to focus on this week.</p>
+        <span class="sc-tag">Cross-source AI</span>
       </div>
     </div>
   </div>
@@ -485,7 +370,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   <div class="wrap">
     <div class="integ-head reveal">
       <p class="sl">Integrations</p>
-      <h2 class="st">Works with the devices<br>you already own</h2>
+      <h2 class="st">What Healix <em>sees</em></h2>
     </div>
     <div class="integ-grid reveal">
       <div class="ic"><div class="ic-icon">⌚</div><div><div class="ic-name">Apple Watch</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
@@ -494,49 +379,36 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
       <div class="ic"><div class="ic-icon">💪</div><div><div class="ic-name">Whoop</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
       <div class="ic"><div class="ic-icon">🧬</div><div><div class="ic-name">Lab Results</div><div class="ic-type">Health data</div></div><div class="ic-badge">Live</div></div>
       <div class="ic"><div class="ic-icon">🍎</div><div><div class="ic-name">Apple Health</div><div class="ic-type">Platform</div></div><div class="ic-badge">Live</div></div>
-      <div class="ic"><div class="ic-icon">🌡</div><div><div class="ic-name">Withings</div><div class="ic-type">Smart scale</div></div><div class="ic-badge">Beta</div></div>
-      <div class="ic"><div class="ic-icon">🛌</div><div><div class="ic-name">Eight Sleep</div><div class="ic-type">Sleep tech</div></div><div class="ic-badge">Soon</div></div>
-    </div>
-    <p class="integ-more reveal">Plus <span>4+ more integrations</span> in development — Google Fit, Fitbit, CGM devices &amp; more.</p>
-    <div class="mq-wrap">
-      <div class="mq-track">
-        <span class="mq-item">Sleep Quality</span><span class="mq-item lit"> · </span><span class="mq-item">Heart Rate Variability</span><span class="mq-item lit"> · </span><span class="mq-item">Recovery Score</span><span class="mq-item lit"> · </span><span class="mq-item">Blood Oxygen</span><span class="mq-item lit"> · </span><span class="mq-item">Cortisol Patterns</span><span class="mq-item lit"> · </span><span class="mq-item">Nutrition Correlation</span><span class="mq-item lit"> · </span><span class="mq-item">Inflammation Markers</span><span class="mq-item lit"> · </span><span class="mq-item">VO₂ Max</span><span class="mq-item lit"> · </span>
-        <span class="mq-item">Sleep Quality</span><span class="mq-item lit"> · </span><span class="mq-item">Heart Rate Variability</span><span class="mq-item lit"> · </span><span class="mq-item">Recovery Score</span><span class="mq-item lit"> · </span><span class="mq-item">Blood Oxygen</span><span class="mq-item lit"> · </span><span class="mq-item">Cortisol Patterns</span><span class="mq-item lit"> · </span><span class="mq-item">Nutrition Correlation</span><span class="mq-item lit"> · </span><span class="mq-item">Inflammation Markers</span><span class="mq-item lit"> · </span><span class="mq-item">VO₂ Max</span><span class="mq-item lit"> · </span>
-      </div>
     </div>
   </div>
 </section>
 
-<!-- INSIGHTS / APP PREVIEW -->
+<!-- INSIGHTS / AI CHAT PREVIEW -->
 <section class="ins">
   <div class="wrap">
     <div class="ins-layout">
       <div class="mockup reveal">
         <div class="m-top">
-          <div class="m-title">Good morning, Alex</div>
-          <div class="m-date">Sat, 21 Feb</div>
+          <div class="m-title">Healix Chat</div>
+          <div class="m-date">Today</div>
         </div>
-        <div class="m-scores">
-          <div class="m-score"><div class="m-s-lbl">Recovery</div><div class="m-s-val">87</div><div class="m-s-del">↑ +12</div></div>
-          <div class="m-score"><div class="m-s-lbl">HRV</div><div class="m-s-val">62<span style="font-size:14px;color:var(--muted)">ms</span></div><div class="m-s-del">↑ +8ms</div></div>
-          <div class="m-score"><div class="m-s-lbl">Sleep</div><div class="m-s-val">7.4<span style="font-size:14px;color:var(--muted)">h</span></div><div class="m-s-del">↓ −0.3h</div></div>
-        </div>
-        <div class="m-chart">
-          <div class="m-c-lbl">HRV — last 7 days</div>
-          <div class="bars">
-            <div class="bar" style="height:55%"></div><div class="bar" style="height:62%"></div><div class="bar" style="height:48%"></div><div class="bar" style="height:70%"></div><div class="bar" style="height:58%"></div><div class="bar" style="height:80%"></div><div class="bar a" style="height:90%"></div>
+        <div class="chat-preview">
+          <div class="chat-preview-msg chat-preview-user">
+            <div class="chat-preview-label">You</div>
+            Why was my recovery so low this morning?
           </div>
-          <div class="daylbls"><div class="dlbl">S</div><div class="dlbl">M</div><div class="dlbl">T</div><div class="dlbl">W</div><div class="dlbl">T</div><div class="dlbl">F</div><div class="dlbl" style="color:var(--gold)">S</div></div>
-        </div>
-        <div class="m-insight">
-          <div class="m-i-ico">✦</div>
-          <div>
-            <div class="m-i-title">Today's Key Insight</div>
-            <div class="m-i-body">Your HRV peaked after 3 consecutive nights of 7h+ sleep. Reducing evening alcohol by 1 drink correlated with a 14% improvement in deep sleep this week.</div>
+          <div class="chat-preview-msg chat-preview-ai">
+            <div class="chat-preview-label">Healix</div>
+            Your resting heart rate was elevated last night — 68 bpm vs. your 58 bpm baseline. You logged 5.2 hours of sleep, well below your 7.1h average. Your most recent blood panel also showed elevated cortisol (22.4 µg/dL). The combination of short sleep and elevated stress hormones is likely driving the low recovery score.
           </div>
-        </div>
-        <div class="m-tags">
-          <div class="m-tag">Sleep ↑</div><div class="m-tag">Stress ↓</div><div class="m-tag">Nutrition link</div><div class="m-tag">Trend detected</div>
+          <div class="chat-preview-msg chat-preview-user">
+            <div class="chat-preview-label">You</div>
+            What should I do differently today?
+          </div>
+          <div class="chat-preview-msg chat-preview-ai">
+            <div class="chat-preview-label">Healix</div>
+            Skip high-intensity training today — your body needs recovery, not more stress. Keep activity to a walk or light mobility. Based on your sleep patterns, your best nights follow a screen cutoff around 9:30 PM. Try to be in bed by 10:15 tonight to get back on track.
+          </div>
         </div>
       </div>
       <div class="reveal d1">
@@ -544,125 +416,11 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
         <h2 class="st">Insights your wearable <em>alone</em> can't offer</h2>
         <div class="feats">
           <div class="feat"><div class="feat-n">01</div><div><h4>Cross-source pattern detection</h4><p>Healix finds correlations across all your data — like how your nutrition impacts sleep three days later, or how stress markers ripple through recovery.</p></div></div>
-          <div class="feat"><div class="feat-n">02</div><div><h4>Plain-language daily briefings</h4><p>No charts to decode. Every morning, Healix delivers a health brief in clear English — with actionable guidance built in.</p></div></div>
+          <div class="feat"><div class="feat-n">02</div><div><h4>Plain-language answers</h4><p>No charts to decode. Ask Healix anything about your health in plain English and get clear, actionable answers grounded in your own data.</p></div></div>
           <div class="feat"><div class="feat-n">03</div><div><h4>Longitudinal memory</h4><p>Healix builds a model of you over months and years. It knows your baselines, your patterns, and flags anything that deviates — before you feel it.</p></div></div>
         </div>
       </div>
     </div>
-  </div>
-</section>
-
-<!-- TESTIMONIALS -->
-<section class="testi">
-  <div class="wrap">
-    <div class="testi-head reveal">
-      <p class="sl">What members say</p>
-      <h2 class="st">Trusted by those who take<br>their health seriously</h2>
-    </div>
-    <div class="testi-grid reveal">
-      <div class="tc">
-        <div><div class="tc-stars">★★★★★</div><div class="tc-q">For the first time, I understand why I feel the way I do. Healix connected dots I didn't even know existed.</div></div>
-        <div><div class="tc-name">Sarah M.</div><div class="tc-role">Endurance athlete · London</div></div>
-      </div>
-      <div class="tc">
-        <div><div class="tc-stars">★★★★★</div><div class="tc-q">I've tried every health app. Nothing comes close to the depth and clarity Healix provides. It genuinely changed how I approach my wellbeing.</div></div>
-        <div><div class="tc-name">James K.</div><div class="tc-role">Founder · San Francisco</div></div>
-      </div>
-      <div class="tc">
-        <div><div class="tc-stars">★★★★★</div><div class="tc-q">The correlation between my lab markers and wearable data surfaced patterns my doctor hadn't even noticed. A remarkable product.</div></div>
-        <div><div class="tc-name">Dr. Priya N.</div><div class="tc-role">Physician · New York</div></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- TEAM -->
-<section class="team" id="team">
-  <div class="wrap">
-    <div class="reveal">
-      <p class="sl">The Team</p>
-      <h2 class="st">Built by people who care<br><em>deeply</em> about health</h2>
-    </div>
-    <div class="team-grid">
-      <div class="team-c reveal"><div class="avatar">PK</div><div class="t-name">Paul Kuveke</div><div class="t-role">CEO &amp; Co-founder</div><div class="t-bio">Former health lead at Google. 10+ years in digital health and AI-driven diagnostics.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
-      <div class="team-c reveal d1"><div class="avatar">JS</div><div class="t-name">Jonathan Sells</div><div class="t-role">CTO &amp; Co-founder</div><div class="t-bio">PhD in computational biology, MIT. Previously ML infrastructure at Apple Health.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
-      <div class="team-c reveal d2"><div class="avatar">DR</div><div class="t-name">Dr. David Reyes</div><div class="t-role">Chief Medical Officer</div><div class="t-bio">Board-certified internist and longevity specialist with 15 years of clinical practice.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
-      <div class="team-c reveal d3"><div class="avatar">SF</div><div class="t-name">Sophie Farrell</div><div class="t-role">Head of Design</div><div class="t-bio">Previously at IDEO and Calm. Passionate about making complex health data feel human.</div><div class="t-soc"><a href="#">in</a><a href="#">𝕏</a></div></div>
-    </div>
-  </div>
-</section>
-
-<!-- PRICING -->
-<section class="pricing" id="pricing">
-  <div class="wrap">
-    <div class="pricing-head reveal">
-      <p class="sl">Pricing</p>
-      <h2 class="st">Simple, transparent access</h2>
-      <div class="ptoggle">
-        <button class="tog on" id="tm">Monthly</button>
-        <button class="tog" id="ta">Annual &nbsp;<span style="color:var(--gold);font-size:10px">Save 30%</span></button>
-      </div>
-    </div>
-    <div class="pcards reveal">
-
-      <!-- ESSENTIAL -->
-      <div class="pc">
-        <div class="ptier">Essential</div>
-        <div class="pprice"><sup>$</sup><span class="pprice-int pv">0</span></div>
-        <div class="pcad">Free forever</div>
-        <hr class="pdiv">
-        <ul class="pfeats">
-          <li><span class="ck">✓</span>Up to 2 wearable integrations</li>
-          <li><span class="ck">✓</span>7-day data history</li>
-          <li><span class="ck">✓</span>Weekly insight summary</li>
-          <li><span class="ck">✓</span>Basic recovery tracking</li>
-          <li><span class="ck">✓</span>Meal logging</li>
-          <li class="off"><span class="ck">–</span>Lab result analysis</li>
-          <li class="off"><span class="ck">–</span>Cross-source correlations</li>
-          <li class="off"><span class="ck">–</span>Daily AI briefing</li>
-        </ul>
-        <a href="signup.html" class="pbtn">Get Started Free</a>
-      </div>
-
-      <!-- PREMIUM -->
-      <div class="pc feat">
-        <div class="ptier">Premium</div>
-        <div class="pprice"><sup>$</sup><span class="pprice-int pv">19</span></div>
-        <div class="pcad pcad-m">per month · cancel anytime</div>
-        <hr class="pdiv">
-        <ul class="pfeats">
-          <li><span class="ck">✓</span>Everything in Essential</li>
-          <li><span class="ck">✓</span>Unlimited integrations</li>
-          <li><span class="ck">✓</span>Full data history</li>
-          <li><span class="ck">✓</span>Daily AI-powered briefing</li>
-          <li><span class="ck">✓</span>Lab result analysis</li>
-          <li><span class="ck">✓</span>Cross-source correlations</li>
-          <li><span class="ck">✓</span>Trend alerts &amp; anomaly detection</li>
-          <li><span class="ck">✓</span>Priority support</li>
-        </ul>
-        <a href="signup.html" class="pbtn">Start 14-day Free Trial</a>
-      </div>
-
-      <!-- CLINICAL -->
-      <div class="pc">
-        <div class="ptier">Clinical</div>
-        <div class="pprice"><sup>$</sup><span class="pprice-int pv">49</span></div>
-        <div class="pcad pcad-c">per month</div>
-        <hr class="pdiv">
-        <ul class="pfeats">
-          <li><span class="ck">✓</span>Everything in Premium</li>
-          <li><span class="ck">✓</span>Physician-reviewed insights</li>
-          <li><span class="ck">✓</span>Exportable health reports</li>
-          <li><span class="ck">✓</span>EHR integration</li>
-          <li><span class="ck">✓</span>Dedicated health concierge</li>
-          <li><span class="ck">✓</span>Family plan (up to 4)</li>
-          <li><span class="ck">✓</span>API access</li>
-        </ul>
-        <a href="mailto:hello@tryhealix.com" class="pbtn">Contact Sales</a>
-      </div>
-
-    </div>
-    <p class="pnote reveal"><span>All plans include a 14-day free trial.</span> No credit card required. Cancel anytime.</p>
   </div>
 </section>
 
@@ -826,12 +584,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   </div>
 </section>
 
-<!-- Netlify form stub for clinical waitlist -->
-<form name="clinical-waitlist" netlify netlify-honeypot="bot-field" hidden>
-  <input type="email" name="email">
-  <input name="bot-field">
-</form>
-
 <!-- FAQ -->
 <section class="faq" id="faq">
   <div class="wrap">
@@ -839,7 +591,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
       <div class="faq-sticky reveal">
         <p class="sl">FAQ</p>
         <h2 class="st">Questions,<br><em>answered.</em></h2>
-        <p style="font-size:14px;color:var(--cream-dim);line-height:1.75;margin-top:24px;max-width:280px">Still have questions? Reach us at <span style="color:var(--gold)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d0b8b5bcbcbf90b8b5b1bcb9a8feb3bfbd">[email&#160;protected]</a></span> — we typically reply within a few hours.</p>
+        <p style="font-size:14px;color:var(--cream-dim);line-height:1.75;margin-top:24px;max-width:280px">Still have questions? Reach us at <span style="color:var(--gold)">hello@tryhealix.xyz</span> — we typically reply within a few hours.</p>
       </div>
       <div class="faq-list reveal d1">
         <div class="fi open">
@@ -848,23 +600,15 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
         </div>
         <div class="fi">
           <button class="fq" onclick="tFaq(this)">Which devices are supported?<div class="ficon">+</div></button>
-          <div class="fa">We support Apple Watch, Oura Ring, Garmin, Whoop, Withings, and Apple Health. Google Fit, Fitbit, and continuous glucose monitors are in beta. We add new integrations monthly based on member demand.</div>
+          <div class="fa">We support Apple Watch, Oura Ring, Garmin, Whoop, and Apple Health. You can also upload blood panel PDFs directly. We add new integrations based on member demand.</div>
         </div>
         <div class="fi">
           <button class="fq" onclick="tFaq(this)">Is Healix a medical device?<div class="ficon">+</div></button>
           <div class="fa">Healix is a personal health intelligence platform, not a medical device. Our insights are for informational and wellness purposes and should not replace professional medical advice, diagnosis, or treatment. Always consult your physician for medical decisions.</div>
         </div>
         <div class="fi">
-          <button class="fq" onclick="tFaq(this)">How long does setup take?<div class="ficon">+</div></button>
-          <div class="fa">Most members are set up in under 5 minutes. Connect your first device via OAuth, grant permissions, and Healix immediately begins syncing historical data (up to 1 year). Your first insight briefing arrives within 24 hours.</div>
-        </div>
-        <div class="fi">
-          <button class="fq" onclick="tFaq(this)">Can I share data with my doctor?<div class="ficon">+</div></button>
-          <div class="fa">Yes — Premium and Clinical members can generate exportable PDF health reports. Clinical members also get EHR integration for seamless sharing with healthcare providers.</div>
-        </div>
-        <div class="fi">
-          <button class="fq" onclick="tFaq(this)">What happens after the free trial?<div class="ficon">+</div></button>
-          <div class="fa">After your 14-day trial, your account automatically moves to the free Essential tier — you're never charged without explicitly providing payment details. No credit card required to start.</div>
+          <button class="fq" onclick="tFaq(this)">Is Healix free?<div class="ficon">+</div></button>
+          <div class="fa">Yes. Healix is completely free during beta. We'll announce pricing before the beta ends, and you'll never be charged without your explicit consent.</div>
         </div>
       </div>
     </div>
@@ -874,16 +618,16 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
 <!-- CTA -->
 <section class="cta">
   <div class="cta-in reveal">
-    <p class="sl" style="margin-bottom:20px">Limited beta spots</p>
-    <h2>Get Premium free.<br><em>Just bring feedback.</em></h2>
-    <p>Enter your email and we'll send you a TestFlight link instantly. Full Premium access, no credit card, no commitment.</p>
-    <form class="cta-form" name="beta-signups" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="signup.html">
-      <input type="hidden" name="form-name" value="beta-signups">
-      <input type="hidden" name="bot-field">
-      <input type="email" name="email" placeholder="Your email address" required>
-      <button type="submit" class="cta-sub">Send Me the Link</button>
+    <p class="sl" style="margin-bottom:20px">Get started</p>
+    <h2>Try Healix free.<br><em>No commitment.</em></h2>
+    <p>Get access to the full Healix experience — mobile app for data ingestion, web dashboard for analysis and AI chat. Free during beta.</p>
+    <form class="cta-form" id="cta-email-form">
+      <input type="email" name="email" placeholder="Your email address" required id="cta-email-input">
+      <button type="submit" class="cta-sub">Get Early Access</button>
     </form>
-    <p class="cta-priv">We'll send your TestFlight invite within minutes. No spam, ever.</p>
+    <div class="cta-success" id="cta-success">You're in! We'll be in touch shortly.</div>
+    <p class="cta-priv">No spam, ever. Your email is only used to send your invite.</p>
+    <a href="signup.html" class="cta-secondary">Or sign up directly →</a>
   </div>
 </section>
 
@@ -891,17 +635,16 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
 <footer>
   <div class="ft">
     <div><div class="fb-logo">HEALIX</div><p class="fb-tag">Your health, unified. Intelligence that helps you truly understand yourself.</p></div>
-    <div class="fc"><h5>Product</h5><ul><li><a href="#">Features</a></li><li><a href="#">Integrations</a></li><li><a href="#">Pricing</a></li><li><a href="#">Changelog</a></li></ul></div>
-    <div class="fc"><h5>Company</h5><ul><li><a href="#">About</a></li><li><a href="#">Team</a></li><li><a href="#">Blog</a></li><li><a href="#">Careers</a></li></ul></div>
-    <div class="fc"><h5>Support</h5><ul><li><a href="#">Help Centre</a></li><li><a href="#">Privacy</a></li><li><a href="#">Terms</a></li><li><a href="#">Contact</a></li></ul></div>
+    <div class="fc"><h5>Product</h5><ul><li><a href="#how">Features</a></li><li><a href="#quiz">Quiz</a></li><li><a href="#faq">FAQ</a></li><li><a href="login.html">Dashboard</a></li></ul></div>
+    <div class="fc"><h5>Legal</h5><ul><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Service</a></li></ul></div>
   </div>
   <div class="fb-bot">
-    <div class="fb-copy">© 2025 Healix Inc. All rights reserved.</div>
-    <div class="fb-legal"><a href="#">Privacy Policy</a><a href="#">Terms of Service</a><a href="#">HIPAA Compliance</a></div>
+    <div class="fb-copy">© 2026 Healix Inc. All rights reserved.</div>
+    <div class="fb-legal"><a href="#">Privacy Policy</a><a href="#">Terms of Service</a></div>
   </div>
 </footer>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // Nav scroll
 window.addEventListener('scroll',()=>document.getElementById('nav').classList.toggle('s',scrollY>40));
 
@@ -916,22 +659,35 @@ function tFaq(btn){
   if(!open) item.classList.add('open');
 }
 
-// Pricing toggle
-const pm={p:19,c:49}, pa={p:13,c:34};
-document.getElementById('tm').addEventListener('click',function(){
-  this.classList.add('on'); document.getElementById('ta').classList.remove('on');
-  document.querySelectorAll('.pv')[1].textContent=pm.p;
-  document.querySelectorAll('.pv')[2].textContent=pm.c;
-  document.querySelector('.pcad-m').textContent='per month';
-  document.querySelector('.pcad-c').textContent='per month';
-});
-document.getElementById('ta').addEventListener('click',function(){
-  this.classList.add('on'); document.getElementById('tm').classList.remove('on');
-  document.querySelectorAll('.pv')[1].textContent=pa.p;
-  document.querySelectorAll('.pv')[2].textContent=pa.c;
-  document.querySelector('.pcad-m').textContent='per year';
-  document.querySelector('.pcad-c').textContent='per year';
-});
+// CTA form — Supabase email capture
+(function(){
+  var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
+  var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
+
+  var form = document.getElementById('cta-email-form');
+  if(!form) return;
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var email = document.getElementById('cta-email-input').value;
+    if(!email) return;
+    fetch(SUPABASE_URL + '/rest/v1/beta_signups', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ email: email })
+    }).then(function(){
+      form.style.display = 'none';
+      document.getElementById('cta-success').style.display = 'block';
+    }).catch(function(){
+      form.style.display = 'none';
+      document.getElementById('cta-success').style.display = 'block';
+    });
+  });
+})();
 </script>
 
 <script>
@@ -1069,9 +825,9 @@ document.getElementById('ta').addEventListener('click',function(){
         body='You want <strong>'+energy+'</strong>, willing to put in '+eL(q1)+', and honest enough that your data will actually mean something.';
       }
     } else {
-      badge='Premium + Clinical Waitlist';
-      title='You are built for <em>Clinical.</em>';
-      body=kL(q4)+'-level knowledge, '+mL(q3).toLowerCase()+', and you want <strong>'+energy+'</strong>. <strong>We are not there yet</strong> but you will be first in line when we launch.';
+      badge='Recommended: Full Access';
+      title='You are built for <em>this.</em>';
+      body=kL(q4)+'-level knowledge, '+mL(q3).toLowerCase()+', and you want <strong>'+energy+'</strong>. Healix was built for exactly your profile — the full experience is free during beta.';
     }
 
     if(cons.length>0) body+=' Constraints noted: <strong>'+cons.join(', ')+'</strong> — Healix will work around them.';
@@ -1092,15 +848,11 @@ document.getElementById('ta').addEventListener('click',function(){
 
     var rb=document.getElementById('hq-rec-block');
     if(tier==='free'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Free while we're testing</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Try Healix completely free during beta. Get your health data unified and your first AI insights — no credit card, no pressure, no catch.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free →</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Free while we\u2019re testing</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Try Healix completely free during beta. Get your health data unified and your first AI insights — no credit card, no pressure, no catch.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free \u2192</a></div>';
     } else if(tier==='premium'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Full Premium, free while we're testing</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">You're exactly who Healix was built for. Try the full Premium experience — wearable data, meal tracking, AI insights, bloodwork analysis — completely free during beta. No credit card needed.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free →</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Full Premium, free while we\u2019re testing</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">You\u2019re exactly who Healix was built for. Try the full Premium experience — wearable data, meal tracking, AI insights, bloodwork analysis — completely free during beta. No credit card needed.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free \u2192</a></div>';
     } else {
-      rb.innerHTML='<div class="hq-rec hq-rec-featured" style="margin-bottom:12px"><div class="hq-rec-tier">Clinical — Coming soon</div><div class="hq-rec-headline">You're ahead of the curve.</div><div class="hq-rec-desc">Clinical is still in development. Join the waitlist and we'll reach out when it launches.</div><form class="hq-email-form" id="hq-wl-form"><input class="hq-email-input" type="email" placeholder="your@email.com" required><button class="hq-email-submit" type="submit">Join Waitlist</button></form><div class="hq-email-thanks" id="hq-wl-thanks" style="display:none">You're on the list!</div></div><div class="hq-rec"><div class="hq-rec-tier">In the meantime — try Premium free</div><div class="hq-rec-headline">Full access, no credit card, no commitment.</div><div class="hq-rec-desc">While Clinical is in development, Premium has everything you need — and it's free during beta.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free →</a></div>';
-      setTimeout(function(){
-        var f=document.getElementById('hq-wl-form');
-        if(f){ f.addEventListener('submit',function(e){ e.preventDefault(); f.style.display='none'; document.getElementById('hq-wl-thanks').style.display='block'; }); }
-      },100);
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Full access, completely free</div><div class="hq-rec-headline">Everything Healix offers. On us.</div><div class="hq-rec-desc">You\u2019re the power user we built this for. During beta, you get full access to every feature — wearable sync, bloodwork analysis, AI chat, Vitality Age — completely free. No credit card, no catch.</div><a href="signup.html" class="hq-cta-btn">Sign Up Free \u2192</a></div>';
     }
 
     allPanes.forEach(function(p){ p.style.display='none'; });
@@ -1112,7 +864,7 @@ document.getElementById('ta').addEventListener('click',function(){
   }
 
   document.getElementById('hq-retry').addEventListener('click',function(){
-    answers.fill(null); multiSel.clear(); hardCapFree=false;
+    answers.fill(null); multiSel.clear(); goalSel.clear(); hardCapFree=false;
     document.querySelectorAll('.hq-choice,.hq-choice-multi').forEach(function(b){ b.classList.remove('hq-sel'); });
     resultEl.style.display='none';
     navEl.style.display='';
