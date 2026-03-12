@@ -176,7 +176,11 @@ async function init() {
       }
     } catch(e) { /* cache parse error, ignore */ }
 
-    loadDashboardData();
+    loadDashboardData().then(function() {
+      renderProfileCompleteness();
+      renderSmartEmptyStates();
+      checkOnboarding();
+    });
     loadFamilyHistoryForm();
     setWeightDateDefault();
   } catch(e) { console.error('Auth error:', e); }
@@ -188,7 +192,7 @@ function greet() {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
@@ -202,6 +206,7 @@ function showPage(id, btn) {
 
   // Load page data
   if (id === 'meals') { loadMealsPage(); }
+  if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
 }
@@ -1030,6 +1035,10 @@ async function loadDashboardData() {
   renderSyncBanner(timestamps);
   renderVitalityConfidence(timestamps);
 
+  // Load weekly insights and health summary (non-blocking)
+  loadWeeklyInsights();
+  loadHealthSummary();
+
   // Cache dashboard data in localStorage for instant render on next visit
   try {
     localStorage.setItem('healix_dashboard_cache', JSON.stringify({
@@ -1658,7 +1667,12 @@ function renderMealsDayView(meals, nutrients, today) {
   var list = document.getElementById('meals-list');
 
   if (dayMeals.length === 0) {
-    list.innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged on this day.</div></div>';
+    list.innerHTML = '<div class="empty-state" style="padding:40px">'
+      + '<div class="empty-state-icon">🍽</div>'
+      + '<div class="empty-state-text">No meals logged on this day.</div>'
+      + '<div style="font-size:12px;color:var(--cream-dim);margin-top:8px;line-height:1.6">Meal tracking powers your nutrition insights and helps Healix give personalized advice.</div>'
+      + '<button class="upload-btn" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')" style="margin:16px auto 0;display:flex">+ Log a Meal</button>'
+      + '</div>';
   } else {
     // Group nutrients by meal
     var nutrientsByMeal = {};
@@ -1677,17 +1691,22 @@ function renderMealsDayView(meals, nutrients, today) {
       var prot = macros.prot !== null ? Math.round(macros.prot) : null;
       var carb = macros.carb !== null ? Math.round(macros.carb) : null;
       var fat  = macros.fat  !== null ? Math.round(macros.fat)  : null;
-      return '<div class="meal-card">'
+      return '<div class="meal-card" style="position:relative">'
         + '<div class="meal-card-emoji">' + (emojis[mealType] || '🥘') + '</div>'
         + '<div class="meal-card-info">'
-        + '<div class="meal-card-name">' + (m.meal_description || 'Meal') + '</div>'
-        + '<div class="meal-card-time">' + (m.meal_type ? m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1) : '') + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
+        + '<div class="meal-card-name">' + escapeHtml(m.meal_description || 'Meal') + '</div>'
+        + '<div class="meal-card-time">' + (m.meal_type ? escapeHtml(m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1)) : '') + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
         + '<div class="meal-card-macros">'
         + (prot !== null ? '<div class="meal-card-macro">P <span>' + prot + 'g</span></div>' : '')
         + (carb !== null ? '<div class="meal-card-macro">C <span>' + carb + 'g</span></div>' : '')
         + (fat  !== null ? '<div class="meal-card-macro">F <span>' + fat  + 'g</span></div>' : '')
         + '</div></div>'
+        + '<div style="display:flex;align-items:center;gap:12px">'
         + '<div class="meal-card-cals">' + (cal || '—') + '</div>'
+        + '<div style="display:flex;gap:4px;opacity:0;transition:opacity .2s" class="meal-actions">'
+        + '<button onclick="event.stopPropagation();openEditMeal(\'' + m.id + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px" title="Edit">✎</button>'
+        + '<button onclick="event.stopPropagation();deleteMeal(\'' + m.id + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px" title="Delete">✕</button>'
+        + '</div></div>'
         + '</div>';
     }).join('');
   }
@@ -1904,13 +1923,45 @@ async function saveMeal() {
   var fat = document.getElementById('ml-fat').value;
   if (!name) { alert('Please enter a meal name.'); return; }
   var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
+  var mealData = {};
+  if (cals || prot || carbs || fat) {
+    mealData = {
+      calories: parseFloat(cals) || 0,
+      protein_g: parseFloat(prot) || 0,
+      carbs_g: parseFloat(carbs) || 0,
+      fat_g: parseFloat(fat) || 0,
+      total_nutrition: {
+        Macronutrients: [
+          { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
+          { name: 'Protein', value: parseFloat(prot) || 0, unit: 'g' },
+          { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
+          { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
+        ]
+      }
+    };
+  }
   try {
-    var mealRes = await supabaseRequest('/rest/v1/meal_log', 'POST', {
-      user_id: currentUser.id, meal_type: type,
-      meal_description: name, meal_time: mealTime
-    }, currentSession.access_token);
+    if (editingMealId) {
+      // Update existing meal
+      await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH', {
+        meal_type: type, meal_description: name, meal_time: mealTime,
+        data: mealData
+      }, currentSession.access_token);
+      editingMealId = null;
+    } else {
+      // Create new meal
+      await supabaseRequest('/rest/v1/meal_log', 'POST', {
+        user_id: currentUser.id, meal_type: type,
+        meal_description: name, meal_time: mealTime,
+        data: mealData
+      }, currentSession.access_token);
+    }
     closeModal('meal-modal');
+    // Reset modal title
+    document.querySelector('#meal-modal .modal-title').innerHTML = 'Log a <em>Meal</em>';
+    document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Log Meal';
     ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
+    loadMealsPage();
     loadDashboardData();
   } catch(e) { alert('Could not save meal: ' + e.message); }
 }
@@ -2142,6 +2193,246 @@ function prefillSupplement(el) {
   openModal('supplement-modal');
 }
 
+// ── BLOODWORK ──
+var allBloodworkSamples = [];
+var bloodworkByDate = {};
+var selectedBloodworkDate = null;
+
+// Optimal ranges for biomarkers — extracted from scoreBloodwork logic + clinical refs
+var BIOMARKER_RANGES = {
+  'Glucose':           { low: 70, optLow: 70, optHigh: 99,  high: 126, unit: 'mg/dL', category: 'Metabolic' },
+  'Hemoglobin A1c':    { low: 4.0, optLow: 4.6, optHigh: 5.6, high: 6.5, unit: '%', category: 'Metabolic' },
+  'HbA1c':             { low: 4.0, optLow: 4.6, optHigh: 5.6, high: 6.5, unit: '%', category: 'Metabolic' },
+  'LDL Cholesterol':   { low: 0,  optLow: 0,   optHigh: 99,  high: 160, unit: 'mg/dL', category: 'Lipid Panel' },
+  'HDL Cholesterol':   { low: 40, optLow: 60,  optHigh: 90,  high: 100, unit: 'mg/dL', category: 'Lipid Panel' },
+  'Triglycerides':     { low: 0,  optLow: 0,   optHigh: 149, high: 200, unit: 'mg/dL', category: 'Lipid Panel' },
+  'Total Cholesterol': { low: 0,  optLow: 0,   optHigh: 199, high: 240, unit: 'mg/dL', category: 'Lipid Panel' },
+  'hs-CRP':            { low: 0,  optLow: 0,   optHigh: 1.0, high: 3.0, unit: 'mg/L', category: 'Inflammation' },
+  'CRP':               { low: 0,  optLow: 0,   optHigh: 1.0, high: 3.0, unit: 'mg/L', category: 'Inflammation' },
+  'Creatinine':        { low: 0.6, optLow: 0.7, optHigh: 1.2, high: 1.5, unit: 'mg/dL', category: 'Kidney' },
+  'BUN':               { low: 7,  optLow: 7,   optHigh: 20,  high: 25, unit: 'mg/dL', category: 'Kidney' },
+  'eGFR':              { low: 60, optLow: 90,  optHigh: 999, high: 999, unit: 'mL/min', category: 'Kidney' },
+  'AST':               { low: 0,  optLow: 10,  optHigh: 34,  high: 50, unit: 'U/L', category: 'Liver' },
+  'ALT':               { low: 0,  optLow: 7,   optHigh: 35,  high: 50, unit: 'U/L', category: 'Liver' },
+  'TSH':               { low: 0.4, optLow: 0.5, optHigh: 4.0, high: 5.0, unit: 'mIU/L', category: 'Thyroid' },
+  'Vitamin D':         { low: 20, optLow: 30,  optHigh: 80,  high: 100, unit: 'ng/mL', category: 'Vitamins' },
+  'Vitamin B12':       { low: 200, optLow: 300, optHigh: 900, high: 1100, unit: 'pg/mL', category: 'Vitamins' },
+  'Iron':              { low: 40, optLow: 60,  optHigh: 170, high: 200, unit: 'mcg/dL', category: 'Blood' },
+  'Ferritin':          { low: 20, optLow: 30,  optHigh: 300, high: 400, unit: 'ng/mL', category: 'Blood' },
+  'Hemoglobin':        { low: 12, optLow: 13.5, optHigh: 17.5, high: 18.5, unit: 'g/dL', category: 'CBC' },
+  'WBC':               { low: 3.5, optLow: 4.5, optHigh: 10.5, high: 12.0, unit: 'K/uL', category: 'CBC' },
+  'RBC':               { low: 3.8, optLow: 4.2, optHigh: 5.8, high: 6.2, unit: 'M/uL', category: 'CBC' },
+  'Platelets':         { low: 140, optLow: 150, optHigh: 400, high: 450, unit: 'K/uL', category: 'CBC' },
+  'Testosterone':      { low: 250, optLow: 300, optHigh: 1000, high: 1200, unit: 'ng/dL', category: 'Hormones' },
+  'Insulin':           { low: 0, optLow: 2,   optHigh: 19,  high: 25, unit: 'uIU/mL', category: 'Metabolic' },
+  'Uric Acid':         { low: 2.0, optLow: 3.0, optHigh: 7.0, high: 8.0, unit: 'mg/dL', category: 'Metabolic' }
+};
+
+function getRange(name) {
+  if (BIOMARKER_RANGES[name]) return BIOMARKER_RANGES[name];
+  // Fuzzy match
+  var lower = name.toLowerCase();
+  for (var key in BIOMARKER_RANGES) {
+    if (key.toLowerCase() === lower) return BIOMARKER_RANGES[key];
+    if (lower.indexOf(key.toLowerCase()) !== -1 || key.toLowerCase().indexOf(lower) !== -1) return BIOMARKER_RANGES[key];
+  }
+  return null;
+}
+
+async function loadBloodworkPage() {
+  if (!currentUser) return;
+  var token = currentSession.access_token;
+  try {
+    var bw = await supabaseRequest(
+      '/rest/v1/blood_work_samples?user_id=eq.' + currentUser.id + '&order=test_date.desc,created_at.desc&limit=500',
+      'GET', null, token
+    );
+    if (!bw || bw.error || !Array.isArray(bw) || bw.length === 0) {
+      renderBloodworkEmpty();
+      return;
+    }
+    allBloodworkSamples = bw;
+    // Group by test_date
+    bloodworkByDate = {};
+    bw.forEach(function(s) {
+      var d = s.test_date || 'unknown';
+      if (!bloodworkByDate[d]) bloodworkByDate[d] = [];
+      bloodworkByDate[d].push(s);
+    });
+    // Populate date selector
+    var dates = Object.keys(bloodworkByDate).filter(function(d) { return d !== 'unknown'; }).sort().reverse();
+    if (dates.length === 0) { renderBloodworkEmpty(); return; }
+    var select = document.getElementById('bw-date-select');
+    select.innerHTML = dates.map(function(d) {
+      var dt = new Date(d + 'T12:00:00');
+      var label = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      return '<option value="' + d + '">' + label + '</option>';
+    }).join('');
+    // Select last viewed date or most recent
+    selectedBloodworkDate = dates[0];
+    select.value = selectedBloodworkDate;
+    renderBloodworkDate(selectedBloodworkDate);
+  } catch(e) {
+    console.error('[Healix] Bloodwork load error:', e);
+    renderBloodworkEmpty();
+  }
+}
+
+function onBloodworkDateChange() {
+  var select = document.getElementById('bw-date-select');
+  selectedBloodworkDate = select.value;
+  renderBloodworkDate(selectedBloodworkDate);
+}
+
+function renderBloodworkEmpty() {
+  document.getElementById('bw-summary').innerHTML = '';
+  document.getElementById('bw-biomarkers').innerHTML =
+    '<div class="empty-state" style="padding:60px">'
+    + '<div class="empty-state-icon">🧬</div>'
+    + '<div class="empty-state-text">No bloodwork uploaded yet.<br>Upload lab results to see your biomarkers here.</div>'
+    + '<button class="upload-btn" onclick="document.getElementById(\'doc-input-full\').click()" style="margin:16px auto 0;display:flex">+ Upload Lab Results</button>'
+    + '</div>';
+  document.getElementById('bw-chat-cta').style.display = 'none';
+  document.getElementById('bw-date-select').innerHTML = '';
+}
+
+function renderBloodworkDate(dateStr) {
+  var samples = bloodworkByDate[dateStr];
+  if (!samples || samples.length === 0) { renderBloodworkEmpty(); return; }
+
+  // Find previous date for trending
+  var allDates = Object.keys(bloodworkByDate).filter(function(d) { return d !== 'unknown'; }).sort().reverse();
+  var prevDate = null;
+  for (var i = 0; i < allDates.length; i++) {
+    if (allDates[i] < dateStr) { prevDate = allDates[i]; break; }
+  }
+  var prevSamples = prevDate ? bloodworkByDate[prevDate] : [];
+  var prevByName = {};
+  prevSamples.forEach(function(s) { prevByName[s.biomarker_name] = s; });
+
+  // Summary bar
+  var flaggedCount = samples.filter(function(s) { return s.flag === 'H' || s.flag === 'L' || s.flag === 'A'; }).length;
+  var normalCount = samples.filter(function(s) { return s.value !== null && !s.flag; }).length;
+  var summaryEl = document.getElementById('bw-summary');
+  summaryEl.innerHTML = '<div class="bw-score-bar">'
+    + '<div style="flex:1">'
+    + '<div class="bw-score-label">Biomarkers extracted</div>'
+    + '<div class="bw-score-val">' + samples.length + '</div>'
+    + '<div class="bw-score-meta">' + normalCount + ' in range' + (flaggedCount > 0 ? ' · <span style="color:var(--down)">' + flaggedCount + ' flagged</span>' : '') + '</div>'
+    + '</div>'
+    + (prevDate ? '<div style="text-align:right"><div class="bw-score-label">Previous labs</div><div style="font-size:14px;color:var(--cream-dim);margin-top:4px">' + new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</div><div style="font-size:11px;color:var(--muted);margin-top:2px">' + allDates.length + ' total reports</div></div>' : '')
+    + '</div>';
+
+  // Group by category
+  var byCategory = {};
+  samples.forEach(function(s) {
+    var range = getRange(s.biomarker_name);
+    var cat = (range && range.category) || s.category || 'Other';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(s);
+  });
+
+  // Render biomarker cards
+  var html = '';
+  var categoryOrder = ['Lipid Panel', 'Metabolic', 'CBC', 'Liver', 'Kidney', 'Thyroid', 'Hormones', 'Inflammation', 'Vitamins', 'Blood', 'Other'];
+  categoryOrder.forEach(function(cat) {
+    var catSamples = byCategory[cat];
+    if (!catSamples) return;
+    html += '<div class="bw-section-title">' + escapeHtml(cat) + '</div>';
+    html += '<div class="bw-grid">';
+    catSamples.forEach(function(s) {
+      html += renderBiomarkerCard(s, prevByName[s.biomarker_name]);
+    });
+    html += '</div>';
+  });
+  // Any remaining categories not in the order
+  Object.keys(byCategory).forEach(function(cat) {
+    if (categoryOrder.indexOf(cat) === -1) {
+      html += '<div class="bw-section-title">' + escapeHtml(cat) + '</div>';
+      html += '<div class="bw-grid">';
+      byCategory[cat].forEach(function(s) {
+        html += renderBiomarkerCard(s, prevByName[s.biomarker_name]);
+      });
+      html += '</div>';
+    }
+  });
+
+  document.getElementById('bw-biomarkers').innerHTML = html;
+  document.getElementById('bw-chat-cta').style.display = 'block';
+  var shareBtn = document.getElementById('bw-share-btn');
+  if (shareBtn) shareBtn.style.display = 'flex';
+}
+
+function renderBiomarkerCard(sample, prevSample) {
+  var range = getRange(sample.biomarker_name);
+  var val = sample.value;
+  var unit = sample.unit || (range ? range.unit : '');
+  var refRange = sample.reference_range || '';
+  var flag = sample.flag;
+
+  // Determine flag if not set but range is known
+  if (!flag && range && val !== null) {
+    if (val < range.low) flag = 'L';
+    else if (val > range.high) flag = 'H';
+  }
+
+  var flagHtml = '';
+  if (flag === 'H') flagHtml = '<span class="bw-card-flag bw-flag-h">High</span>';
+  else if (flag === 'L') flagHtml = '<span class="bw-card-flag bw-flag-l">Low</span>';
+  else if (flag === 'A') flagHtml = '<span class="bw-card-flag bw-flag-a">Abnormal</span>';
+  else if (val !== null && range) flagHtml = '<span class="bw-card-flag bw-flag-normal">Normal</span>';
+
+  // Range visualization
+  var rangeHtml = '';
+  if (range && val !== null) {
+    var trackMin = Math.min(range.low * 0.5, val * 0.8);
+    var trackMax = Math.max(range.high * 1.3, val * 1.2);
+    var trackSpan = trackMax - trackMin || 1;
+    var optLeft = ((range.optLow - trackMin) / trackSpan) * 100;
+    var optWidth = ((range.optHigh - range.optLow) / trackSpan) * 100;
+    var markerPos = Math.max(2, Math.min(98, ((val - trackMin) / trackSpan) * 100));
+    var markerCls = (val >= range.optLow && val <= range.optHigh) ? 'good' : (val >= range.low && val <= range.high) ? 'warn' : 'bad';
+    rangeHtml = '<div class="bw-range-track">'
+      + '<div class="bw-range-optimal" style="left:' + Math.max(0, optLeft) + '%;width:' + Math.min(100, optWidth) + '%"></div>'
+      + '<div class="bw-range-marker ' + markerCls + '" style="left:' + markerPos + '%"></div>'
+      + '</div>'
+      + '<div class="bw-range-labels"><span>' + range.low + '</span><span>Optimal: ' + range.optLow + '–' + range.optHigh + '</span><span>' + range.high + '</span></div>';
+  }
+
+  // Delta from previous
+  var deltaHtml = '';
+  if (prevSample && prevSample.value !== null && val !== null) {
+    var diff = val - prevSample.value;
+    var pctChange = Math.round((diff / prevSample.value) * 100);
+    if (Math.abs(diff) > 0.01) {
+      var improved = false;
+      // For most markers, lower is better if flagged high; for HDL, higher is better
+      var name = sample.biomarker_name.toLowerCase();
+      if (name.indexOf('hdl') !== -1) improved = diff > 0;
+      else if (flag === 'H' || (!flag && range && val > range.optHigh)) improved = diff < 0;
+      else if (flag === 'L' || (!flag && range && val < range.optLow)) improved = diff > 0;
+      else improved = Math.abs(diff) < Math.abs(val * 0.05);
+      var arrow = diff > 0 ? '↑' : '↓';
+      var cls = improved ? 'improved' : (Math.abs(pctChange) <= 5 ? 'same' : 'worsened');
+      deltaHtml = '<div class="bw-card-delta ' + cls + '">' + arrow + ' ' + Math.abs(Math.round(diff * 10) / 10) + ' ' + unit + ' (' + (pctChange > 0 ? '+' : '') + pctChange + '%) from previous</div>';
+    }
+  }
+
+  var displayVal = val !== null ? (val % 1 === 0 ? val : Math.round(val * 10) / 10) : (sample.value_text || '—');
+
+  return '<div class="bw-card">'
+    + '<div class="bw-card-name">' + escapeHtml(sample.biomarker_name) + '</div>'
+    + '<div class="bw-card-value-row">'
+    + '<div class="bw-card-value">' + displayVal + '</div>'
+    + '<div class="bw-card-unit">' + escapeHtml(unit) + '</div>'
+    + flagHtml
+    + '</div>'
+    + rangeHtml
+    + (refRange ? '<div class="bw-card-ref">Ref: ' + escapeHtml(refRange) + '</div>' : '')
+    + deltaHtml
+    + '</div>';
+}
+
 // ── DOCUMENTS ──
 var uploadedDocs = [];
 
@@ -2257,6 +2548,40 @@ async function handleDocUpload(input) {
       if (tempCard) {
         tempCard.style.opacity = '1';
         tempCard.querySelector('.doc-card-meta').textContent = 'Uploaded just now';
+      }
+
+      // Check if this was detected as blood_work and redirect
+      if (upload_id) {
+        try {
+          var updatedDoc = await supabaseRequest(
+            '/rest/v1/uploads?id=eq.' + upload_id + '&select=document_type,status',
+            'GET', null, currentSession.access_token
+          );
+          if (updatedDoc && updatedDoc[0] && updatedDoc[0].document_type === 'blood_work') {
+            // Count extracted biomarkers
+            var extracted = await supabaseRequest(
+              '/rest/v1/blood_work_samples?upload_id=eq.' + upload_id + '&select=id',
+              'GET', null, currentSession.access_token
+            );
+            var count = (extracted && Array.isArray(extracted)) ? extracted.length : 0;
+            if (count > 0) {
+              // Navigate to bloodwork page with success message
+              showPage('bloodwork', null);
+              // Brief delay for page render then show success
+              setTimeout(function() {
+                var summary = document.getElementById('bw-summary');
+                if (summary) {
+                  summary.insertAdjacentHTML('afterbegin',
+                    '<div style="background:var(--success-bg);border:1px solid var(--success-border);padding:12px 18px;margin-bottom:16px;font-size:13px;color:var(--up);display:flex;align-items:center;gap:10px;animation:fade-in .3s ease">'
+                    + '<span style="font-size:16px">✓</span> Extracted ' + count + ' biomarkers from your lab results.'
+                    + '</div>'
+                  );
+                }
+              }, 500);
+              continue; // skip loadDocumentsPage for this file
+            }
+          }
+        } catch(e2) { /* non-critical, just skip redirect */ }
       }
     } catch(e) {
       console.error('Upload error:', e);
@@ -3840,6 +4165,288 @@ function reloadPageData(page) {
     mealsDate = pageSelectedDate['meals'] || new Date();
     updateMealsDateLabel();
     loadMealsPage();
+  }
+}
+
+// ── WEEKLY INSIGHTS ──
+async function loadWeeklyInsights() {
+  if (!currentUser) return;
+  var token = currentSession.access_token;
+  try {
+    // Get insights from current week
+    var weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
+    var weekStartStr = localDateStr(weekStart);
+    var insights = await supabaseRequest(
+      '/rest/v1/weekly_insights?user_id=eq.' + currentUser.id + '&week_start=gte.' + weekStartStr + '&order=created_at.desc&limit=5',
+      'GET', null, token
+    );
+    if (!insights || insights.error || !Array.isArray(insights) || insights.length === 0) {
+      // Try last week
+      var lastWeek = new Date(weekStart);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      insights = await supabaseRequest(
+        '/rest/v1/weekly_insights?user_id=eq.' + currentUser.id + '&week_start=gte.' + localDateStr(lastWeek) + '&order=created_at.desc&limit=5',
+        'GET', null, token
+      );
+    }
+    if (!insights || insights.error || !Array.isArray(insights) || insights.length === 0) return;
+    renderWeeklyInsights(insights);
+  } catch(e) { console.error('[Healix] Weekly insights error:', e); }
+}
+
+function renderWeeklyInsights(insights) {
+  var section = document.getElementById('weekly-insights-section');
+  var list = document.getElementById('weekly-insights-list');
+  if (!section || !list) return;
+  section.style.display = 'block';
+  var riskColors = { low: 'risk-low', moderate: 'risk-moderate', high: 'risk-high' };
+  list.innerHTML = insights.map(function(ins) {
+    var riskCls = riskColors[ins.risk_level] || 'risk-low';
+    var encoded = encodeURIComponent(ins.insight_text.substring(0, 100));
+    return '<div class="insight-card">'
+      + '<div class="insight-card-risk ' + riskCls + '">' + escapeHtml(ins.risk_level || 'low') + '</div>'
+      + '<div class="insight-card-content">'
+      + '<div class="insight-card-text">' + escapeHtml(ins.insight_text) + '</div>'
+      + '<a href="chat.html?q=' + encoded + '" class="insight-card-discuss">Discuss with Healix →</a>'
+      + '</div></div>';
+  }).join('');
+}
+
+// ── HEALTH SUMMARIES ──
+async function loadHealthSummary() {
+  if (!currentUser) return;
+  var token = currentSession.access_token;
+  try {
+    var summaries = await supabaseRequest(
+      '/rest/v1/user_health_summaries?user_id=eq.' + currentUser.id + '&summary_type=eq.weekly&order=created_at.desc&limit=1',
+      'GET', null, token
+    );
+    if (!summaries || summaries.error || !Array.isArray(summaries) || summaries.length === 0) return;
+    renderHealthSummaryCard(summaries[0]);
+  } catch(e) { console.error('[Healix] Health summary error:', e); }
+}
+
+function renderHealthSummaryCard(summary) {
+  var section = document.getElementById('health-summary-section');
+  var content = document.getElementById('health-summary-content');
+  if (!section || !content) return;
+  var text = summary.summary_text || summary.content || '';
+  if (!text) return;
+  section.style.display = 'block';
+  content.innerHTML = safeMarkdownDashboard(text);
+}
+
+function safeMarkdownDashboard(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--cream)">$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+// ── SHARE/EXPORT ──
+function shareBloodwork() {
+  // Generate a printable bloodwork summary
+  var el = document.getElementById('bw-biomarkers');
+  if (!el || !selectedBloodworkDate) return;
+  var printWin = window.open('', '_blank');
+  if (!printWin) { alert('Please allow pop-ups to generate the report.'); return; }
+  var samples = bloodworkByDate[selectedBloodworkDate] || [];
+  var dateLabel = new Date(selectedBloodworkDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  var profileName = '';
+  if (window.userProfileData) {
+    profileName = [window.userProfileData.first_name, window.userProfileData.last_name].filter(Boolean).join(' ');
+  }
+  var html = '<!DOCTYPE html><html><head><title>Healix Bloodwork Report</title>'
+    + '<style>body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:40px auto;padding:0 20px;color:#1a1a1a}'
+    + 'h1{font-size:24px;font-weight:300;margin-bottom:4px}h2{font-size:14px;color:#666;font-weight:400;margin-bottom:32px}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:24px}'
+    + 'th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#999;padding:8px 0;border-bottom:2px solid #eee}'
+    + 'td{padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px}'
+    + '.flag-h{color:#e55;font-weight:600}.flag-l{color:#2a7;font-weight:600}.flag-normal{color:#555}'
+    + '.footer{margin-top:40px;font-size:11px;color:#999;border-top:1px solid #eee;padding-top:16px}'
+    + '@media print{body{margin:0}}</style></head><body>'
+    + '<h1>Bloodwork Report' + (profileName ? ' — ' + escapeHtml(profileName) : '') + '</h1>'
+    + '<h2>Lab results from ' + escapeHtml(dateLabel) + '</h2>'
+    + '<table><thead><tr><th>Biomarker</th><th>Value</th><th>Unit</th><th>Reference</th><th>Flag</th></tr></thead><tbody>';
+  samples.forEach(function(s) {
+    var flagCls = s.flag === 'H' ? 'flag-h' : s.flag === 'L' ? 'flag-l' : 'flag-normal';
+    var flagLabel = s.flag === 'H' ? 'HIGH' : s.flag === 'L' ? 'LOW' : s.flag === 'A' ? 'ABN' : 'Normal';
+    html += '<tr><td>' + escapeHtml(s.biomarker_name) + '</td>'
+      + '<td><strong>' + (s.value !== null ? s.value : (s.value_text || '—')) + '</strong></td>'
+      + '<td>' + escapeHtml(s.unit || '') + '</td>'
+      + '<td>' + escapeHtml(s.reference_range || '') + '</td>'
+      + '<td class="' + flagCls + '">' + flagLabel + '</td></tr>';
+  });
+  html += '</tbody></table>'
+    + '<div class="footer">Generated by Healix · tryhealix.xyz · ' + new Date().toLocaleDateString() + '</div>'
+    + '</body></html>';
+  printWin.document.write(html);
+  printWin.document.close();
+  printWin.print();
+}
+
+// ── PREMIUM GATES ──
+function getUserTier() {
+  // For now, all users are premium during beta
+  // This function will check the profile tier field when Stripe is integrated
+  var profile = window.userProfileData || {};
+  return profile.tier || 'premium';
+}
+
+function isPremium() {
+  return getUserTier() === 'premium';
+}
+
+function renderPremiumGate(containerId, featureName) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  if (isPremium()) return; // No gate for premium users
+  container.classList.add('premium-gate');
+  container.insertAdjacentHTML('beforeend',
+    '<div class="premium-cta">'
+    + '<div class="premium-cta-text">Upgrade to unlock ' + escapeHtml(featureName) + '</div>'
+    + '<button class="premium-cta-btn" onclick="showPage(\'profile\',null)">Upgrade</button>'
+    + '</div>'
+  );
+}
+
+// ── ONBOARDING ──
+function checkOnboarding() {
+  // Skip if user already dismissed onboarding
+  if (localStorage.getItem('healix_onboarding_done')) return;
+  // Check if user has meaningful data
+  var profile = window.userProfileData || {};
+  var hasBloodwork = document.getElementById('drv-bloodwork-val') && document.getElementById('drv-bloodwork-val').textContent !== 'Not connected' && document.getElementById('drv-bloodwork-val').textContent !== '—';
+  var hasWeight = profile.current_weight_kg;
+  var hasDob = profile.birth_date || profile.dob;
+  var hasHeight = profile.height_cm;
+  // If user has most core data, skip onboarding
+  if (hasBloodwork && hasWeight && hasDob && hasHeight) {
+    localStorage.setItem('healix_onboarding_done', '1');
+    return;
+  }
+  showOnboarding();
+}
+
+function showOnboarding() {
+  var overlay = document.createElement('div');
+  overlay.className = 'onboarding-overlay';
+  overlay.id = 'onboarding-overlay';
+  overlay.innerHTML = '<div class="onboarding-card">'
+    + '<div class="onboarding-title">Welcome to <em>Healix</em></div>'
+    + '<div class="onboarding-sub">Get the most out of your health dashboard. Start with any of these — each one makes your insights smarter.</div>'
+    + '<div class="onboarding-actions">'
+    + '<div class="onboarding-action" onclick="dismissOnboarding();showPage(\'documents\',null)">'
+    + '<div class="onboarding-action-icon">🧬</div>'
+    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Upload lab results</div><div class="onboarding-action-desc">Blood work is worth 40% of your Vitality Age. Upload a PDF — we extract everything automatically.</div></div>'
+    + '<div class="onboarding-action-badge">Fastest path</div>'
+    + '</div>'
+    + '<div class="onboarding-action" onclick="dismissOnboarding();showPage(\'profile\',null)">'
+    + '<div class="onboarding-action-icon">📋</div>'
+    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Complete your profile</div><div class="onboarding-action-desc">Add date of birth, height, and weight for an accurate Vitality Age calculation.</div></div>'
+    + '</div>'
+    + '<div class="onboarding-action" onclick="dismissOnboarding();setMealDateTimeDefault();openModal(\'meal-modal\')">'
+    + '<div class="onboarding-action-icon">🍽</div>'
+    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Log your first meal</div><div class="onboarding-action-desc">Track nutrition and get AI-powered dietary insights.</div></div>'
+    + '</div>'
+    + '</div>'
+    + '<div class="onboarding-skip" onclick="dismissOnboarding()">I\'ll explore on my own</div>'
+    + '</div>';
+  document.body.appendChild(overlay);
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('healix_onboarding_done', '1');
+  var overlay = document.getElementById('onboarding-overlay');
+  if (overlay) overlay.remove();
+}
+
+// ── PROFILE COMPLETENESS ──
+function renderProfileCompleteness() {
+  var profile = window.userProfileData || {};
+  var fields = [
+    { key: 'first_name', label: 'name', has: !!profile.first_name },
+    { key: 'birth_date', label: 'date of birth', has: !!(profile.birth_date || profile.dob) },
+    { key: 'height_cm', label: 'height', has: !!profile.height_cm },
+    { key: 'current_weight_kg', label: 'weight', has: !!profile.current_weight_kg },
+    { key: 'sex', label: 'biological sex', has: !!profile.sex }
+  ];
+  var filled = fields.filter(function(f) { return f.has; }).length;
+  var pct = Math.round((filled / fields.length) * 100);
+  if (pct >= 100) return; // Don't show if complete
+  var missing = fields.filter(function(f) { return !f.has; }).map(function(f) { return f.label; });
+  var missingText = 'Add ' + missing.join(', ') + ' for accurate Vitality Age.';
+  // Insert before the vitality hero
+  var container = document.querySelector('.vitality-page');
+  if (!container) return;
+  var existing = document.getElementById('profile-completeness');
+  if (existing) existing.remove();
+  var el = document.createElement('div');
+  el.className = 'profile-completeness';
+  el.id = 'profile-completeness';
+  el.style.cursor = 'pointer';
+  el.onclick = function() { showPage('profile', null); };
+  el.innerHTML = '<div class="profile-pct">' + pct + '%</div>'
+    + '<div class="profile-pct-info">'
+    + '<div class="profile-pct-label">Profile completeness</div>'
+    + '<div class="profile-pct-hint">' + escapeHtml(missingText) + '</div>'
+    + '<div class="profile-pct-bar"><div class="profile-pct-fill" style="width:' + pct + '%"></div></div>'
+    + '</div>';
+  container.insertBefore(el, container.firstChild);
+}
+
+// ── SMART EMPTY STATES ──
+function renderSmartEmptyStates() {
+  // Vitality Age — show guidance when it's showing "—"
+  var vaAge = document.getElementById('va-age');
+  if (vaAge && vaAge.textContent === '—') {
+    var confidence = document.getElementById('va-confidence');
+    if (confidence) {
+      confidence.innerHTML = 'Upload bloodwork (40% of your score) or add your height and weight to unlock your Vitality Age.';
+      confidence.className = 'vitality-confidence amber';
+    }
+  }
+}
+
+// ── MEAL EDIT/DELETE ──
+var editingMealId = null;
+
+function openEditMeal(mealId) {
+  editingMealId = mealId;
+  var meals = window._healixMeals || [];
+  var meal = meals.find(function(m) { return m.id === mealId; });
+  if (!meal) return;
+  var macros = getMacrosFromMeal(meal);
+  document.getElementById('ml-name').value = meal.meal_description || '';
+  document.getElementById('ml-type').value = meal.meal_type || 'lunch';
+  if (meal.meal_time) {
+    var dt = new Date(meal.meal_time);
+    var y = dt.getFullYear();
+    var mo = String(dt.getMonth() + 1).padStart(2, '0');
+    var d = String(dt.getDate()).padStart(2, '0');
+    var h = String(dt.getHours()).padStart(2, '0');
+    var mi = String(dt.getMinutes()).padStart(2, '0');
+    document.getElementById('ml-datetime').value = y + '-' + mo + '-' + d + 'T' + h + ':' + mi;
+  }
+  document.getElementById('ml-cals').value = macros.cal ? Math.round(macros.cal) : '';
+  document.getElementById('ml-protein').value = macros.prot ? Math.round(macros.prot) : '';
+  document.getElementById('ml-carbs').value = macros.carb ? Math.round(macros.carb) : '';
+  document.getElementById('ml-fat').value = macros.fat ? Math.round(macros.fat) : '';
+  // Update modal title and button
+  document.querySelector('#meal-modal .modal-title').innerHTML = 'Edit <em>Meal</em>';
+  document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Save Changes';
+  openModal('meal-modal');
+}
+
+async function deleteMeal(mealId) {
+  var confirmed = await confirmModal('This meal will be permanently deleted.', { title: 'Delete Meal', confirmText: 'Delete', danger: true });
+  if (!confirmed) return;
+  try {
+    await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'DELETE', null, currentSession.access_token);
+    loadMealsPage();
+    loadDashboardData();
+  } catch(e) {
+    console.error('Delete meal error:', e);
   }
 }
 
