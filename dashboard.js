@@ -185,10 +185,7 @@ async function init() {
     loadFamilyHistoryForm();
     setWeightDateDefault();
   } catch(e) {
-    console.error('Auth error:', e);
-    localStorage.removeItem('healix_session');
-    window.location.href = 'login.html';
-    return;
+    console.error('[Healix] Init error:', e);
   }
 }
 
@@ -689,7 +686,7 @@ function renderVitalityTimeline() {
     realY = padY + (1 - (realAge - minAge) / rangeAge) * (H - 2 * padY);
   }
 
-  var svg = '<svg class="va-timeline-chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+  var svg = '<svg class="va-timeline-chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
   svg += '<defs><linearGradient id="vaTimelineGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#B8975A" stop-opacity=".3"/><stop offset="100%" stop-color="#B8975A" stop-opacity="0"/></linearGradient>';
   svg += '<linearGradient id="vaTimelineLineGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#B8975A"/><stop offset="100%" stop-color="#F5D89A"/></linearGradient></defs>';
 
@@ -942,7 +939,8 @@ function setSleepRange(days, btn) {
 
 async function loadSleepPage() {
   if (!currentUser) return;
-  var token = currentSession.access_token;
+  var s = getSession(); if (!s) return;
+  var token = s.access_token;
   var daysAgo = new Date();
   daysAgo.setDate(daysAgo.getDate() - 90); // Fetch 90 days max, filter client-side
 
@@ -1019,7 +1017,8 @@ function renderSleepPageData() {
   debt = Math.round(debt * 10) / 10;
 
   // Sleep score
-  var sleepScore = scoreSleep({ avg: avgHours, nights: sessionData.length, debt: debt });
+  // Cap nights to 21 for score consistency with the dashboard's 21-day window
+  var sleepScore = scoreSleep({ avg: avgHours, nights: Math.min(sessionData.length, 21), debt: debt });
 
   var safeSet = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
   safeSet('slp-last', latest.totalHours);
@@ -1071,9 +1070,9 @@ function renderSleepStageChart(sessionData) {
     html += '<div class="sleep-stage-bar">';
     html += '<div class="sleep-stage-hours">' + d.totalHours + 'h</div>';
     html += '<div class="sleep-stage-stack">';
-    html += '<div class="sleep-stage-seg" style="height:' + deepH + 'px;background:#5B6FAF"></div>';
-    html += '<div class="sleep-stage-seg" style="height:' + remH + 'px;background:#7C6FAF"></div>';
-    html += '<div class="sleep-stage-seg" style="height:' + coreH + 'px;background:#6F9FAF"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + deepH + 'px;background:var(--sleep-deep)"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + remH + 'px;background:var(--sleep-rem)"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + coreH + 'px;background:var(--sleep-core)"></div>';
     html += '<div class="sleep-stage-seg" style="height:' + awakeH + 'px;background:rgba(245,240,232,0.15)"></div>';
     html += '</div>';
     html += '<div class="sleep-stage-date">' + dayOfWeek + '<br>' + dayLabel + '</div>';
@@ -1086,9 +1085,9 @@ function renderSleepStageChart(sessionData) {
   var avgRem = Math.round(data.reduce(function(s, d) { return s + d.stages.rem; }, 0) / data.length);
   var avgCore = Math.round(data.reduce(function(s, d) { return s + d.stages.core; }, 0) / data.length);
   html += '<div style="display:flex;gap:20px;margin-top:16px;padding-top:12px;border-top:1px solid var(--gold-border)">';
-  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#5B6FAF;margin-bottom:4px">Avg Deep</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgDeep / 60) + 'h ' + (avgDeep % 60) + 'm</div></div>';
-  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#7C6FAF;margin-bottom:4px">Avg REM</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgRem / 60) + 'h ' + (avgRem % 60) + 'm</div></div>';
-  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#6F9FAF;margin-bottom:4px">Avg Core</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgCore / 60) + 'h ' + (avgCore % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--sleep-deep);margin-bottom:4px">Avg Deep</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgDeep / 60) + 'h ' + (avgDeep % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--sleep-rem);margin-bottom:4px">Avg REM</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgRem / 60) + 'h ' + (avgRem % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--sleep-core);margin-bottom:4px">Avg Core</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgCore / 60) + 'h ' + (avgCore % 60) + 'm</div></div>';
   html += '</div>';
 
   container.innerHTML = html;
@@ -1362,10 +1361,11 @@ async function loadDashboardData() {
           for (var i = 0; i < mapKeys.length; i++) {
             if (mapKeys[i].toLowerCase() === lowerName) { key = BIOMARKER_MAP[mapKeys[i]]; break; }
           }
-          // Partial match fallback: check if biomarker name contains a map key
+          // Partial match fallback: check if biomarker name starts with a map key
           if (!key) {
             for (var j = 0; j < mapKeys.length; j++) {
-              if (lowerName.indexOf(mapKeys[j].toLowerCase()) !== -1) { key = BIOMARKER_MAP[mapKeys[j]]; break; }
+              var mapKeyLower = mapKeys[j].toLowerCase();
+              if (lowerName === mapKeyLower || lowerName.indexOf(mapKeyLower + ' ') === 0 || lowerName.indexOf(mapKeyLower + '/') === 0) { key = BIOMARKER_MAP[mapKeys[j]]; break; }
             }
           }
           if (!key) unmapped.push(sample.biomarker_name);
@@ -1608,6 +1608,23 @@ function getMacroTargets() {
   return { cal: calTarget, prot: protTarget, fat: fatTarget, carbs: carbTarget };
 }
 
+function animateMacroRings(prot, carbs, fat, targets) {
+  var rings = [
+    { id: 'ring-prot', value: prot || 0, target: targets.prot, circ: 439.8 },
+    { id: 'ring-carbs', value: carbs || 0, target: targets.carbs, circ: 351.9 },
+    { id: 'ring-fat', value: fat || 0, target: targets.fat, circ: 263.9 }
+  ];
+  setTimeout(function() {
+    rings.forEach(function(r) {
+      var el = document.getElementById(r.id);
+      if (!el) return;
+      var pct = Math.min(r.value / r.target, 1.15); // Allow slight overflow visual
+      var offset = r.circ * (1 - pct);
+      el.style.strokeDashoffset = Math.max(0, offset);
+    });
+  }, 100);
+}
+
 function renderDayMacroUI(cal, prot, carbs, fat) {
   var targets = getMacroTargets();
   var setEl = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
@@ -1625,20 +1642,7 @@ function renderDayMacroUI(cal, prot, carbs, fat) {
   setEl('mp-fat-sub', 'of ' + targets.fat + 'g goal');
 
   // Animate rings
-  var rings = [
-    { id: 'ring-prot', value: prot || 0, target: targets.prot, circ: 439.8 },
-    { id: 'ring-carbs', value: carbs || 0, target: targets.carbs, circ: 351.9 },
-    { id: 'ring-fat', value: fat || 0, target: targets.fat, circ: 263.9 }
-  ];
-  setTimeout(function() {
-    rings.forEach(function(r) {
-      var el = document.getElementById(r.id);
-      if (!el) return;
-      var pct = Math.min(r.value / r.target, 1.15); // Allow slight overflow visual
-      var offset = r.circ * (1 - pct);
-      el.style.strokeDashoffset = Math.max(0, offset);
-    });
-  }, 100);
+  animateMacroRings(prot, carbs, fat, targets);
 }
 
 
@@ -2221,20 +2225,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
 
   // Animate rings for avg values
   var targets = getMacroTargets();
-  var rings = [
-    { id: 'ring-prot', value: avgProt || 0, target: targets.prot, circ: 439.8 },
-    { id: 'ring-carbs', value: avgCarb || 0, target: targets.carbs, circ: 351.9 },
-    { id: 'ring-fat', value: avgFat || 0, target: targets.fat, circ: 263.9 }
-  ];
-  setTimeout(function() {
-    rings.forEach(function(r) {
-      var el = document.getElementById(r.id);
-      if (!el) return;
-      var pct = Math.min(r.value / r.target, 1.15);
-      var offset = r.circ * (1 - pct);
-      el.style.strokeDashoffset = Math.max(0, offset);
-    });
-  }, 100);
+  animateMacroRings(avgProt, avgCarb, avgFat, targets);
 
   // Avg macro cards
   document.getElementById('agg-cal').textContent     = avgCal || '—';
@@ -2249,7 +2240,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var calDates = document.getElementById('agg-cal-dates');
   if (calChart) {
     var maxCal = Math.max.apply(null, calsByDay.concat([1]));
-    var calGoal = getMacroTargets().cal;
+    var calGoal = targets.cal;
     calChart.style.display = 'flex';
     calChart.style.alignItems = 'flex-end';
     calChart.style.gap = '3px';
@@ -2299,7 +2290,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
         var ri = days.length - 1 - i;
         var dt = new Date(d + 'T12:00:00');
         var isToday = d === localDateStr(new Date());
-        var overGoal = calsByDay[ri] > getMacroTargets().cal;
+        var overGoal = calsByDay[ri] > targets.cal;
         return '<tr style="border-bottom:1px solid rgba(184,151,90,.06);cursor:pointer" onclick="drillToDay(\'' + d + '\')" onmouseover="this.style.background=\'var(--gold-faint)\'" onmouseout="this.style.background=\'\'">'
 
           + '<td style="padding:11px 0;font-size:13px;color:' + (isToday ? 'var(--gold)' : 'var(--cream)') + '">' + dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>'
@@ -2576,7 +2567,6 @@ async function saveSupplement() {
     dosageEl.value = '';
     statusEl.style.display = 'none';
     saveBtn.disabled = false;
-    _suppPhotoBase64 = null;
     _suppPhotoNutrients = null;
     document.getElementById('supp-photo-preview').style.display = 'none';
     document.getElementById('supp-photo-input').value = '';
@@ -2588,7 +2578,6 @@ async function saveSupplement() {
 }
 
 // ── SUPPLEMENT PHOTO ──
-var _suppPhotoBase64 = null;
 var _suppPhotoNutrients = null;
 
 function handleSupplementPhoto(input) {
@@ -2597,7 +2586,6 @@ function handleSupplementPhoto(input) {
   var reader = new FileReader();
   reader.onload = function(e) {
     var base64 = e.target.result;
-    _suppPhotoBase64 = base64;
     document.getElementById('supp-photo-img').src = base64;
     document.getElementById('supp-photo-preview').style.display = 'block';
     analyzeSupplementPhoto(base64);
@@ -2606,7 +2594,6 @@ function handleSupplementPhoto(input) {
 }
 
 function clearSupplementPhoto() {
-  _suppPhotoBase64 = null;
   _suppPhotoNutrients = null;
   document.getElementById('supp-photo-preview').style.display = 'none';
   document.getElementById('supp-photo-input').value = '';
@@ -2615,6 +2602,8 @@ function clearSupplementPhoto() {
 }
 
 async function analyzeSupplementPhoto(base64) {
+  var s = getSession(); if (!s) return;
+  var token = s.access_token;
   var statusEl = document.getElementById('supp-status');
   var nameEl = document.getElementById('supp-name');
   var dosageEl = document.getElementById('supp-dosage');
@@ -2625,7 +2614,7 @@ async function analyzeSupplementPhoto(base64) {
   try {
     var res = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-from-image', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
         image: base64,
         context: 'This is a supplement bottle label. Extract the supplement name, serving size, and all nutrients with amounts.'
@@ -3281,6 +3270,9 @@ async function saveFamilyHistory() {
   } catch(e) { alert('Could not save family history: ' + e.message); console.error(e); }
 }
 
+var profileHeightUnit = 'imperial'; // 'imperial' or 'metric'
+var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
+
 function populateProfileForm(profile) {
   var fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
   if (fullName) document.getElementById('p-name').value = fullName;
@@ -3349,8 +3341,7 @@ function populateProfileForm(profile) {
   }
 }
 
-var profileHeightUnit = 'imperial'; // 'imperial' or 'metric'
-var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
+// profileHeightUnit and profileWeightUnit moved before populateProfileForm
 
 function toggleHeightUnit(unit) {
   var input = document.getElementById('p-height');
@@ -3472,15 +3463,15 @@ async function saveProfile() {
   var goal = document.getElementById('p-goal').value;
   var dob = document.getElementById('p-dob').value;
   var sex = document.getElementById('p-sex').value;
-  if (goal) data.primary_goal = goal;
-  if (dob) data.birth_date = dob;
-  if (sex) data.gender = sex;
-  if (heightCm) data.height_cm = heightCm;
-  if (weightKg) data.current_weight_kg = weightKg;
+  data.primary_goal = goal || null;
+  data.birth_date = dob || null;
+  data.gender = sex || null;
+  data.height_cm = heightCm || null;
+  data.current_weight_kg = weightKg || null;
 
-  // Also save medical profile
-  if (medicalProfile.conditions.length > 0) data.health_conditions = medicalProfile.conditions.join(', ');
-  if (medicalProfile.allergies.length > 0) data.dietary_restrictions = medicalProfile.allergies.join(', ');
+  // Also save medical profile (clearable)
+  data.health_conditions = medicalProfile.conditions.length > 0 ? medicalProfile.conditions.join(', ') : null;
+  data.dietary_restrictions = medicalProfile.allergies.length > 0 ? medicalProfile.allergies.join(', ') : null;
 
   console.log('[Healix] Saving profile:', JSON.stringify(data));
   var saveBtn = document.querySelector('.save-btn');

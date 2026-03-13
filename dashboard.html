@@ -179,7 +179,7 @@
             <div class="driver-status" id="drv-aerobic-status"></div>
             <div class="driver-freshness" id="drv-aerobic-freshness"></div>
           </div>
-          <div class="driver-card" id="drv-sleep" onclick="showPage('sleep',null)" style="cursor:pointer">
+          <div class="driver-card" id="drv-sleep" onclick="showPage('sleep',null)" role="button" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" style="cursor:pointer">
             <div class="driver-icon">◑</div>
             <div class="driver-label">Sleep</div>
             <div class="driver-val" id="drv-sleep-val">—</div>
@@ -341,38 +341,38 @@
         <div style="margin-top:16px">
           <div class="card">
             <div class="card-label" style="margin-bottom:12px">What Nutrients Support</div>
-            <div id="vitamin-functions-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Eyes & Vision</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Vitamin A, Zinc, Omega-3, Vitamin E, Lutein</div>
+            <div id="vitamin-functions-grid" class="nutrient-grid">
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Eyes & Vision</div>
+                <div class="nutrient-grid-cell-body">Vitamin A, Zinc, Omega-3, Vitamin E, Lutein</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Bones & Joints</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Calcium, Vitamin D, Vitamin K, Magnesium, Phosphorus</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Bones & Joints</div>
+                <div class="nutrient-grid-cell-body">Calcium, Vitamin D, Vitamin K, Magnesium, Phosphorus</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Brain & Focus</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Omega-3, B12, Iron, Magnesium, Choline</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Brain & Focus</div>
+                <div class="nutrient-grid-cell-body">Omega-3, B12, Iron, Magnesium, Choline</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Immune System</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Vitamin C, Vitamin D, Zinc, Selenium, Iron</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Immune System</div>
+                <div class="nutrient-grid-cell-body">Vitamin C, Vitamin D, Zinc, Selenium, Iron</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Energy & Metabolism</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">B1, B2, B3, B6, Iron, Magnesium</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Energy & Metabolism</div>
+                <div class="nutrient-grid-cell-body">B1, B2, B3, B6, Iron, Magnesium</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Heart & Blood</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Omega-3, Potassium, Magnesium, Folate, Iron</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Heart & Blood</div>
+                <div class="nutrient-grid-cell-body">Omega-3, Potassium, Magnesium, Folate, Iron</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Skin & Hair</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Vitamin A, Vitamin C, Vitamin E, Biotin, Zinc</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Skin & Hair</div>
+                <div class="nutrient-grid-cell-body">Vitamin A, Vitamin C, Vitamin E, Biotin, Zinc</div>
               </div>
-              <div style="padding:10px;border:1px solid var(--gold-border);border-radius:2px">
-                <div style="font-size:11px;color:var(--gold);font-weight:500;margin-bottom:6px">Muscle Recovery</div>
-                <div style="font-size:11px;color:var(--cream-dim);line-height:1.6">Magnesium, Potassium, Vitamin D, Calcium, Leucine</div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Muscle Recovery</div>
+                <div class="nutrient-grid-cell-body">Magnesium, Potassium, Vitamin D, Calcium, Leucine</div>
               </div>
             </div>
           </div>
@@ -474,9 +474,9 @@
         <div class="card-label" style="margin-bottom:16px">Sleep Stages Over Time</div>
         <div id="sleep-stage-chart" style="min-height:160px"></div>
         <div class="sleep-stage-legend" id="sleep-stage-legend">
-          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:#5B6FAF"></span> Deep</span>
-          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:#7C6FAF"></span> REM</span>
-          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:#6F9FAF"></span> Core</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:var(--sleep-deep)"></span> Deep</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:var(--sleep-rem)"></span> REM</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:var(--sleep-core)"></span> Core</span>
           <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:rgba(245,240,232,0.15)"></span> Awake</span>
         </div>
       </div>
@@ -588,7 +588,7 @@
               <label class="modal-label">Height</label>
               <div style="display:flex;gap:6px;align-items:center">
                 <input class="modal-input" id="p-height" type="text" placeholder='e.g. 5&apos;11"' style="flex:1">
-                <div class="unit-toggle" id="height-unit-toggle">
+                <div class="unit-toggle" id="height-unit-toggle" role="group">
                   <button class="unit-btn active" data-unit="imperial" onclick="toggleHeightUnit('imperial')">ft/in</button>
                   <button class="unit-btn" data-unit="metric" onclick="toggleHeightUnit('metric')">cm</button>
                 </div>
@@ -598,7 +598,7 @@
               <label class="modal-label">Weight</label>
               <div style="display:flex;gap:6px;align-items:center">
                 <input class="modal-input" id="p-weight" type="text" placeholder="lbs" style="flex:1">
-                <div class="unit-toggle" id="weight-unit-toggle">
+                <div class="unit-toggle" id="weight-unit-toggle" role="group">
                   <button class="unit-btn active" data-unit="lbs" onclick="toggleWeightUnit('lbs')">lbs</button>
                   <button class="unit-btn" data-unit="kg" onclick="toggleWeightUnit('kg')">kg</button>
                 </div>
