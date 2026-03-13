@@ -620,13 +620,8 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
     <p class="sl" style="margin-bottom:20px">Get started</p>
     <h2>Try Healix free.<br><em>No commitment.</em></h2>
     <p>Get access to the full Healix experience — mobile app for data ingestion, web dashboard for analysis and AI chat. Free during beta.</p>
-    <form class="cta-form" id="cta-email-form">
-      <input type="email" name="email" placeholder="Your email address" required id="cta-email-input">
-      <button type="submit" class="cta-sub">Get Early Access</button>
-    </form>
-    <div class="cta-success" id="cta-success">You're in! We'll be in touch shortly.</div>
-    <p class="cta-priv">No spam, ever. Your email is only used to send your invite.</p>
-    <a href="signup.html" class="cta-secondary">Or sign up directly →</a>
+    <a href="signup.html" class="btn-p" style="display:inline-block;margin-top:8px">Sign Up Free</a>
+    <a href="login.html" class="cta-secondary" style="margin-top:16px;display:inline-block">Already have an account? Log in →</a>
   </div>
 </section>
 
@@ -659,34 +654,7 @@ function tFaq(btn){
   if(!open) item.classList.add('open');
 }
 
-// CTA form — Supabase email capture (uses config.js globals)
-(function(){
-  var form = document.getElementById('cta-email-form');
-  if(!form) return;
-  form.addEventListener('submit', function(e){
-    e.preventDefault();
-    var email = document.getElementById('cta-email-input').value;
-    if(!email) return;
-    fetch(SUPABASE_URL + '/rest/v1/beta_signups', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
-        'Prefer': 'return=minimal'
-      },
-      body: JSON.stringify({ email: email })
-    }).then(function(res){
-      if (!res.ok) throw new Error('Signup failed');
-      form.style.display = 'none';
-      document.getElementById('cta-success').style.display = 'block';
-    }).catch(function(){
-      form.style.display = 'none';
-      document.getElementById('cta-success').textContent = 'Something went wrong — please try again later.';
-      document.getElementById('cta-success').style.display = 'block';
-    });
-  });
-})();
+// CTA form removed — direct signup link used instead
 </script>
 
 <script>

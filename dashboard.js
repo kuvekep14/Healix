@@ -616,6 +616,22 @@ function renderVitalityAge(result, realAge) {
 }
 
 function renderDriverCards(metrics, result) {
+  // Compute actual weights (accounting for redistribution)
+  var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
+  var bwPresent = scoreBloodwork(metrics.bloodwork) !== null;
+  var hrPresent = metrics.hr !== null;
+  var wtPresent = metrics.weightScore !== null && metrics.weightScore > 0;
+  var slpPresent = metrics.sleepData != null;
+  var strPresent = metrics.strengthData !== null;
+  var aerPresent = metrics.vo2max !== null;
+  var totalAvail = (bwPresent ? rawWeights.bloodwork : 0) + (hrPresent ? rawWeights.heart : 0)
+    + (wtPresent ? rawWeights.weight : 0) + (slpPresent ? rawWeights.sleep : 0)
+    + (strPresent ? rawWeights.strength : 0) + (aerPresent ? rawWeights.aerobic : 0);
+  function pctLabel(key, present) {
+    if (totalAvail === 0) return Math.round(rawWeights[key] * 100) + '%';
+    return present ? Math.round((rawWeights[key] / totalAvail) * 100) + '%' : Math.round(rawWeights[key] * 100) + '%';
+  }
+
   function setDriver(key, val, score, unit) {
     var cls = score >= 70 ? 'good' : score >= 40 ? 'fair' : score > 0 ? 'low' : 'none';
     var label = score >= 70 ? 'Good' : score >= 40 ? 'Fair' : score > 0 ? 'Needs work' : 'No data';
@@ -623,10 +639,23 @@ function renderDriverCards(metrics, result) {
     var valEl = document.getElementById('drv-' + key + '-val');
     var barEl = document.getElementById('drv-' + key + '-bar');
     var stEl = document.getElementById('drv-' + key + '-status');
-    if (valEl) valEl.textContent = val !== null ? (val + (unit||'')) : '—';
+    if (valEl) {
+      if (val !== null) {
+        valEl.textContent = val + (unit||'');
+        valEl.style.fontSize = ''; valEl.style.color = '';
+      } else {
+        valEl.textContent = '—';
+      }
+    }
     if (barEl) { barEl.style.width = score + '%'; barEl.className = 'driver-bar-fill ' + (score > 0 ? cls : ''); }
     if (stEl) { stEl.textContent = label; stEl.className = 'driver-status ' + cls; }
     if (card) { card.className = 'driver-card ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : ''); }
+    // Show weight percentage in label
+    var labelEl = card ? card.querySelector('.driver-label') : null;
+    if (labelEl) {
+      var baseName = { heart: 'Heart Rate', weight: 'Weight', strength: 'Strength', aerobic: 'VO2 Max', sleep: 'Sleep', bloodwork: 'Blood Work' };
+      labelEl.innerHTML = (baseName[key] || key) + ' <span style="color:var(--muted);font-size:10px;font-weight:300">' + pctLabel(key, score > 0) + '</span>';
+    }
   }
 
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
@@ -910,8 +939,9 @@ async function loadDashboardData() {
           totals.fat  += mac.fat  || 0;
         });
         // Score: calories within goal = 40pts, protein >= 80% goal = 30pts, logged at least 2 meals = 30pts
-        var calScore  = totals.cal  > 0 ? Math.min(40, Math.round(40 * Math.min(1, 1 - Math.abs(totals.cal - 2000) / 2000))) : 0;
-        var protScore = totals.prot > 0 ? Math.min(30, Math.round(30 * Math.min(1, totals.prot / 150))) : 0;
+        var macroGoals = getMacroTargets();
+        var calScore  = totals.cal  > 0 ? Math.min(40, Math.round(40 * Math.min(1, 1 - Math.abs(totals.cal - macroGoals.cal) / macroGoals.cal))) : 0;
+        var protScore = totals.prot > 0 ? Math.min(30, Math.round(30 * Math.min(1, totals.prot / macroGoals.prot))) : 0;
         var mealScore = Math.min(30, todayMeals.length * 15);
         metrics.nutritionScore = calScore + protScore + mealScore;
         // Also update macro display elements used by dashboard
@@ -978,31 +1008,49 @@ async function loadDashboardData() {
     if (bwData && !bwData.error && bwData.length > 0) {
       var BIOMARKER_MAP = {
         'Glucose': 'glucose', 'Fasting Glucose': 'glucose', 'Glucose, Fasting': 'glucose',
-        'Glucose, Serum': 'glucose',
+        'Glucose, Serum': 'glucose', 'Blood Glucose': 'glucose', 'Glucose Fasting': 'glucose',
+        'Glucose,Serum': 'glucose', 'GLUCOSE': 'glucose', 'Glucose (Fasting)': 'glucose',
         'Hemoglobin A1c': 'hba1c', 'HbA1c': 'hba1c', 'A1C': 'hba1c', 'Hemoglobin A1C': 'hba1c',
+        'A1c': 'hba1c', 'HgbA1c': 'hba1c', 'Hgb A1c': 'hba1c', 'HBA1C': 'hba1c',
+        'Glycated Hemoglobin': 'hba1c', 'Hemoglobin A1c (HbA1c)': 'hba1c',
         'LDL Chol Calc (NIH)': 'ldl', 'LDL Cholesterol': 'ldl', 'LDL-C': 'ldl',
-        'LDL Cholesterol Calc': 'ldl',
-        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl', 'HDL': 'hdl',
+        'LDL Cholesterol Calc': 'ldl', 'LDL-Cholesterol': 'ldl', 'LDL': 'ldl',
+        'Low Density Lipoprotein': 'ldl', 'LDL CHOL': 'ldl', 'LDL Chol Calc': 'ldl',
+        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl', 'HDL': 'hdl', 'HDL-Cholesterol': 'hdl',
+        'High Density Lipoprotein': 'hdl', 'HDL CHOL': 'hdl',
         'hs-CRP': 'crp', 'CRP': 'crp', 'C-Reactive Protein': 'crp',
-        'hsCRP': 'crp', 'C-Reactive Protein, Cardiac': 'crp',
+        'hsCRP': 'crp', 'C-Reactive Protein, Cardiac': 'crp', 'HS-CRP': 'crp',
+        'C Reactive Protein': 'crp', 'High Sensitivity CRP': 'crp',
         'Triglycerides': 'triglycerides', 'Triglyceride': 'triglycerides', 'TG': 'triglycerides',
-        'Creatinine': 'creatinine', 'Creatinine, Serum': 'creatinine'
+        'TRIGLYCERIDES': 'triglycerides', 'Trigs': 'triglycerides',
+        'Creatinine': 'creatinine', 'Creatinine, Serum': 'creatinine',
+        'CREATININE': 'creatinine', 'Creatinine,Serum': 'creatinine'
       };
       // Use only the most recent test date
       var latestDate = bwData[0].test_date;
       var latestSamples = bwData.filter(function(s) { return s.test_date === latestDate; });
       var bw = {};
+      var unmapped = [];
       latestSamples.forEach(function(sample) {
         var key = BIOMARKER_MAP[sample.biomarker_name];
         if (!key) {
-          var lowerName = sample.biomarker_name.toLowerCase();
+          var lowerName = (sample.biomarker_name || '').toLowerCase().trim();
           var mapKeys = Object.keys(BIOMARKER_MAP);
           for (var i = 0; i < mapKeys.length; i++) {
             if (mapKeys[i].toLowerCase() === lowerName) { key = BIOMARKER_MAP[mapKeys[i]]; break; }
           }
+          // Partial match fallback: check if biomarker name contains a map key
+          if (!key) {
+            for (var j = 0; j < mapKeys.length; j++) {
+              if (lowerName.indexOf(mapKeys[j].toLowerCase()) !== -1) { key = BIOMARKER_MAP[mapKeys[j]]; break; }
+            }
+          }
+          if (!key) unmapped.push(sample.biomarker_name);
         }
-        if (key && sample.value !== null) bw[key] = parseFloat(sample.value);
+        var val = sample.value !== null && sample.value !== undefined ? parseFloat(sample.value) : NaN;
+        if (key && !isNaN(val) && val > 0) bw[key] = val;
       });
+      if (unmapped.length > 0) console.log('[Healix] unmapped biomarkers:', unmapped.join(', '));
       metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
       if (metrics.bloodwork) timestamps.bloodwork = bwData[0].test_date;
       console.log('[Healix] bloodwork mapped:', JSON.stringify(bw));
@@ -1185,22 +1233,64 @@ function renderMacrosFromNutrients(nutrients) {
   );
 }
 
+function getMacroTargets() {
+  var p = window.userProfileData || {};
+  var weightKg = p.current_weight_kg;
+  var heightCm = p.height_cm;
+  var sex = (p.gender || p.sex || '').toLowerCase();
+  var goal = (p.primary_goal || '').toLowerCase();
+  var dobStr = p.birth_date || p.dob;
+  var age = 30;
+  if (dobStr) { var d = new Date(dobStr); if (!isNaN(d)) age = Math.floor((Date.now() - d) / (365.25 * 24 * 3600 * 1000)); }
+
+  // Need weight and height for calculation
+  if (!weightKg || !heightCm) return { cal: 2000, prot: 150, fat: 67, carbs: 225 };
+
+  // Mifflin-St Jeor BMR
+  var bmr = sex.includes('f')
+    ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
+    : 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+
+  // Default moderate activity (1.55) — no activity_level field yet
+  var tdee = Math.round(bmr * 1.55);
+
+  // Adjust for goal
+  var calTarget = tdee;
+  if (goal === 'lose_weight') calTarget = Math.round(tdee * 0.8);
+  else if (goal === 'gain_strength') calTarget = Math.round(tdee + 300);
+
+  // Protein: 1g/lb for weight loss and strength, 0.8g/lb otherwise
+  var weightLbs = weightKg * 2.205;
+  var protTarget = (goal === 'lose_weight' || goal === 'gain_strength')
+    ? Math.round(weightLbs * 1.0)
+    : Math.round(weightLbs * 0.8);
+
+  // Fat: 28% of calories
+  var fatTarget = Math.round(calTarget * 0.28 / 9);
+
+  // Carbs: remainder
+  var carbTarget = Math.round((calTarget - protTarget * 4 - fatTarget * 9) / 4);
+  if (carbTarget < 50) carbTarget = 50;
+
+  return { cal: calTarget, prot: protTarget, fat: fatTarget, carbs: carbTarget };
+}
+
 function renderDayMacroUI(cal, prot, carbs, fat) {
   var macroTotal = prot + carbs + fat || 1;
-  var calGoal = 2000;
+  var targets = getMacroTargets();
   var setEl = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
   var setHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
   var setW = function(id,v) { var e=document.getElementById(id); if(e) e.style.width=v; };
 
   // Top summary cards
   setEl('mp-cal', cal || '—');
-  setEl('mp-cal-sub', 'of 2000 goal');
+  setEl('mp-cal-sub', 'of ' + targets.cal + ' goal');
   setHTML('mp-protein', (prot||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
-  setEl('mp-prot-sub', 'of 150g goal');
+  setEl('mp-prot-sub', 'of ' + targets.prot + 'g goal');
   setHTML('mp-carbs', (carbs||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
-  setEl('mp-carb-sub', 'today');
+  setEl('mp-carb-sub', 'of ' + targets.carbs + 'g goal');
   setHTML('mp-fat', (fat||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
-  setEl('mp-fat-sub', 'today');
+  setEl('mp-fat-sub', 'of ' + targets.fat + 'g goal');
 
   // (macro proportion bars removed — summary cards above are sufficient)
 }
@@ -1293,6 +1383,8 @@ function getMicroTotalsFromMeals(meals) {
   return totals;
 }
 
+var KEY_MICROS = ['Vitamin D', 'Vitamin B12', 'Iron', 'Magnesium', 'Calcium', 'Omega-3'];
+
 function renderMicroPanel(totals, containerId) {
   var container = document.getElementById(containerId);
   if (!container) return;
@@ -1316,15 +1408,30 @@ function renderMicroPanel(totals, containerId) {
       + '</div>';
   }
 
-  function section(label, group) {
-    var defs = MICRO_DEFS[group].filter(function(d) { return totals[d.key] !== undefined || true; });
-    return '<div class="micro-section-title">' + label + '</div>'
-      + '<div class="micro-grid">' + defs.map(microItem).join('') + '</div>';
-  }
+  // Collect key and remaining nutrients
+  var allDefs = MICRO_DEFS.vitamins.concat(MICRO_DEFS.minerals).concat(MICRO_DEFS.other);
+  var keyDefs = [];
+  var restDefs = [];
+  allDefs.forEach(function(d) {
+    if (KEY_MICROS.indexOf(d.key) !== -1) keyDefs.push(d);
+    else restDefs.push(d);
+  });
+  // Sort key defs by KEY_MICROS order
+  keyDefs.sort(function(a, b) { return KEY_MICROS.indexOf(a.key) - KEY_MICROS.indexOf(b.key); });
 
-  container.innerHTML = section('Vitamins', 'vitamins')
-    + section('Minerals', 'minerals')
-    + section('Fiber & Other', 'other');
+  var panelId = containerId + '-expand';
+  var html = '<div class="micro-section-title">Key Nutrients</div>'
+    + '<div class="micro-grid">' + keyDefs.map(microItem).join('') + '</div>'
+    + '<button class="micro-expand-btn" onclick="var el=document.getElementById(\'' + panelId + '\');var show=el.style.display===\'none\';el.style.display=show?\'block\':\'none\';this.textContent=show?\'Hide details ▲\':\'Show all nutrients ▼\'"'
+    + ' style="display:block;width:100%;background:none;border:1px solid var(--gold-border);color:var(--muted);font-size:11px;letter-spacing:.1em;padding:10px;cursor:pointer;margin:16px 0 0;font-family:var(--B);transition:color .2s"'
+    + ' onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'var(--muted)\'">'
+    + 'Show all nutrients ▼</button>'
+    + '<div id="' + panelId + '" style="display:none;margin-top:16px">'
+    + '<div class="micro-section-title">All Nutrients</div>'
+    + '<div class="micro-grid">' + restDefs.map(microItem).join('') + '</div>'
+    + '</div>';
+
+  container.innerHTML = html;
 }
 
 function renderMicronutrientsFromMealData(meals) {
@@ -1777,7 +1884,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var calDates = document.getElementById('agg-cal-dates');
   if (calChart) {
     var maxCal = Math.max.apply(null, calsByDay.concat([1]));
-    var calGoal = 2000;
+    var calGoal = getMacroTargets().cal;
     calChart.style.display = 'flex';
     calChart.style.alignItems = 'flex-end';
     calChart.style.gap = '3px';
@@ -1827,7 +1934,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
         var ri = days.length - 1 - i;
         var dt = new Date(d + 'T12:00:00');
         var isToday = d === localDateStr(new Date());
-        var overGoal = calsByDay[ri] > 2000;
+        var overGoal = calsByDay[ri] > getMacroTargets().cal;
         return '<tr style="border-bottom:1px solid rgba(184,151,90,.06);cursor:pointer" onclick="drillToDay(\'' + d + '\')" onmouseover="this.style.background=\'var(--gold-faint)\'" onmouseout="this.style.background=\'\'">'
 
           + '<td style="padding:11px 0;font-size:13px;color:' + (isToday ? 'var(--gold)' : 'var(--cream)') + '">' + dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>'
@@ -3154,13 +3261,54 @@ var FITNESS_NORMS = {
         '60+':   [[595,99],[535,90],[500,80],[470,70],[445,60],[423,50],[398,40],[369,30],[331,20],[275,10]]
       }
     }
+  },
+  dead_hang: {
+    label: 'Dead Hang', unit: 'sec', higherBetter: true,
+    hint: 'Hang from a pull-up bar with a full grip, arms fully extended. Time until you drop.',
+    norms: {
+      male: {
+        '18-29': [[120,99],[90,90],[75,80],[62,70],[52,60],[44,50],[36,40],[28,30],[18,20],[8,10]],
+        '30-39': [[110,99],[82,90],[68,80],[57,70],[48,60],[40,50],[33,40],[25,30],[16,20],[7,10]],
+        '40-49': [[95,99],[72,90],[60,80],[50,70],[42,60],[35,50],[28,40],[22,30],[14,20],[6,10]],
+        '50-59': [[80,99],[60,90],[50,80],[42,70],[35,60],[29,50],[23,40],[18,30],[11,20],[5,10]],
+        '60+':   [[65,99],[48,90],[40,80],[33,70],[28,60],[23,50],[18,40],[14,30],[8,20],[3,10]]
+      },
+      female: {
+        '18-29': [[90,99],[68,90],[56,80],[47,70],[39,60],[33,50],[27,40],[20,30],[13,20],[6,10]],
+        '30-39': [[80,99],[60,90],[50,80],[42,70],[35,60],[29,50],[23,40],[17,30],[11,20],[5,10]],
+        '40-49': [[68,99],[51,90],[42,80],[35,70],[29,60],[24,50],[19,40],[14,30],[9,20],[4,10]],
+        '50-59': [[55,99],[41,90],[34,80],[28,70],[23,60],[19,50],[15,40],[11,30],[7,20],[3,10]],
+        '60+':   [[42,99],[32,90],[26,80],[22,70],[18,60],[15,50],[12,40],[8,30],[5,20],[2,10]]
+      }
+    }
+  },
+  farmers_walk: {
+    label: 'Farmers Walk', unit: 'm', higherBetter: true,
+    hint: 'Carry 50% of your bodyweight in each hand. Walk as far as possible without putting the weights down.',
+    relativeToWeight: false,
+    norms: {
+      male: {
+        '18-29': [[120,99],[95,90],[80,80],[70,70],[60,60],[52,50],[44,40],[36,30],[26,20],[15,10]],
+        '30-39': [[110,99],[88,90],[75,80],[65,70],[56,60],[48,50],[40,40],[33,30],[24,20],[14,10]],
+        '40-49': [[100,99],[80,90],[68,80],[58,70],[50,60],[43,50],[36,40],[29,30],[21,20],[12,10]],
+        '50-59': [[85,99],[68,90],[58,80],[50,70],[43,60],[37,50],[31,40],[25,30],[18,20],[10,10]],
+        '60+':   [[70,99],[56,90],[47,80],[40,70],[34,60],[29,50],[24,40],[19,30],[13,20],[7,10]]
+      },
+      female: {
+        '18-29': [[95,99],[76,90],[64,80],[55,70],[47,60],[40,50],[34,40],[27,30],[19,20],[10,10]],
+        '30-39': [[85,99],[68,90],[58,80],[50,70],[43,60],[36,50],[30,40],[24,30],[17,20],[9,10]],
+        '40-49': [[75,99],[60,90],[51,80],[44,70],[37,60],[32,50],[26,40],[21,30],[15,20],[8,10]],
+        '50-59': [[63,99],[50,90],[42,80],[36,70],[31,60],[26,50],[22,40],[17,30],[12,20],[6,10]],
+        '60+':   [[50,99],[40,90],[34,80],[29,70],[24,60],[20,50],[16,40],[13,30],[9,20],[4,10]]
+      }
+    }
   }
 };
 
 var FITNESS_CATEGORIES = [
   { key: 'strength',   label: 'Strength',   tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
   { key: 'cardio',     label: 'Cardio',     tests: ['mile_time','vo2max','walk_6min'] },
-  { key: 'functional', label: 'Functional', tests: ['grip_strength','chair_stand','balance'] },
+  { key: 'functional', label: 'Functional', tests: ['grip_strength','dead_hang','farmers_walk','chair_stand','balance'] },
   { key: 'mobility',   label: 'Mobility',   tests: ['sit_reach','shoulder_mobility'] }
 ];
 
@@ -3200,10 +3348,10 @@ function getRecommendedTests(profile, byKey) {
       if (['walk_6min','mile_time','vo2max','chair_stand'].includes(key)) score += 20;
     }
     if (goal.includes('muscle') || goal.includes('strength')) {
-      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength'].includes(key)) score += 20;
+      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength','dead_hang','farmers_walk'].includes(key)) score += 20;
     }
     if (goal.includes('longevity') || goal.includes('health')) {
-      if (['grip_strength','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
+      if (['grip_strength','dead_hang','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
     }
 
     // Low percentile = needs attention
