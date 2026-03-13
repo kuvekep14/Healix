@@ -1243,8 +1243,16 @@ function getMacroTargets() {
   var age = 30;
   if (dobStr) { var d = new Date(dobStr); if (!isNaN(d)) age = Math.floor((Date.now() - d) / (365.25 * 24 * 3600 * 1000)); }
 
-  // Need weight and height for calculation
-  if (!weightKg || !heightCm) return { cal: 2000, prot: 150, fat: 67, carbs: 225 };
+  // Try weight from weight logs if not in profile
+  if (!weightKg && window.weightEntries && weightEntries.length > 0) {
+    var latestWeight = parseFloat(weightEntries[0].value);
+    var unit = (weightEntries[0].unit || 'lbs').toLowerCase();
+    weightKg = unit === 'kg' ? latestWeight : latestWeight / 2.205;
+  }
+
+  // Sex-based defaults if still missing
+  if (!weightKg) weightKg = sex.includes('f') ? 63.5 : 81.6; // US avg
+  if (!heightCm) heightCm = sex.includes('f') ? 162 : 177; // US avg
 
   // Mifflin-St Jeor BMR
   var bmr = sex.includes('f')
