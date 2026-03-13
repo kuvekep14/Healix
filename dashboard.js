@@ -198,7 +198,7 @@ function greet() {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', sleep: 'Sleep', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
@@ -212,6 +212,7 @@ function showPage(id, btn) {
 
   // Load page data
   if (id === 'meals') { loadMealsPage(); }
+  if (id === 'sleep') loadSleepPage();
   if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
@@ -931,6 +932,222 @@ function calculateSleepTrend(sessions) {
   var deltaHours = Math.round((thisWeekAvg - lastWeekAvg) * 10) / 10;
   var direction = deltaHours >= 0.25 ? 'improving' : deltaHours <= -0.25 ? 'declining' : 'stable';
   return { thisWeekAvg: Math.round(thisWeekAvg * 10) / 10, lastWeekAvg: Math.round(lastWeekAvg * 10) / 10, deltaHours: deltaHours, direction: direction };
+}
+
+// ── SLEEP PAGE ──
+var sleepPageRange = 14;
+var sleepPageSessions = [];
+
+function setSleepRange(days, btn) {
+  sleepPageRange = days;
+  var btns = document.querySelectorAll('#page-sleep .tf-btn');
+  btns.forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderSleepPageData();
+}
+
+async function loadSleepPage() {
+  if (!currentUser) return;
+  var token = currentSession.access_token;
+  var daysAgo = new Date();
+  daysAgo.setDate(daysAgo.getDate() - 90); // Fetch 90 days max, filter client-side
+
+  try {
+    var data = await supabaseRequest(
+      '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
+      '&metric_type=eq.sleep_analysis&recorded_at=gte.' + daysAgo.toISOString() +
+      '&order=start_date.asc&limit=5000',
+      'GET', null, token
+    );
+    if (!data || data.error || !Array.isArray(data) || data.length === 0) {
+      showSleepEmpty(true);
+      return;
+    }
+    sleepPageSessions = identifySleepSessions(data);
+    if (sleepPageSessions.length === 0) { showSleepEmpty(true); return; }
+    showSleepEmpty(false);
+    renderSleepPageData();
+  } catch(e) {
+    console.error('[Healix] Sleep page load error:', e);
+    showSleepEmpty(true);
+  }
+}
+
+function showSleepEmpty(show) {
+  var empty = document.getElementById('sleep-empty');
+  var scores = document.getElementById('sleep-scores');
+  var cta = document.getElementById('sleep-chat-cta');
+  if (empty) empty.style.display = show ? 'block' : 'none';
+  if (scores) scores.style.display = show ? 'none' : '';
+  if (cta) cta.style.display = show ? 'none' : '';
+  // Hide the cards too
+  var cards = document.querySelectorAll('#page-sleep > .card');
+  cards.forEach(function(c) { c.style.display = show ? 'none' : ''; });
+}
+
+function renderSleepPageData() {
+  var now = Date.now();
+  var msPerDay = 24 * 60 * 60 * 1000;
+  var cutoff = now - sleepPageRange * msPerDay;
+
+  // Filter sessions to range
+  var sessions = sleepPageSessions.filter(function(s) { return s.startTime >= cutoff; });
+  if (sessions.length === 0) { showSleepEmpty(true); return; }
+  showSleepEmpty(false);
+
+  // Compute per-session data
+  var sessionData = sessions.map(function(sess) {
+    var computed = computeSessionMinutes(sess);
+    var dateStr = localDateStr(new Date(sess.startTime));
+    return {
+      date: dateStr,
+      startTime: sess.startTime,
+      endTime: sess.endTime,
+      totalHours: Math.round(computed.actualSleepMinutes / 60 * 10) / 10,
+      stages: computed.stages,
+      totalMinutes: computed.totalMinutes,
+      actualMinutes: computed.actualSleepMinutes,
+      efficiency: computed.totalMinutes > 0 ? Math.round(computed.actualSleepMinutes / computed.totalMinutes * 100) : 0
+    };
+  }).sort(function(a, b) { return b.startTime - a.startTime; });
+
+  // Score cards
+  var latest = sessionData[0];
+  var avgHours = Math.round(sessionData.reduce(function(s, d) { return s + d.totalHours; }, 0) / sessionData.length * 10) / 10;
+
+  // Sleep debt (last 7 nights)
+  var TARGET = 7;
+  var recentSessions = sessionData.slice(0, 7);
+  var debt = recentSessions.reduce(function(d, s) {
+    var deficit = TARGET - s.totalHours;
+    return d + (deficit > 0 ? deficit : 0);
+  }, 0);
+  debt = Math.round(debt * 10) / 10;
+
+  // Sleep score
+  var sleepScore = scoreSleep({ avg: avgHours, nights: sessionData.length, debt: debt });
+
+  var safeSet = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+  safeSet('slp-last', latest.totalHours);
+  safeSet('slp-last-sub', 'hours · ' + Math.round(latest.efficiency) + '% efficiency');
+  safeSet('slp-avg', avgHours);
+  safeSet('slp-avg-sub', 'hours/night · ' + sessionData.length + ' nights');
+  safeSet('slp-debt', debt);
+  var debtEl = document.getElementById('slp-debt');
+  if (debtEl) debtEl.style.color = debt > 7 ? 'var(--down)' : debt > 3 ? 'var(--warn)' : 'var(--cream)';
+  safeSet('slp-debt-sub', debt <= 1 ? 'well rested' : debt <= 3 ? 'mild deficit' : debt <= 7 ? 'moderate deficit' : 'high deficit');
+  safeSet('slp-score', sleepScore !== null ? sleepScore : '—');
+  var scoreEl = document.getElementById('slp-score');
+  if (scoreEl && sleepScore !== null) scoreEl.style.color = sleepScore >= 70 ? 'var(--up)' : sleepScore >= 50 ? 'var(--gold)' : 'var(--down)';
+  safeSet('slp-score-sub', 'out of 100');
+
+  // Stage breakdown chart — stacked bars
+  renderSleepStageChart(sessionData);
+
+  // Calendar
+  renderSleepCalendar(sessionData);
+
+  // Show chat CTA
+  var cta = document.getElementById('sleep-chat-cta');
+  if (cta) cta.style.display = 'block';
+}
+
+function renderSleepStageChart(sessionData) {
+  var container = document.getElementById('sleep-stage-chart');
+  if (!container) return;
+
+  // Show most recent N sessions (reverse to chronological order)
+  var maxBars = Math.min(sessionData.length, sleepPageRange);
+  var data = sessionData.slice(0, maxBars).reverse();
+
+  // Find max total for scaling
+  var maxMinutes = Math.max.apply(null, data.map(function(d) { return d.totalMinutes; }));
+  if (maxMinutes === 0) maxMinutes = 480;
+
+  var html = '<div style="display:flex;gap:3px;align-items:flex-end;height:140px">';
+  data.forEach(function(d) {
+    var deepH = (d.stages.deep / maxMinutes * 120);
+    var remH = (d.stages.rem / maxMinutes * 120);
+    var coreH = (d.stages.core / maxMinutes * 120);
+    var awakeH = (d.stages.awake / maxMinutes * 120);
+    var dt = new Date(d.startTime);
+    var dayLabel = dt.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+    var dayOfWeek = dt.toLocaleDateString('en-US', { weekday: 'narrow' });
+
+    html += '<div class="sleep-stage-bar">';
+    html += '<div class="sleep-stage-hours">' + d.totalHours + 'h</div>';
+    html += '<div class="sleep-stage-stack">';
+    html += '<div class="sleep-stage-seg" style="height:' + deepH + 'px;background:#5B6FAF"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + remH + 'px;background:#7C6FAF"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + coreH + 'px;background:#6F9FAF"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + awakeH + 'px;background:rgba(245,240,232,0.15)"></div>';
+    html += '</div>';
+    html += '<div class="sleep-stage-date">' + dayOfWeek + '<br>' + dayLabel + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Stage averages summary
+  var avgDeep = Math.round(data.reduce(function(s, d) { return s + d.stages.deep; }, 0) / data.length);
+  var avgRem = Math.round(data.reduce(function(s, d) { return s + d.stages.rem; }, 0) / data.length);
+  var avgCore = Math.round(data.reduce(function(s, d) { return s + d.stages.core; }, 0) / data.length);
+  html += '<div style="display:flex;gap:20px;margin-top:16px;padding-top:12px;border-top:1px solid var(--gold-border)">';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#5B6FAF;margin-bottom:4px">Avg Deep</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgDeep / 60) + 'h ' + (avgDeep % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#7C6FAF;margin-bottom:4px">Avg REM</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgRem / 60) + 'h ' + (avgRem % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:#6F9FAF;margin-bottom:4px">Avg Core</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgCore / 60) + 'h ' + (avgCore % 60) + 'm</div></div>';
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+function renderSleepCalendar(sessionData) {
+  var container = document.getElementById('sleep-calendar');
+  if (!container) return;
+
+  // Build lookup: date string → session data
+  var byDate = {};
+  sessionData.forEach(function(d) { byDate[d.date] = d; });
+
+  // Determine calendar range
+  var today = new Date();
+  var startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - sleepPageRange + 1);
+
+  // Align to start of week (Sunday)
+  var calStart = new Date(startDate);
+  calStart.setDate(calStart.getDate() - calStart.getDay());
+
+  // Align end to end of week (Saturday)
+  var calEnd = new Date(today);
+  calEnd.setDate(calEnd.getDate() + (6 - calEnd.getDay()));
+
+  var html = '';
+  // Day headers
+  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  dayNames.forEach(function(d) { html += '<div class="sleep-cal-header">' + d + '</div>'; });
+
+  // Day cells
+  var cursor = new Date(calStart);
+  while (cursor <= calEnd) {
+    var dateStr = localDateStr(cursor);
+    var inRange = cursor >= startDate && cursor <= today;
+    var data = byDate[dateStr];
+
+    if (!inRange) {
+      html += '<div class="sleep-cal-day empty"></div>';
+    } else if (!data) {
+      html += '<div class="sleep-cal-day no-data"><div class="sleep-cal-date">' + cursor.getDate() + '</div></div>';
+    } else {
+      var cls = data.totalHours >= 7 ? 'great' : data.totalHours >= 6 ? 'good' : data.totalHours >= 5 ? 'fair' : 'poor';
+      html += '<div class="sleep-cal-day ' + cls + '">';
+      html += '<div class="sleep-cal-hours">' + data.totalHours + '</div>';
+      html += '<div class="sleep-cal-date">' + cursor.getDate() + '</div>';
+      html += '</div>';
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  container.innerHTML = html;
 }
 
 async function loadDashboardData() {

@@ -30,6 +30,9 @@
       <button class="nav-item" onclick="showPage('meals', this)">
         <span class="nav-icon">⊕</span> Meals
       </button>
+      <button class="nav-item" onclick="showPage('sleep', this)">
+        <span class="nav-icon">◑</span> Sleep
+      </button>
       <button class="nav-item" onclick="showPage('bloodwork', this)">
         <span class="nav-icon">◐</span> Bloodwork
       </button>
@@ -176,7 +179,7 @@
             <div class="driver-status" id="drv-aerobic-status"></div>
             <div class="driver-freshness" id="drv-aerobic-freshness"></div>
           </div>
-          <div class="driver-card" id="drv-sleep">
+          <div class="driver-card" id="drv-sleep" onclick="showPage('sleep',null)" style="cursor:pointer">
             <div class="driver-icon">◑</div>
             <div class="driver-label">Sleep</div>
             <div class="driver-val" id="drv-sleep-val">—</div>
@@ -426,6 +429,86 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ══ SLEEP PAGE ══ -->
+    <div class="page" id="page-sleep">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+        <div>
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Rest & Recovery</div>
+          <div style="font-family:var(--F);font-size:28px;font-weight:300">Your <em style="font-style:italic;color:var(--gold)">Sleep</em></div>
+        </div>
+        <div class="tf-group">
+          <button class="tf-btn active" onclick="setSleepRange(14, this)">2 Weeks</button>
+          <button class="tf-btn" onclick="setSleepRange(30, this)">30 Days</button>
+          <button class="tf-btn" onclick="setSleepRange(90, this)">90 Days</button>
+        </div>
+      </div>
+
+      <!-- Sleep score cards -->
+      <div class="sleep-scores" id="sleep-scores">
+        <div class="card">
+          <div class="card-label">Last Night</div>
+          <div class="stat-item-val" id="slp-last" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-last-sub">hours</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Average</div>
+          <div class="stat-item-val" id="slp-avg" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-avg-sub">hours/night</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Sleep Debt</div>
+          <div class="stat-item-val" id="slp-debt" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-debt-sub">hours this week</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Sleep Score</div>
+          <div class="stat-item-val" id="slp-score" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-score-sub">out of 100</div>
+        </div>
+      </div>
+
+      <!-- Stage breakdown over time -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-label" style="margin-bottom:16px">Sleep Stages Over Time</div>
+        <div id="sleep-stage-chart" style="min-height:160px"></div>
+        <div class="sleep-stage-legend" id="sleep-stage-legend">
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:#5B6FAF"></span> Deep</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:#7C6FAF"></span> REM</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:#6F9FAF"></span> Core</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:rgba(245,240,232,0.15)"></span> Awake</span>
+        </div>
+      </div>
+
+      <!-- Calendar view -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-label" style="margin-bottom:16px">Sleep Calendar</div>
+        <div class="sleep-calendar" id="sleep-calendar"></div>
+      </div>
+
+      <!-- Chat CTA -->
+      <div id="sleep-chat-cta" style="display:none;margin-top:20px">
+        <div class="vitality-chat-card" onclick="window.location.href='chat.html'">
+          <div class="vitality-chat-left">
+            <div class="vitality-chat-label">ASK HEALIX</div>
+            <div class="vitality-chat-title">How can I <em>improve my sleep</em>?</div>
+            <div class="vitality-chat-suggestions">
+              <span class="vcs">Why is my deep sleep low?</span>
+              <span class="vcs">What's causing my sleep debt?</span>
+            </div>
+          </div>
+          <div class="vitality-chat-arrow">→</div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="sleep-empty" style="display:none">
+        <div class="empty-state" style="padding:60px">
+          <div class="empty-state-icon">🌙</div>
+          <div class="empty-state-text">No sleep data yet.<br>Connect HealthBite to sync your sleep from Apple Watch.</div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ BLOODWORK PAGE ══ -->
