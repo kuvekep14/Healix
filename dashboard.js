@@ -2330,22 +2330,24 @@ async function saveSupplement() {
   saveBtn.disabled = true;
 
   try {
-    // Call analyze-meal-ai to get nutrient profile
-    var nutrientProfile = null;
-    try {
-      var desc = dosage ? dosage + ' ' + name : name;
-      var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
-        body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
-      });
-      if (aiRes.ok) {
-        var aiData = await aiRes.json();
-        if (aiData && aiData.total_nutrition) {
-          nutrientProfile = aiData.total_nutrition;
+    // Use photo-extracted nutrients if available, otherwise look up by name
+    var nutrientProfile = _suppPhotoNutrients || null;
+    if (!nutrientProfile) {
+      try {
+        var desc = dosage ? dosage + ' ' + name : name;
+        var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+          body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
+        });
+        if (aiRes.ok) {
+          var aiData = await aiRes.json();
+          if (aiData && aiData.total_nutrition) {
+            nutrientProfile = aiData.total_nutrition;
+          }
         }
-      }
-    } catch(e) { console.warn('[Healix] Could not fetch nutrient profile:', e); }
+      } catch(e) { console.warn('[Healix] Could not fetch nutrient profile:', e); }
+    }
 
     statusEl.textContent = 'Saving supplement...';
 
@@ -2363,10 +2365,81 @@ async function saveSupplement() {
     dosageEl.value = '';
     statusEl.style.display = 'none';
     saveBtn.disabled = false;
+    _suppPhotoBase64 = null;
+    _suppPhotoNutrients = null;
+    document.getElementById('supp-photo-preview').style.display = 'none';
+    document.getElementById('supp-photo-input').value = '';
     await loadSupplements();
   } catch(e) {
     statusEl.textContent = 'Error: ' + e.message;
     saveBtn.disabled = false;
+  }
+}
+
+// ── SUPPLEMENT PHOTO ──
+var _suppPhotoBase64 = null;
+var _suppPhotoNutrients = null;
+
+function handleSupplementPhoto(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result;
+    _suppPhotoBase64 = base64;
+    document.getElementById('supp-photo-img').src = base64;
+    document.getElementById('supp-photo-preview').style.display = 'block';
+    analyzeSupplementPhoto(base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearSupplementPhoto() {
+  _suppPhotoBase64 = null;
+  _suppPhotoNutrients = null;
+  document.getElementById('supp-photo-preview').style.display = 'none';
+  document.getElementById('supp-photo-input').value = '';
+  var statusEl = document.getElementById('supp-status');
+  statusEl.style.display = 'none';
+}
+
+async function analyzeSupplementPhoto(base64) {
+  var statusEl = document.getElementById('supp-status');
+  var nameEl = document.getElementById('supp-name');
+  var dosageEl = document.getElementById('supp-dosage');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--gold)';
+  statusEl.textContent = 'Reading supplement label...';
+
+  try {
+    var res = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-from-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+      body: JSON.stringify({
+        image: base64,
+        context: 'This is a supplement bottle label. Extract the supplement name, serving size, and all nutrients with amounts.'
+      })
+    });
+    if (!res.ok) throw new Error('Analysis failed');
+    var data = await res.json();
+
+    // Extract name from response
+    if (data.meal_description || data.description) {
+      nameEl.value = data.meal_description || data.description;
+    }
+    if (data.serving_size) {
+      dosageEl.value = data.serving_size;
+    }
+    if (data.total_nutrition) {
+      _suppPhotoNutrients = data.total_nutrition;
+    }
+
+    statusEl.style.color = 'var(--up)';
+    statusEl.textContent = 'Label read — review and save.';
+  } catch(e) {
+    console.error('[Healix] Supplement photo analysis error:', e);
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'Could not read label. Enter details manually.';
   }
 }
 

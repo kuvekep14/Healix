@@ -834,7 +834,18 @@
   <div class="modal" style="position:relative">
     <button class="modal-close" onclick="closeModal('supplement-modal')">✕</button>
     <div class="modal-title">Add a <em>Supplement</em></div>
-    <div class="modal-sub">Define a supplement you take regularly. We'll look up its nutrient profile automatically.</div>
+    <div class="modal-sub">Take a photo of the label or type the name manually.</div>
+    <div id="supp-photo-section" style="margin-bottom:16px">
+      <input type="file" id="supp-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleSupplementPhoto(this)">
+      <button onclick="document.getElementById('supp-photo-input').click()" style="width:100%;padding:20px;background:var(--dark-3);border:1px dashed var(--gold-border);color:var(--gold);cursor:pointer;font-family:var(--B);font-size:13px;letter-spacing:.05em;display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--gold-hover)'" onmouseout="this.style.borderColor='var(--gold-border)'">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Photo of Label
+      </button>
+      <div id="supp-photo-preview" style="display:none;margin-top:8px;position:relative">
+        <img id="supp-photo-img" style="width:100%;max-height:160px;object-fit:cover;border:1px solid var(--gold-border)">
+        <button onclick="clearSupplementPhoto()" style="position:absolute;top:6px;right:6px;background:var(--dark);border:1px solid var(--gold-border);color:var(--cream);width:24px;height:24px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+    </div>
     <div class="modal-field">
       <label class="modal-label">Supplement Name</label>
       <input class="modal-input" id="supp-name" type="text" placeholder="e.g. Centrum Men's Multivitamin">
