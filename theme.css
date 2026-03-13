@@ -26,6 +26,11 @@
   --muted: rgba(245,240,232,0.3);
   --neutral: rgba(245,240,232,0.4);
 
+  /* ── Sleep stage colors ── */
+  --sleep-deep: #5B6FAF;
+  --sleep-rem: #7C6FAF;
+  --sleep-core: #6F9FAF;
+
   /* ── Status colors ── */
   --up: #6fcf8a;
   --down: #e07070;

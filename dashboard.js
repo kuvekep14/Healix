@@ -163,6 +163,7 @@ async function init() {
         // Use cache if less than 10 minutes old
         if (c.cachedAt && (Date.now() - c.cachedAt < 10 * 60 * 1000)) {
           renderVitalityAge(c.result, c.realAge);
+          renderVitalityTimeline();
           renderDriverCards(c.metrics, c.result);
           if (c.timestamps) {
             renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', c.timestamps.heart_rate);
@@ -183,7 +184,9 @@ async function init() {
     });
     loadFamilyHistoryForm();
     setWeightDateDefault();
-  } catch(e) { console.error('Auth error:', e); }
+  } catch(e) {
+    console.error('[Healix] Init error:', e);
+  }
 }
 
 function greet() {
@@ -192,7 +195,7 @@ function greet() {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', sleep: 'Sleep', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
@@ -206,6 +209,7 @@ function showPage(id, btn) {
 
   // Load page data
   if (id === 'meals') { loadMealsPage(); }
+  if (id === 'sleep') loadSleepPage();
   if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
@@ -615,7 +619,129 @@ function renderVitalityAge(result, realAge) {
   }
 }
 
+// ── VITALITY AGE TIMELINE ──
+function saveVitalityHistory(result, realAge) {
+  if (!result || !result.vAge) return;
+  var today = localDateStr(new Date());
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem('healix_va_history_' + currentUser.id) || '[]'); } catch(e) { history = []; }
+  // Update today's entry or add new one
+  var found = false;
+  for (var i = 0; i < history.length; i++) {
+    if (history[i].date === today) { history[i] = { date: today, vAge: result.vAge, composite: result.composite, realAge: realAge }; found = true; break; }
+  }
+  if (!found) history.push({ date: today, vAge: result.vAge, composite: result.composite, realAge: realAge });
+  // Keep last 365 days
+  history.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+  if (history.length > 365) history = history.slice(-365);
+  try { localStorage.setItem('healix_va_history_' + currentUser.id, JSON.stringify(history)); } catch(e) {}
+}
+
+function renderVitalityTimeline() {
+  var container = document.getElementById('va-timeline');
+  var chartEl = document.getElementById('va-tl-chart');
+  var rangeEl = document.getElementById('va-tl-range');
+  if (!container || !chartEl) return;
+
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem(currentUser ? 'healix_va_history_' + currentUser.id : 'healix_va_history') || '[]'); } catch(e) {}
+  if (history.length < 2) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  var pts = history.slice(-90); // Last 90 days
+  var firstDate = new Date(pts[0].date + 'T12:00:00');
+  var lastDate = new Date(pts[pts.length - 1].date + 'T12:00:00');
+  if (rangeEl) {
+    rangeEl.textContent = firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' — ' + lastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // Chart dimensions
+  var W = 812, H = 80, padX = 30, padY = 12;
+  var ages = pts.map(function(p) { return p.vAge; });
+  var minAge = Math.min.apply(null, ages) - 1;
+  var maxAge = Math.max.apply(null, ages) + 1;
+  if (maxAge - minAge < 4) { minAge -= 1; maxAge += 1; }
+  var rangeAge = maxAge - minAge || 1;
+
+  // Build points
+  var points = pts.map(function(p, i) {
+    var x = padX + (i / (pts.length - 1)) * (W - 2 * padX);
+    var y = padY + (1 - (p.vAge - minAge) / rangeAge) * (H - 2 * padY);
+    return { x: x, y: y, vAge: p.vAge, date: p.date };
+  });
+
+  var polyline = points.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+  // Area fill (close path at bottom)
+  var areaPath = 'M' + points[0].x + ',' + points[0].y;
+  for (var i = 1; i < points.length; i++) areaPath += ' L' + points[i].x + ',' + points[i].y;
+  areaPath += ' L' + points[points.length - 1].x + ',' + (H - padY) + ' L' + points[0].x + ',' + (H - padY) + ' Z';
+
+  // Real age reference line
+  var realAge = pts[pts.length - 1].realAge;
+  var realY = null;
+  if (realAge >= minAge && realAge <= maxAge) {
+    realY = padY + (1 - (realAge - minAge) / rangeAge) * (H - 2 * padY);
+  }
+
+  var svg = '<svg class="va-timeline-chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+  svg += '<defs><linearGradient id="vaTimelineGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#B8975A" stop-opacity=".3"/><stop offset="100%" stop-color="#B8975A" stop-opacity="0"/></linearGradient>';
+  svg += '<linearGradient id="vaTimelineLineGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#B8975A"/><stop offset="100%" stop-color="#F5D89A"/></linearGradient></defs>';
+
+  // Grid lines
+  var gridSteps = 3;
+  for (var g = 0; g <= gridSteps; g++) {
+    var gy = padY + (g / gridSteps) * (H - 2 * padY);
+    svg += '<line x1="' + padX + '" y1="' + gy + '" x2="' + (W - padX) + '" y2="' + gy + '" class="va-tl-grid" stroke-width="1"/>';
+  }
+
+  // Real age dashed line
+  if (realY !== null) {
+    svg += '<line x1="' + padX + '" y1="' + realY + '" x2="' + (W - padX) + '" y2="' + realY + '" stroke="rgba(245,240,232,.1)" stroke-width="1" stroke-dasharray="4,4"/>';
+    svg += '<text x="' + (W - padX + 6) + '" y="' + (realY + 3) + '" class="va-tl-label" style="font-size:8px;fill:var(--muted)">Age ' + realAge + '</text>';
+  }
+
+  // Area + line
+  svg += '<path d="' + areaPath + '" class="va-tl-area"/>';
+  svg += '<polyline points="' + polyline + '" class="va-tl-line"/>';
+
+  // Dots — first, last, and any local min/max
+  var last = points[points.length - 1];
+  svg += '<circle cx="' + last.x + '" cy="' + last.y + '" r="4" class="va-tl-dot-latest"/>';
+  if (points.length > 2) {
+    svg += '<circle cx="' + points[0].x + '" cy="' + points[0].y + '" r="3" class="va-tl-dot"/>';
+  }
+
+  // Y-axis labels
+  svg += '<text x="' + (padX - 6) + '" y="' + (padY + 3) + '" class="va-tl-label" text-anchor="end">' + Math.round(maxAge) + '</text>';
+  svg += '<text x="' + (padX - 6) + '" y="' + (H - padY + 3) + '" class="va-tl-label" text-anchor="end">' + Math.round(minAge) + '</text>';
+
+  // Latest value label
+  svg += '<text x="' + (last.x + 8) + '" y="' + (last.y + 4) + '" style="font-family:var(--F);font-size:13px;fill:var(--gold-light);font-weight:300">' + last.vAge + '</text>';
+
+  svg += '</svg>';
+  chartEl.innerHTML = svg;
+}
+
 function renderDriverCards(metrics, result) {
+  // Compute actual weights (accounting for redistribution)
+  var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
+  var bwPresent = scoreBloodwork(metrics.bloodwork) !== null;
+  var hrPresent = metrics.hr !== null;
+  var wtPresent = metrics.weightScore !== null && metrics.weightScore > 0;
+  var slpPresent = metrics.sleepData != null;
+  var strPresent = metrics.strengthData !== null;
+  var aerPresent = metrics.vo2max !== null;
+  var totalAvail = (bwPresent ? rawWeights.bloodwork : 0) + (hrPresent ? rawWeights.heart : 0)
+    + (wtPresent ? rawWeights.weight : 0) + (slpPresent ? rawWeights.sleep : 0)
+    + (strPresent ? rawWeights.strength : 0) + (aerPresent ? rawWeights.aerobic : 0);
+  function pctLabel(key, present) {
+    if (totalAvail === 0) return Math.round(rawWeights[key] * 100) + '%';
+    return present ? Math.round((rawWeights[key] / totalAvail) * 100) + '%' : Math.round(rawWeights[key] * 100) + '%';
+  }
+
   function setDriver(key, val, score, unit) {
     var cls = score >= 70 ? 'good' : score >= 40 ? 'fair' : score > 0 ? 'low' : 'none';
     var label = score >= 70 ? 'Good' : score >= 40 ? 'Fair' : score > 0 ? 'Needs work' : 'No data';
@@ -623,7 +749,14 @@ function renderDriverCards(metrics, result) {
     var valEl = document.getElementById('drv-' + key + '-val');
     var barEl = document.getElementById('drv-' + key + '-bar');
     var stEl = document.getElementById('drv-' + key + '-status');
-    if (valEl) valEl.textContent = val !== null ? (val + (unit||'')) : '—';
+    if (valEl) {
+      if (val !== null) {
+        valEl.textContent = val + (unit||'');
+        valEl.style.fontSize = ''; valEl.style.color = '';
+      } else {
+        valEl.textContent = '—';
+      }
+    }
     if (barEl) { barEl.style.width = score + '%'; barEl.className = 'driver-bar-fill ' + (score > 0 ? cls : ''); }
     if (stEl) { stEl.textContent = label; stEl.className = 'driver-status ' + cls; }
     if (card) { card.className = 'driver-card ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : ''); }
@@ -792,6 +925,224 @@ function calculateSleepTrend(sessions) {
   return { thisWeekAvg: Math.round(thisWeekAvg * 10) / 10, lastWeekAvg: Math.round(lastWeekAvg * 10) / 10, deltaHours: deltaHours, direction: direction };
 }
 
+// ── SLEEP PAGE ──
+var sleepPageRange = 14;
+var sleepPageSessions = [];
+
+function setSleepRange(days, btn) {
+  sleepPageRange = days;
+  var btns = document.querySelectorAll('#page-sleep .tf-btn');
+  btns.forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderSleepPageData();
+}
+
+async function loadSleepPage() {
+  if (!currentUser) return;
+  var s = getSession(); if (!s) return;
+  var token = s.access_token;
+  var daysAgo = new Date();
+  daysAgo.setDate(daysAgo.getDate() - 90); // Fetch 90 days max, filter client-side
+
+  try {
+    var data = await supabaseRequest(
+      '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
+      '&metric_type=eq.sleep_analysis&recorded_at=gte.' + daysAgo.toISOString() +
+      '&order=start_date.asc&limit=5000',
+      'GET', null, token
+    );
+    if (!data || data.error || !Array.isArray(data) || data.length === 0) {
+      showSleepEmpty(true);
+      return;
+    }
+    sleepPageSessions = identifySleepSessions(data);
+    if (sleepPageSessions.length === 0) { showSleepEmpty(true); return; }
+    showSleepEmpty(false);
+    renderSleepPageData();
+  } catch(e) {
+    console.error('[Healix] Sleep page load error:', e);
+    showSleepEmpty(true);
+  }
+}
+
+function showSleepEmpty(show) {
+  var empty = document.getElementById('sleep-empty');
+  var scores = document.getElementById('sleep-scores');
+  var cta = document.getElementById('sleep-chat-cta');
+  if (empty) empty.style.display = show ? 'block' : 'none';
+  if (scores) scores.style.display = show ? 'none' : '';
+  if (cta) cta.style.display = show ? 'none' : '';
+  // Hide the cards too
+  var cards = document.querySelectorAll('#page-sleep > .card');
+  cards.forEach(function(c) { c.style.display = show ? 'none' : ''; });
+}
+
+function renderSleepPageData() {
+  var now = Date.now();
+  var msPerDay = 24 * 60 * 60 * 1000;
+  var cutoff = now - sleepPageRange * msPerDay;
+
+  // Filter sessions to range
+  var sessions = sleepPageSessions.filter(function(s) { return s.startTime >= cutoff; });
+  if (sessions.length === 0) { showSleepEmpty(true); return; }
+  showSleepEmpty(false);
+
+  // Compute per-session data
+  var sessionData = sessions.map(function(sess) {
+    var computed = computeSessionMinutes(sess);
+    var dateStr = localDateStr(new Date(sess.startTime));
+    return {
+      date: dateStr,
+      startTime: sess.startTime,
+      endTime: sess.endTime,
+      totalHours: Math.round(computed.actualSleepMinutes / 60 * 10) / 10,
+      stages: computed.stages,
+      totalMinutes: computed.totalMinutes,
+      actualMinutes: computed.actualSleepMinutes,
+      efficiency: computed.totalMinutes > 0 ? Math.round(computed.actualSleepMinutes / computed.totalMinutes * 100) : 0
+    };
+  }).sort(function(a, b) { return b.startTime - a.startTime; });
+
+  // Score cards
+  var latest = sessionData[0];
+  var avgHours = Math.round(sessionData.reduce(function(s, d) { return s + d.totalHours; }, 0) / sessionData.length * 10) / 10;
+
+  // Sleep debt (last 7 nights)
+  var TARGET = 7;
+  var recentSessions = sessionData.slice(0, 7);
+  var debt = recentSessions.reduce(function(d, s) {
+    var deficit = TARGET - s.totalHours;
+    return d + (deficit > 0 ? deficit : 0);
+  }, 0);
+  debt = Math.round(debt * 10) / 10;
+
+  // Sleep score
+  // Cap nights to 21 for score consistency with the dashboard's 21-day window
+  var sleepScore = scoreSleep({ avg: avgHours, nights: Math.min(sessionData.length, 21), debt: debt });
+
+  var safeSet = function(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+  safeSet('slp-last', latest.totalHours);
+  safeSet('slp-last-sub', 'hours · ' + Math.round(latest.efficiency) + '% efficiency');
+  safeSet('slp-avg', avgHours);
+  safeSet('slp-avg-sub', 'hours/night · ' + sessionData.length + ' nights');
+  safeSet('slp-debt', debt);
+  var debtEl = document.getElementById('slp-debt');
+  if (debtEl) debtEl.style.color = debt > 7 ? 'var(--down)' : debt > 3 ? 'var(--warn)' : 'var(--cream)';
+  safeSet('slp-debt-sub', debt <= 1 ? 'well rested' : debt <= 3 ? 'mild deficit' : debt <= 7 ? 'moderate deficit' : 'high deficit');
+  safeSet('slp-score', sleepScore !== null ? sleepScore : '—');
+  var scoreEl = document.getElementById('slp-score');
+  if (scoreEl && sleepScore !== null) scoreEl.style.color = sleepScore >= 70 ? 'var(--up)' : sleepScore >= 50 ? 'var(--gold)' : 'var(--down)';
+  safeSet('slp-score-sub', 'out of 100');
+
+  // Stage breakdown chart — stacked bars
+  renderSleepStageChart(sessionData);
+
+  // Calendar
+  renderSleepCalendar(sessionData);
+
+  // Show chat CTA
+  var cta = document.getElementById('sleep-chat-cta');
+  if (cta) cta.style.display = 'block';
+}
+
+function renderSleepStageChart(sessionData) {
+  var container = document.getElementById('sleep-stage-chart');
+  if (!container) return;
+
+  // Show most recent N sessions (reverse to chronological order)
+  var maxBars = Math.min(sessionData.length, sleepPageRange);
+  var data = sessionData.slice(0, maxBars).reverse();
+
+  // Find max total for scaling
+  var maxMinutes = Math.max.apply(null, data.map(function(d) { return d.totalMinutes; }));
+  if (maxMinutes === 0) maxMinutes = 480;
+
+  var html = '<div style="display:flex;gap:3px;align-items:flex-end;height:140px">';
+  data.forEach(function(d) {
+    var deepH = (d.stages.deep / maxMinutes * 120);
+    var remH = (d.stages.rem / maxMinutes * 120);
+    var coreH = (d.stages.core / maxMinutes * 120);
+    var awakeH = (d.stages.awake / maxMinutes * 120);
+    var dt = new Date(d.startTime);
+    var dayLabel = dt.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+    var dayOfWeek = dt.toLocaleDateString('en-US', { weekday: 'narrow' });
+
+    html += '<div class="sleep-stage-bar">';
+    html += '<div class="sleep-stage-hours">' + d.totalHours + 'h</div>';
+    html += '<div class="sleep-stage-stack">';
+    html += '<div class="sleep-stage-seg" style="height:' + deepH + 'px;background:var(--sleep-deep)"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + remH + 'px;background:var(--sleep-rem)"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + coreH + 'px;background:var(--sleep-core)"></div>';
+    html += '<div class="sleep-stage-seg" style="height:' + awakeH + 'px;background:rgba(245,240,232,0.15)"></div>';
+    html += '</div>';
+    html += '<div class="sleep-stage-date">' + dayOfWeek + '<br>' + dayLabel + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Stage averages summary
+  var avgDeep = Math.round(data.reduce(function(s, d) { return s + d.stages.deep; }, 0) / data.length);
+  var avgRem = Math.round(data.reduce(function(s, d) { return s + d.stages.rem; }, 0) / data.length);
+  var avgCore = Math.round(data.reduce(function(s, d) { return s + d.stages.core; }, 0) / data.length);
+  html += '<div style="display:flex;gap:20px;margin-top:16px;padding-top:12px;border-top:1px solid var(--gold-border)">';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--sleep-deep);margin-bottom:4px">Avg Deep</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgDeep / 60) + 'h ' + (avgDeep % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--sleep-rem);margin-bottom:4px">Avg REM</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgRem / 60) + 'h ' + (avgRem % 60) + 'm</div></div>';
+  html += '<div style="flex:1"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--sleep-core);margin-bottom:4px">Avg Core</div><div style="font-family:var(--F);font-size:20px;color:var(--cream)">' + Math.floor(avgCore / 60) + 'h ' + (avgCore % 60) + 'm</div></div>';
+  html += '</div>';
+
+  container.innerHTML = html;
+}
+
+function renderSleepCalendar(sessionData) {
+  var container = document.getElementById('sleep-calendar');
+  if (!container) return;
+
+  // Build lookup: date string → session data
+  var byDate = {};
+  sessionData.forEach(function(d) { byDate[d.date] = d; });
+
+  // Determine calendar range
+  var today = new Date();
+  var startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - sleepPageRange + 1);
+
+  // Align to start of week (Sunday)
+  var calStart = new Date(startDate);
+  calStart.setDate(calStart.getDate() - calStart.getDay());
+
+  // Align end to end of week (Saturday)
+  var calEnd = new Date(today);
+  calEnd.setDate(calEnd.getDate() + (6 - calEnd.getDay()));
+
+  var html = '';
+  // Day headers
+  var dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  dayNames.forEach(function(d) { html += '<div class="sleep-cal-header">' + d + '</div>'; });
+
+  // Day cells
+  var cursor = new Date(calStart);
+  while (cursor <= calEnd) {
+    var dateStr = localDateStr(cursor);
+    var inRange = cursor >= startDate && cursor <= today;
+    var data = byDate[dateStr];
+
+    if (!inRange) {
+      html += '<div class="sleep-cal-day empty"></div>';
+    } else if (!data) {
+      html += '<div class="sleep-cal-day no-data"><div class="sleep-cal-date">' + cursor.getDate() + '</div></div>';
+    } else {
+      var cls = data.totalHours >= 7 ? 'great' : data.totalHours >= 6 ? 'good' : data.totalHours >= 5 ? 'fair' : 'poor';
+      html += '<div class="sleep-cal-day ' + cls + '">';
+      html += '<div class="sleep-cal-hours">' + data.totalHours + '</div>';
+      html += '<div class="sleep-cal-date">' + cursor.getDate() + '</div>';
+      html += '</div>';
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  container.innerHTML = html;
+}
+
 async function loadDashboardData() {
   if (!currentUser) return;
   var token = currentSession.access_token;
@@ -888,6 +1239,17 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('Health error:', e); }
 
+  // 1b. Pre-fetch weight logs so getMacroTargets() can use them as fallback
+  try {
+    var wlData = await supabaseRequest(
+      '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=14',
+      'GET', null, token
+    );
+    if (wlData && !wlData.error && wlData.length > 0) {
+      weightEntries = wlData;
+    }
+  } catch(e) { console.error('Weight pre-fetch error:', e); }
+
   // 2. Meals / nutrition score
   try {
     var mealLogs = await supabaseRequest(
@@ -910,8 +1272,9 @@ async function loadDashboardData() {
           totals.fat  += mac.fat  || 0;
         });
         // Score: calories within goal = 40pts, protein >= 80% goal = 30pts, logged at least 2 meals = 30pts
-        var calScore  = totals.cal  > 0 ? Math.min(40, Math.round(40 * Math.min(1, 1 - Math.abs(totals.cal - 2000) / 2000))) : 0;
-        var protScore = totals.prot > 0 ? Math.min(30, Math.round(30 * Math.min(1, totals.prot / 150))) : 0;
+        var macroGoals = getMacroTargets();
+        var calScore  = totals.cal  > 0 ? Math.min(40, Math.round(40 * Math.min(1, 1 - Math.abs(totals.cal - macroGoals.cal) / macroGoals.cal))) : 0;
+        var protScore = totals.prot > 0 ? Math.min(30, Math.round(30 * Math.min(1, totals.prot / macroGoals.prot))) : 0;
         var mealScore = Math.min(30, todayMeals.length * 15);
         metrics.nutritionScore = calScore + protScore + mealScore;
         // Also update macro display elements used by dashboard
@@ -978,31 +1341,50 @@ async function loadDashboardData() {
     if (bwData && !bwData.error && bwData.length > 0) {
       var BIOMARKER_MAP = {
         'Glucose': 'glucose', 'Fasting Glucose': 'glucose', 'Glucose, Fasting': 'glucose',
-        'Glucose, Serum': 'glucose',
+        'Glucose, Serum': 'glucose', 'Blood Glucose': 'glucose', 'Glucose Fasting': 'glucose',
+        'Glucose,Serum': 'glucose', 'GLUCOSE': 'glucose', 'Glucose (Fasting)': 'glucose',
         'Hemoglobin A1c': 'hba1c', 'HbA1c': 'hba1c', 'A1C': 'hba1c', 'Hemoglobin A1C': 'hba1c',
+        'A1c': 'hba1c', 'HgbA1c': 'hba1c', 'Hgb A1c': 'hba1c', 'HBA1C': 'hba1c',
+        'Glycated Hemoglobin': 'hba1c', 'Hemoglobin A1c (HbA1c)': 'hba1c',
         'LDL Chol Calc (NIH)': 'ldl', 'LDL Cholesterol': 'ldl', 'LDL-C': 'ldl',
-        'LDL Cholesterol Calc': 'ldl',
-        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl', 'HDL': 'hdl',
+        'LDL Cholesterol Calc': 'ldl', 'LDL-Cholesterol': 'ldl', 'LDL': 'ldl',
+        'Low Density Lipoprotein': 'ldl', 'LDL CHOL': 'ldl', 'LDL Chol Calc': 'ldl',
+        'HDL Cholesterol': 'hdl', 'HDL-C': 'hdl', 'HDL': 'hdl', 'HDL-Cholesterol': 'hdl',
+        'High Density Lipoprotein': 'hdl', 'HDL CHOL': 'hdl',
         'hs-CRP': 'crp', 'CRP': 'crp', 'C-Reactive Protein': 'crp',
-        'hsCRP': 'crp', 'C-Reactive Protein, Cardiac': 'crp',
+        'hsCRP': 'crp', 'C-Reactive Protein, Cardiac': 'crp', 'HS-CRP': 'crp',
+        'C Reactive Protein': 'crp', 'High Sensitivity CRP': 'crp',
         'Triglycerides': 'triglycerides', 'Triglyceride': 'triglycerides', 'TG': 'triglycerides',
-        'Creatinine': 'creatinine', 'Creatinine, Serum': 'creatinine'
+        'TRIGLYCERIDES': 'triglycerides', 'Trigs': 'triglycerides',
+        'Creatinine': 'creatinine', 'Creatinine, Serum': 'creatinine',
+        'CREATININE': 'creatinine', 'Creatinine,Serum': 'creatinine'
       };
       // Use only the most recent test date
       var latestDate = bwData[0].test_date;
       var latestSamples = bwData.filter(function(s) { return s.test_date === latestDate; });
       var bw = {};
+      var unmapped = [];
       latestSamples.forEach(function(sample) {
         var key = BIOMARKER_MAP[sample.biomarker_name];
         if (!key) {
-          var lowerName = sample.biomarker_name.toLowerCase();
+          var lowerName = (sample.biomarker_name || '').toLowerCase().trim();
           var mapKeys = Object.keys(BIOMARKER_MAP);
           for (var i = 0; i < mapKeys.length; i++) {
             if (mapKeys[i].toLowerCase() === lowerName) { key = BIOMARKER_MAP[mapKeys[i]]; break; }
           }
+          // Partial match fallback: check if biomarker name starts with a map key
+          if (!key) {
+            for (var j = 0; j < mapKeys.length; j++) {
+              var mapKeyLower = mapKeys[j].toLowerCase();
+              if (lowerName === mapKeyLower || lowerName.indexOf(mapKeyLower + ' ') === 0 || lowerName.indexOf(mapKeyLower + '/') === 0) { key = BIOMARKER_MAP[mapKeys[j]]; break; }
+            }
+          }
+          if (!key) unmapped.push(sample.biomarker_name);
         }
-        if (key && sample.value !== null) bw[key] = parseFloat(sample.value);
+        var val = sample.value !== null && sample.value !== undefined ? parseFloat(sample.value) : NaN;
+        if (key && !isNaN(val) && val > 0) bw[key] = val;
       });
+      if (unmapped.length > 0) console.log('[Healix] unmapped biomarkers:', unmapped.join(', '));
       metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
       if (metrics.bloodwork) timestamps.bloodwork = bwData[0].test_date;
       console.log('[Healix] bloodwork mapped:', JSON.stringify(bw));
@@ -1014,6 +1396,8 @@ async function loadDashboardData() {
   var result = calcVitalityAge(metrics);
   console.log('[Healix] vitalityResult:', result);
   renderVitalityAge(result, realAge);
+  saveVitalityHistory(result, realAge);
+  renderVitalityTimeline();
   renderDriverCards(metrics, result);
 
   // AI insight sentence
@@ -1185,24 +1569,91 @@ function renderMacrosFromNutrients(nutrients) {
   );
 }
 
+function getMacroTargets() {
+  var p = window.userProfileData || {};
+  var weightKg = p.current_weight_kg;
+  var heightCm = p.height_cm;
+  var sex = (p.gender || p.sex || '').toLowerCase();
+  var goal = (p.primary_goal || '').toLowerCase();
+  var dobStr = p.birth_date || p.dob;
+  var age = 30;
+  if (dobStr) { var d = new Date(dobStr); if (!isNaN(d)) age = Math.floor((Date.now() - d) / (365.25 * 24 * 3600 * 1000)); }
+
+  // Try weight from weight logs if not in profile
+  if (!weightKg && window.weightEntries && weightEntries.length > 0) {
+    var latestWeight = parseFloat(weightEntries[0].value);
+    var unit = (weightEntries[0].unit || 'lbs').toLowerCase();
+    weightKg = unit === 'kg' ? latestWeight : latestWeight / 2.205;
+  }
+
+  // Sex-based defaults if still missing
+  if (!weightKg) weightKg = sex.includes('f') ? 63.5 : 81.6; // US avg
+  if (!heightCm) heightCm = sex.includes('f') ? 162 : 177; // US avg
+
+  // Mifflin-St Jeor BMR
+  var bmr = sex.includes('f')
+    ? 10 * weightKg + 6.25 * heightCm - 5 * age - 161
+    : 10 * weightKg + 6.25 * heightCm - 5 * age + 5;
+
+  // Default moderate activity (1.55) — no activity_level field yet
+  var tdee = Math.round(bmr * 1.55);
+
+  // Adjust for goal
+  var calTarget = tdee;
+  if (goal === 'lose_weight') calTarget = Math.round(tdee * 0.8);
+  else if (goal === 'gain_strength') calTarget = Math.round(tdee + 300);
+
+  // Protein: 1g/lb for weight loss and strength, 0.8g/lb otherwise
+  var weightLbs = weightKg * 2.205;
+  var protTarget = (goal === 'lose_weight' || goal === 'gain_strength')
+    ? Math.round(weightLbs * 1.0)
+    : Math.round(weightLbs * 0.8);
+
+  // Fat: 28% of calories
+  var fatTarget = Math.round(calTarget * 0.28 / 9);
+
+  // Carbs: remainder
+  var carbTarget = Math.round((calTarget - protTarget * 4 - fatTarget * 9) / 4);
+  if (carbTarget < 50) carbTarget = 50;
+
+  return { cal: calTarget, prot: protTarget, fat: fatTarget, carbs: carbTarget };
+}
+
+function animateMacroRings(prot, carbs, fat, targets) {
+  var rings = [
+    { id: 'ring-prot', value: prot || 0, target: targets.prot, circ: 439.8 },
+    { id: 'ring-carbs', value: carbs || 0, target: targets.carbs, circ: 351.9 },
+    { id: 'ring-fat', value: fat || 0, target: targets.fat, circ: 263.9 }
+  ];
+  setTimeout(function() {
+    rings.forEach(function(r) {
+      var el = document.getElementById(r.id);
+      if (!el) return;
+      var pct = Math.min(r.value / r.target, 1.15); // Allow slight overflow visual
+      var offset = r.circ * (1 - pct);
+      el.style.strokeDashoffset = Math.max(0, offset);
+    });
+  }, 100);
+}
+
 function renderDayMacroUI(cal, prot, carbs, fat) {
-  var macroTotal = prot + carbs + fat || 1;
-  var calGoal = 2000;
+  var targets = getMacroTargets();
   var setEl = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
   var setHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
-  var setW = function(id,v) { var e=document.getElementById(id); if(e) e.style.width=v; };
 
-  // Top summary cards
+  // Center calorie display
   setEl('mp-cal', cal || '—');
-  setEl('mp-cal-sub', 'of 2000 goal');
-  setHTML('mp-protein', (prot||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
-  setEl('mp-prot-sub', 'of 150g goal');
-  setHTML('mp-carbs', (carbs||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
-  setEl('mp-carb-sub', 'today');
-  setHTML('mp-fat', (fat||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
-  setEl('mp-fat-sub', 'today');
 
-  // (macro proportion bars removed — summary cards above are sufficient)
+  // Legend values
+  setHTML('mp-protein', (prot||'—') + '<span>g</span>');
+  setEl('mp-prot-sub', 'of ' + targets.prot + 'g goal');
+  setHTML('mp-carbs', (carbs||'—') + '<span>g</span>');
+  setEl('mp-carb-sub', 'of ' + targets.carbs + 'g goal');
+  setHTML('mp-fat', (fat||'—') + '<span>g</span>');
+  setEl('mp-fat-sub', 'of ' + targets.fat + 'g goal');
+
+  // Animate rings
+  animateMacroRings(prot, carbs, fat, targets);
 }
 
 
@@ -1293,6 +1744,8 @@ function getMicroTotalsFromMeals(meals) {
   return totals;
 }
 
+var KEY_MICROS = ['Vitamin D', 'Vitamin B12', 'Iron', 'Magnesium', 'Calcium', 'Omega-3'];
+
 function renderMicroPanel(totals, containerId) {
   var container = document.getElementById(containerId);
   if (!container) return;
@@ -1316,15 +1769,30 @@ function renderMicroPanel(totals, containerId) {
       + '</div>';
   }
 
-  function section(label, group) {
-    var defs = MICRO_DEFS[group].filter(function(d) { return totals[d.key] !== undefined || true; });
-    return '<div class="micro-section-title">' + label + '</div>'
-      + '<div class="micro-grid">' + defs.map(microItem).join('') + '</div>';
-  }
+  // Collect key and remaining nutrients
+  var allDefs = MICRO_DEFS.vitamins.concat(MICRO_DEFS.minerals).concat(MICRO_DEFS.other);
+  var keyDefs = [];
+  var restDefs = [];
+  allDefs.forEach(function(d) {
+    if (KEY_MICROS.indexOf(d.key) !== -1) keyDefs.push(d);
+    else restDefs.push(d);
+  });
+  // Sort key defs by KEY_MICROS order
+  keyDefs.sort(function(a, b) { return KEY_MICROS.indexOf(a.key) - KEY_MICROS.indexOf(b.key); });
 
-  container.innerHTML = section('Vitamins', 'vitamins')
-    + section('Minerals', 'minerals')
-    + section('Fiber & Other', 'other');
+  var panelId = containerId + '-expand';
+  var html = '<div class="micro-section-title">Key Nutrients</div>'
+    + '<div class="micro-grid">' + keyDefs.map(microItem).join('') + '</div>'
+    + '<button class="micro-expand-btn" onclick="var el=document.getElementById(\'' + panelId + '\');var show=el.style.display===\'none\';el.style.display=show?\'block\':\'none\';this.textContent=show?\'Hide details ▲\':\'Show all nutrients ▼\'"'
+    + ' style="display:block;width:100%;background:none;border:1px solid var(--gold-border);color:var(--muted);font-size:11px;letter-spacing:.1em;padding:10px;cursor:pointer;margin:16px 0 0;font-family:var(--B);transition:color .2s"'
+    + ' onmouseover="this.style.color=\'var(--gold)\'" onmouseout="this.style.color=\'var(--muted)\'">'
+    + 'Show all nutrients ▼</button>'
+    + '<div id="' + panelId + '" style="display:none;margin-top:16px">'
+    + '<div class="micro-section-title">All Nutrients</div>'
+    + '<div class="micro-grid">' + restDefs.map(microItem).join('') + '</div>'
+    + '</div>';
+
+  container.innerHTML = html;
 }
 
 function renderMicronutrientsFromMealData(meals) {
@@ -1753,16 +2221,22 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var avgCarb = Math.round(carbsByDay.reduce(function(s,v){return s+v;},0) / numDays);
   var avgFat  = Math.round(fatsByDay.reduce(function(s,v){return s+v;},0) / numDays);
 
-  // Update top macro cards with avg label
+  // Update macro rings with avg values
   var periodLabel = mealsView === 'week' ? 'this week' : 'this month';
-  document.getElementById('mp-cal').textContent  = avgCal || '—';
-  document.getElementById('mp-cal-sub').textContent = 'avg/day ' + periodLabel;
-  document.getElementById('mp-protein').innerHTML = (avgProt || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-prot-sub').textContent = 'avg/day protein';
-  document.getElementById('mp-carbs').innerHTML   = (avgCarb || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-carb-sub').textContent = 'avg/day carbs';
-  document.getElementById('mp-fat').innerHTML     = (avgFat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-fat-sub').textContent = 'avg/day fat';
+  var safeSet = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
+  var safeHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
+  safeSet('mp-cal', avgCal || '—');
+  safeSet('mp-cal-sub', 'avg/day ' + periodLabel);
+  safeHTML('mp-protein', (avgProt || '—') + '<span>g</span>');
+  safeSet('mp-prot-sub', 'avg/day protein');
+  safeHTML('mp-carbs', (avgCarb || '—') + '<span>g</span>');
+  safeSet('mp-carb-sub', 'avg/day carbs');
+  safeHTML('mp-fat', (avgFat || '—') + '<span>g</span>');
+  safeSet('mp-fat-sub', 'avg/day fat');
+
+  // Animate rings for avg values
+  var targets = getMacroTargets();
+  animateMacroRings(avgProt, avgCarb, avgFat, targets);
 
   // Avg macro cards
   document.getElementById('agg-cal').textContent     = avgCal || '—';
@@ -1777,7 +2251,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var calDates = document.getElementById('agg-cal-dates');
   if (calChart) {
     var maxCal = Math.max.apply(null, calsByDay.concat([1]));
-    var calGoal = 2000;
+    var calGoal = targets.cal;
     calChart.style.display = 'flex';
     calChart.style.alignItems = 'flex-end';
     calChart.style.gap = '3px';
@@ -1827,7 +2301,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
         var ri = days.length - 1 - i;
         var dt = new Date(d + 'T12:00:00');
         var isToday = d === localDateStr(new Date());
-        var overGoal = calsByDay[ri] > 2000;
+        var overGoal = calsByDay[ri] > targets.cal;
         return '<tr style="border-bottom:1px solid rgba(184,151,90,.06);cursor:pointer" onclick="drillToDay(\'' + d + '\')" onmouseover="this.style.background=\'var(--gold-faint)\'" onmouseout="this.style.background=\'\'">'
 
           + '<td style="padding:11px 0;font-size:13px;color:' + (isToday ? 'var(--gold)' : 'var(--cream)') + '">' + dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + '</td>'
@@ -2063,28 +2537,36 @@ async function saveSupplement() {
   var name = nameEl.value.trim();
   var dosage = dosageEl.value.trim();
   if (!name) { alert('Please enter a supplement name.'); return; }
+  if (_suppPhotoAnalyzing) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--gold)';
+    statusEl.textContent = 'Photo still analyzing, please wait...';
+    return;
+  }
 
   statusEl.style.display = 'block';
   statusEl.textContent = 'Looking up nutrient profile...';
   saveBtn.disabled = true;
 
   try {
-    // Call analyze-meal-ai to get nutrient profile
-    var nutrientProfile = null;
-    try {
-      var desc = dosage ? dosage + ' ' + name : name;
-      var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
-        body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
-      });
-      if (aiRes.ok) {
-        var aiData = await aiRes.json();
-        if (aiData && aiData.total_nutrition) {
-          nutrientProfile = aiData.total_nutrition;
+    // Use photo-extracted nutrients if available, otherwise look up by name
+    var nutrientProfile = _suppPhotoNutrients || null;
+    if (!nutrientProfile) {
+      try {
+        var desc = dosage ? dosage + ' ' + name : name;
+        var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+          body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
+        });
+        if (aiRes.ok) {
+          var aiData = await aiRes.json();
+          if (aiData && aiData.total_nutrition) {
+            nutrientProfile = aiData.total_nutrition;
+          }
         }
-      }
-    } catch(e) { console.warn('[Healix] Could not fetch nutrient profile:', e); }
+      } catch(e) { console.warn('[Healix] Could not fetch nutrient profile:', e); }
+    }
 
     statusEl.textContent = 'Saving supplement...';
 
@@ -2102,10 +2584,84 @@ async function saveSupplement() {
     dosageEl.value = '';
     statusEl.style.display = 'none';
     saveBtn.disabled = false;
+    _suppPhotoNutrients = null;
+    document.getElementById('supp-photo-preview').style.display = 'none';
+    document.getElementById('supp-photo-input').value = '';
     await loadSupplements();
   } catch(e) {
     statusEl.textContent = 'Error: ' + e.message;
     saveBtn.disabled = false;
+  }
+}
+
+// ── SUPPLEMENT PHOTO ──
+var _suppPhotoNutrients = null;
+var _suppPhotoAnalyzing = false;
+
+function handleSupplementPhoto(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result;
+    document.getElementById('supp-photo-img').src = base64;
+    document.getElementById('supp-photo-preview').style.display = 'block';
+    analyzeSupplementPhoto(base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearSupplementPhoto() {
+  _suppPhotoNutrients = null;
+  _suppPhotoAnalyzing = false;
+  document.getElementById('supp-photo-preview').style.display = 'none';
+  document.getElementById('supp-photo-input').value = '';
+  var statusEl = document.getElementById('supp-status');
+  statusEl.style.display = 'none';
+}
+
+async function analyzeSupplementPhoto(base64) {
+  var s = getSession(); if (!s) return;
+  var token = s.access_token;
+  var statusEl = document.getElementById('supp-status');
+  var nameEl = document.getElementById('supp-name');
+  var dosageEl = document.getElementById('supp-dosage');
+  _suppPhotoAnalyzing = true;
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--gold)';
+  statusEl.textContent = 'Reading supplement label...';
+
+  try {
+    var res = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-from-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        image: base64,
+        context: 'This is a supplement bottle label. Extract the supplement name, serving size, and all nutrients with amounts.'
+      })
+    });
+    if (!res.ok) throw new Error('Analysis failed');
+    var data = await res.json();
+
+    // Extract name from response
+    if (data.meal_description || data.description) {
+      nameEl.value = data.meal_description || data.description;
+    }
+    if (data.serving_size) {
+      dosageEl.value = data.serving_size;
+    }
+    if (data.total_nutrition) {
+      _suppPhotoNutrients = data.total_nutrition;
+    }
+
+    statusEl.style.color = 'var(--up)';
+    statusEl.textContent = 'Label read — review and save.';
+    _suppPhotoAnalyzing = false;
+  } catch(e) {
+    console.error('[Healix] Supplement photo analysis error:', e);
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'Could not read label. Enter details manually.';
+    _suppPhotoAnalyzing = false;
   }
 }
 
@@ -2322,6 +2878,54 @@ function renderBloodworkDate(dateStr) {
     + (prevDate ? '<div style="text-align:right"><div class="bw-score-label">Previous labs</div><div style="font-size:14px;color:var(--cream-dim);margin-top:4px">' + new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</div><div style="font-size:11px;color:var(--muted);margin-top:2px">' + allDates.length + ' total reports</div></div>' : '')
     + '</div>';
 
+  // Comparison highlight — show biggest changes when previous labs exist
+  var compareHtml = '';
+  if (prevDate && prevSamples.length > 0) {
+    var deltas = [];
+    samples.forEach(function(s) {
+      var prev = prevByName[s.biomarker_name];
+      if (!prev || prev.value === null || s.value === null) return;
+      var diff = s.value - prev.value;
+      if (Math.abs(diff) < 0.01) return;
+      var pctChange = prev.value !== 0 ? Math.round((diff / prev.value) * 100) : 0;
+      var name = s.biomarker_name.toLowerCase();
+      var range = getRange(s.biomarker_name);
+      var improved = false;
+      if (name.indexOf('hdl') !== -1) improved = diff > 0;
+      else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
+      else if (s.flag === 'L' || (!s.flag && range && s.value < range.optLow)) improved = diff > 0;
+      else improved = true;
+      deltas.push({ name: s.biomarker_name, oldVal: prev.value, newVal: s.value, diff: diff, pct: pctChange, improved: improved, unit: s.unit || '' });
+    });
+    // Sort by absolute pct change, take top 6
+    deltas.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
+    var topChanges = deltas.slice(0, 6);
+    if (topChanges.length > 0) {
+      var prevLabel = new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var curLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      compareHtml = '<div class="bw-compare">';
+      compareHtml += '<div class="bw-compare-header"><div class="bw-compare-label">Biggest Changes</div>';
+      compareHtml += '<div class="bw-compare-dates">' + prevLabel + ' → ' + curLabel + '</div></div>';
+      compareHtml += '<div class="bw-compare-grid">';
+      topChanges.forEach(function(d) {
+        var round = function(v) { return v % 1 === 0 ? v : Math.round(v * 10) / 10; };
+        var arrowDir = d.diff > 0 ? 'up' : 'down';
+        var arrowChar = d.diff > 0 ? '↑' : '↓';
+        var pctCls = d.improved ? 'improved' : (Math.abs(d.pct) <= 5 ? 'same' : 'worsened');
+        compareHtml += '<div class="bw-compare-item">';
+        compareHtml += '<div class="bw-compare-name">' + escapeHtml(d.name) + '</div>';
+        compareHtml += '<div class="bw-compare-values">';
+        compareHtml += '<span class="bw-compare-old">' + round(d.oldVal) + '</span>';
+        compareHtml += '<span class="bw-compare-arrow ' + arrowDir + '">' + arrowChar + '</span>';
+        compareHtml += '<span class="bw-compare-new">' + round(d.newVal) + '</span>';
+        compareHtml += '</div>';
+        compareHtml += '<div class="bw-compare-pct ' + pctCls + '">' + (d.pct > 0 ? '+' : '') + d.pct + '%</div>';
+        compareHtml += '</div>';
+      });
+      compareHtml += '</div></div>';
+    }
+  }
+
   // Group by category
   var byCategory = {};
   samples.forEach(function(s) {
@@ -2332,7 +2936,7 @@ function renderBloodworkDate(dateStr) {
   });
 
   // Render biomarker cards
-  var html = '';
+  var html = compareHtml;
   var categoryOrder = ['Lipid Panel', 'Metabolic', 'CBC', 'Liver', 'Kidney', 'Thyroid', 'Hormones', 'Inflammation', 'Vitamins', 'Blood', 'Other'];
   categoryOrder.forEach(function(cat) {
     var catSamples = byCategory[cat];
@@ -2688,22 +3292,39 @@ async function saveFamilyHistory() {
   } catch(e) { alert('Could not save family history: ' + e.message); console.error(e); }
 }
 
+var profileHeightUnit = 'imperial'; // 'imperial' or 'metric'
+var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
+
 function populateProfileForm(profile) {
   var fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
   if (fullName) document.getElementById('p-name').value = fullName;
   if (profile.birth_date) document.getElementById('p-dob').value = profile.birth_date;
   if (profile.gender) document.getElementById('p-sex').value = profile.gender;
   if (profile.primary_goal) document.getElementById('p-goal').value = profile.primary_goal;
-  // Height: stored as cm, display as feet/inches
+  // Restore unit preferences from localStorage
+  var savedHeightUnit = localStorage.getItem('healix_height_unit_' + currentUser.id);
+  var savedWeightUnit = localStorage.getItem('healix_weight_unit_' + currentUser.id);
+  if (savedHeightUnit) toggleHeightUnit(savedHeightUnit);
+  if (savedWeightUnit) toggleWeightUnit(savedWeightUnit);
+
+  // Height: stored as cm, display in user's preferred unit
   if (profile.height_cm) {
-    var totalInches = profile.height_cm / 2.54;
-    var feet = Math.floor(totalInches / 12);
-    var inches = Math.round(totalInches % 12);
-    document.getElementById('p-height').value = feet + "'" + inches + '"';
+    if (profileHeightUnit === 'metric') {
+      document.getElementById('p-height').value = Math.round(profile.height_cm);
+    } else {
+      var totalInches = profile.height_cm / 2.54;
+      var feet = Math.floor(totalInches / 12);
+      var inches = Math.round(totalInches % 12);
+      document.getElementById('p-height').value = feet + "'" + inches + '"';
+    }
   }
-  // Weight: stored as kg, display as lbs
+  // Weight: stored as kg, display in user's preferred unit
   if (profile.current_weight_kg) {
-    document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
+    if (profileWeightUnit === 'kg') {
+      document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 10) / 10;
+    } else {
+      document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
+    }
   }
   // Load health conditions
   if (profile.health_conditions) {
@@ -2742,10 +3363,81 @@ function populateProfileForm(profile) {
   }
 }
 
-function parseHeight(val) {
-  // Parse formats: 5'11", 5'11, 5 11, 71 (inches), 180cm
+// profileHeightUnit and profileWeightUnit moved before populateProfileForm
+
+function toggleHeightUnit(unit) {
+  var input = document.getElementById('p-height');
+  if (!input) { profileHeightUnit = unit; return; }
+  var oldUnit = profileHeightUnit;
+  profileHeightUnit = unit;
+  try { localStorage.setItem(currentUser ? 'healix_height_unit_' + currentUser.id : 'healix_height_unit', unit); } catch(e) {}
+  // Update toggle buttons
+  var toggle = document.getElementById('height-unit-toggle');
+  if (!toggle) return;
+  toggle.querySelectorAll('.unit-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-unit') === unit);
+  });
+  // Convert current value
+  var currentVal = input.value.trim();
+  if (currentVal && oldUnit !== unit) {
+    var cm = parseHeight(currentVal, oldUnit);
+    if (cm) {
+      if (unit === 'metric') {
+        input.value = Math.round(cm);
+        input.placeholder = 'e.g. 180';
+      } else {
+        var totalInches = cm / 2.54;
+        var feet = Math.floor(totalInches / 12);
+        var inches = Math.round(totalInches % 12);
+        input.value = feet + "'" + inches + '"';
+        input.placeholder = 'e.g. 5\'11"';
+      }
+    }
+  } else {
+    input.placeholder = unit === 'metric' ? 'e.g. 180' : 'e.g. 5\'11"';
+  }
+}
+
+function toggleWeightUnit(unit) {
+  var input = document.getElementById('p-weight');
+  if (!input) { profileWeightUnit = unit; return; }
+  var oldUnit = profileWeightUnit;
+  profileWeightUnit = unit;
+  try { localStorage.setItem(currentUser ? 'healix_weight_unit_' + currentUser.id : 'healix_weight_unit', unit); } catch(e) {}
+  // Update toggle buttons
+  var toggle = document.getElementById('weight-unit-toggle');
+  if (!toggle) return;
+  toggle.querySelectorAll('.unit-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-unit') === unit);
+  });
+  // Convert current value
+  var currentVal = input.value.trim();
+  if (currentVal && oldUnit !== unit) {
+    var kg = parseWeight(currentVal, oldUnit);
+    if (kg) {
+      if (unit === 'kg') {
+        input.value = Math.round(kg * 10) / 10;
+        input.placeholder = 'kg';
+      } else {
+        input.value = Math.round(kg * 2.205);
+        input.placeholder = 'lbs';
+      }
+    }
+  } else {
+    input.placeholder = unit === 'kg' ? 'kg' : 'lbs';
+  }
+}
+
+function parseHeight(val, unit) {
+  // Parse height and return cm
   if (!val) return null;
-  val = val.trim();
+  val = (val + '').trim();
+  unit = unit || profileHeightUnit;
+  if (unit === 'metric') {
+    var num = parseFloat(val);
+    return !isNaN(num) ? num : null;
+  }
+  // Imperial: try ft'in" formats
   var cmMatch = val.match(/(\d+)\s*cm/i);
   if (cmMatch) return parseFloat(cmMatch[1]);
   var ftInMatch = val.match(/(\d+)\s*[''′]\s*(\d+)/);
@@ -2760,10 +3452,16 @@ function parseHeight(val) {
   return null;
 }
 
-function parseWeight(val) {
-  // Parse weight — assume lbs, convert to kg
+function parseWeight(val, unit) {
+  // Parse weight and return kg
   if (!val) return null;
-  val = val.trim();
+  val = (val + '').trim();
+  unit = unit || profileWeightUnit;
+  if (unit === 'kg') {
+    var num = parseFloat(val);
+    return !isNaN(num) ? num : null;
+  }
+  // Imperial: assume lbs
   var kgMatch = val.match(/(\d+\.?\d*)\s*kg/i);
   if (kgMatch) return parseFloat(kgMatch[1]);
   var num = parseFloat(val);
@@ -2778,20 +3476,44 @@ async function saveProfile() {
   var nameParts = document.getElementById('p-name').value.trim().split(/\s+/);
   var firstName = nameParts[0] || '';
   var lastName = nameParts.slice(1).join(' ') || '';
+
+  // Build data — only include fields that have values to avoid nullifying existing data
   var data = {
     first_name: firstName,
-    last_name: lastName,
-    primary_goal: document.getElementById('p-goal').value || null,
-    birth_date: document.getElementById('p-dob').value || null,
-    gender: document.getElementById('p-sex').value || null,
-    height_cm: heightCm,
-    current_weight_kg: weightKg
+    last_name: lastName
   };
+  var goal = document.getElementById('p-goal').value;
+  var dob = document.getElementById('p-dob').value;
+  var sex = document.getElementById('p-sex').value;
+  data.primary_goal = goal || null;
+  data.birth_date = dob || null;
+  data.gender = sex || null;
+  data.height_cm = heightCm || null;
+  data.current_weight_kg = weightKg || null;
+
+  // Also save medical profile (clearable)
+  data.health_conditions = medicalProfile.conditions.length > 0 ? medicalProfile.conditions.join(', ') : null;
+  data.dietary_restrictions = medicalProfile.allergies.length > 0 ? medicalProfile.allergies.join(', ') : null;
+
+  console.log('[Healix] Saving profile:', JSON.stringify(data));
+  var saveBtn = document.querySelector('.save-btn');
+  if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
+
   try {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
     window.userProfileData = Object.assign(window.userProfileData || {}, data);
-    alert('Profile saved.');
-  } catch(e) { alert('Could not save profile: ' + e.message); console.error('Profile save error:', e); }
+    if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
+    // Update sidebar name
+    var profileName = [firstName, lastName].filter(Boolean).join(' ');
+    if (profileName) {
+      document.getElementById('sb-name').textContent = profileName;
+      document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
+    }
+  } catch(e) {
+    console.error('[Healix] Profile save error:', e);
+    if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
+    alert('Could not save profile: ' + e.message);
+  }
 }
 
 // ── MODALS ──
@@ -3154,13 +3876,54 @@ var FITNESS_NORMS = {
         '60+':   [[595,99],[535,90],[500,80],[470,70],[445,60],[423,50],[398,40],[369,30],[331,20],[275,10]]
       }
     }
+  },
+  dead_hang: {
+    label: 'Dead Hang', unit: 'sec', higherBetter: true,
+    hint: 'Hang from a pull-up bar with a full grip, arms fully extended. Time until you drop.',
+    norms: {
+      male: {
+        '18-29': [[120,99],[90,90],[75,80],[62,70],[52,60],[44,50],[36,40],[28,30],[18,20],[8,10]],
+        '30-39': [[110,99],[82,90],[68,80],[57,70],[48,60],[40,50],[33,40],[25,30],[16,20],[7,10]],
+        '40-49': [[95,99],[72,90],[60,80],[50,70],[42,60],[35,50],[28,40],[22,30],[14,20],[6,10]],
+        '50-59': [[80,99],[60,90],[50,80],[42,70],[35,60],[29,50],[23,40],[18,30],[11,20],[5,10]],
+        '60+':   [[65,99],[48,90],[40,80],[33,70],[28,60],[23,50],[18,40],[14,30],[8,20],[3,10]]
+      },
+      female: {
+        '18-29': [[90,99],[68,90],[56,80],[47,70],[39,60],[33,50],[27,40],[20,30],[13,20],[6,10]],
+        '30-39': [[80,99],[60,90],[50,80],[42,70],[35,60],[29,50],[23,40],[17,30],[11,20],[5,10]],
+        '40-49': [[68,99],[51,90],[42,80],[35,70],[29,60],[24,50],[19,40],[14,30],[9,20],[4,10]],
+        '50-59': [[55,99],[41,90],[34,80],[28,70],[23,60],[19,50],[15,40],[11,30],[7,20],[3,10]],
+        '60+':   [[42,99],[32,90],[26,80],[22,70],[18,60],[15,50],[12,40],[8,30],[5,20],[2,10]]
+      }
+    }
+  },
+  farmers_walk: {
+    label: 'Farmers Walk', unit: 'm', higherBetter: true,
+    hint: 'Carry 50% of your bodyweight in each hand. Walk as far as possible without putting the weights down.',
+    relativeToWeight: false,
+    norms: {
+      male: {
+        '18-29': [[120,99],[95,90],[80,80],[70,70],[60,60],[52,50],[44,40],[36,30],[26,20],[15,10]],
+        '30-39': [[110,99],[88,90],[75,80],[65,70],[56,60],[48,50],[40,40],[33,30],[24,20],[14,10]],
+        '40-49': [[100,99],[80,90],[68,80],[58,70],[50,60],[43,50],[36,40],[29,30],[21,20],[12,10]],
+        '50-59': [[85,99],[68,90],[58,80],[50,70],[43,60],[37,50],[31,40],[25,30],[18,20],[10,10]],
+        '60+':   [[70,99],[56,90],[47,80],[40,70],[34,60],[29,50],[24,40],[19,30],[13,20],[7,10]]
+      },
+      female: {
+        '18-29': [[95,99],[76,90],[64,80],[55,70],[47,60],[40,50],[34,40],[27,30],[19,20],[10,10]],
+        '30-39': [[85,99],[68,90],[58,80],[50,70],[43,60],[36,50],[30,40],[24,30],[17,20],[9,10]],
+        '40-49': [[75,99],[60,90],[51,80],[44,70],[37,60],[32,50],[26,40],[21,30],[15,20],[8,10]],
+        '50-59': [[63,99],[50,90],[42,80],[36,70],[31,60],[26,50],[22,40],[17,30],[12,20],[6,10]],
+        '60+':   [[50,99],[40,90],[34,80],[29,70],[24,60],[20,50],[16,40],[13,30],[9,20],[4,10]]
+      }
+    }
   }
 };
 
 var FITNESS_CATEGORIES = [
   { key: 'strength',   label: 'Strength',   tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
   { key: 'cardio',     label: 'Cardio',     tests: ['mile_time','vo2max','walk_6min'] },
-  { key: 'functional', label: 'Functional', tests: ['grip_strength','chair_stand','balance'] },
+  { key: 'functional', label: 'Functional', tests: ['grip_strength','dead_hang','farmers_walk','chair_stand','balance'] },
   { key: 'mobility',   label: 'Mobility',   tests: ['sit_reach','shoulder_mobility'] }
 ];
 
@@ -3200,10 +3963,10 @@ function getRecommendedTests(profile, byKey) {
       if (['walk_6min','mile_time','vo2max','chair_stand'].includes(key)) score += 20;
     }
     if (goal.includes('muscle') || goal.includes('strength')) {
-      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength'].includes(key)) score += 20;
+      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength','dead_hang','farmers_walk'].includes(key)) score += 20;
     }
     if (goal.includes('longevity') || goal.includes('health')) {
-      if (['grip_strength','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
+      if (['grip_strength','dead_hang','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
     }
 
     // Low percentile = needs attention
@@ -3341,17 +4104,25 @@ function onFitnessTestChange() {
 
   // Configure AMRAP fields for reps-only (bodyweight) tests
   var amrapLabel = document.getElementById('ft-amrap-label');
+  var weightField = document.getElementById('ft-amrap-weight').parentElement;
+  var unitField = document.getElementById('ft-amrap-unit').parentElement;
   if (isRepsOnly) {
-    amrapLabel.textContent = 'Added weight (optional) & reps to failure';
-    document.getElementById('ft-amrap-weight').placeholder = '0';
+    amrapLabel.textContent = 'Reps to failure';
+    weightField.style.display = 'none';
+    unitField.style.display = 'none';
+    document.getElementById('ft-amrap-weight').value = '0';
     document.getElementById('ft-amrap-weight').required = false;
-    document.getElementById('ft-amrap-wunit').textContent = 'lbs added (0 = bodyweight)';
-    document.getElementById('ft-amrap-reps').placeholder = 'reps';
+    document.getElementById('ft-amrap-reps').placeholder = 'max reps';
+    document.getElementById('ft-amrap-reps').style.flex = '1';
     document.getElementById('ft-amrap-1rm-preview').textContent = '';
   } else if (isAMRAP) {
     amrapLabel.textContent = 'Weight used & reps completed to failure';
+    weightField.style.display = '';
+    unitField.style.display = '';
+    document.getElementById('ft-amrap-weight').value = '';
     document.getElementById('ft-amrap-weight').placeholder = 'e.g. 185';
     document.getElementById('ft-amrap-weight').required = true;
+    document.getElementById('ft-amrap-reps').style.flex = '';
     document.getElementById('ft-amrap-wunit').textContent = 'lbs';
   }
 

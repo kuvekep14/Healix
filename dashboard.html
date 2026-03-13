@@ -30,6 +30,9 @@
       <button class="nav-item" onclick="showPage('meals', this)">
         <span class="nav-icon">⊕</span> Meals
       </button>
+      <button class="nav-item" onclick="showPage('sleep', this)">
+        <span class="nav-icon">◑</span> Sleep
+      </button>
       <button class="nav-item" onclick="showPage('bloodwork', this)">
         <span class="nav-icon">◐</span> Bloodwork
       </button>
@@ -133,6 +136,15 @@
           <span id="va-insight-text"></span>
         </div>
 
+        <!-- Vitality Age Timeline -->
+        <div class="va-timeline" id="va-timeline" style="display:none">
+          <div class="va-timeline-header">
+            <div class="va-timeline-label">Your Vitality Age Over Time</div>
+            <div class="va-timeline-range" id="va-tl-range"></div>
+          </div>
+          <div id="va-tl-chart"></div>
+        </div>
+
         <!-- Driver cards -->
         <div class="vitality-drivers" id="va-drivers">
           <div class="driver-card" id="drv-heart" onclick="showPage('dashboard',null)">
@@ -167,7 +179,7 @@
             <div class="driver-status" id="drv-aerobic-status"></div>
             <div class="driver-freshness" id="drv-aerobic-freshness"></div>
           </div>
-          <div class="driver-card" id="drv-sleep">
+          <div class="driver-card" id="drv-sleep" onclick="showPage('sleep',null)" role="button" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" style="cursor:pointer">
             <div class="driver-icon">◑</div>
             <div class="driver-label">Sleep</div>
             <div class="driver-val" id="drv-sleep-val">—</div>
@@ -238,27 +250,55 @@
         </div>
       </div>
 
-      <!-- Macro summary cards (shown in all views) -->
-      <div class="meals-summary">
-        <div class="card">
-          <div class="card-label">Calories</div>
-          <div class="stat-item-val" id="mp-cal" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral" id="mp-cal-sub">of 2000 goal</div>
+      <!-- Macro rings (shown in all views) -->
+      <div class="macro-rings-wrap" id="macro-rings-wrap">
+        <div class="macro-rings-svg-wrap">
+          <svg class="macro-rings-svg" viewBox="0 0 160 160">
+            <defs>
+              <linearGradient id="ringProtGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6fcf8a"/><stop offset="100%" stop-color="#4fb86a"/></linearGradient>
+              <linearGradient id="ringCarbGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D4B483"/><stop offset="100%" stop-color="#B8975A"/></linearGradient>
+              <linearGradient id="ringFatGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e0a070"/><stop offset="100%" stop-color="#d08050"/></linearGradient>
+            </defs>
+            <!-- Protein ring (outer, r=70) -->
+            <circle cx="80" cy="80" r="70" class="macro-ring-track" style="stroke:rgba(111,207,138,.12)"/>
+            <circle cx="80" cy="80" r="70" id="ring-prot" class="macro-ring-fill" stroke="url(#ringProtGrad)" stroke-width="8" stroke-dasharray="439.8" stroke-dashoffset="439.8" transform="rotate(-90 80 80)"/>
+            <!-- Carbs ring (middle, r=56) -->
+            <circle cx="80" cy="80" r="56" class="macro-ring-track" style="stroke:rgba(184,151,90,.12)"/>
+            <circle cx="80" cy="80" r="56" id="ring-carbs" class="macro-ring-fill" stroke="url(#ringCarbGrad)" stroke-width="8" stroke-dasharray="351.9" stroke-dashoffset="351.9" transform="rotate(-90 80 80)"/>
+            <!-- Fat ring (inner, r=42) -->
+            <circle cx="80" cy="80" r="42" class="macro-ring-track" style="stroke:rgba(224,160,112,.12)"/>
+            <circle cx="80" cy="80" r="42" id="ring-fat" class="macro-ring-fill" stroke="url(#ringFatGrad)" stroke-width="8" stroke-dasharray="263.9" stroke-dashoffset="263.9" transform="rotate(-90 80 80)"/>
+          </svg>
+          <div class="macro-rings-center">
+            <div class="macro-rings-cal" id="mp-cal">—</div>
+            <div class="macro-rings-cal-label" id="mp-cal-sub">kcal</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">Protein</div>
-          <div class="stat-item-val" id="mp-protein" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral" id="mp-prot-sub">of 150g goal</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Carbs</div>
-          <div class="stat-item-val" id="mp-carbs" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral" id="mp-carb-sub">today</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Fat</div>
-          <div class="stat-item-val" id="mp-fat" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral" id="mp-fat-sub">today</div>
+        <div class="macro-rings-legend">
+          <div class="macro-ring-item">
+            <div class="macro-ring-dot protein"></div>
+            <div class="macro-ring-info">
+              <div class="macro-ring-name">Protein</div>
+              <div class="macro-ring-val" id="mp-protein">—<span>g</span></div>
+              <div class="macro-ring-target" id="mp-prot-sub">of 150g goal</div>
+            </div>
+          </div>
+          <div class="macro-ring-item">
+            <div class="macro-ring-dot carbs"></div>
+            <div class="macro-ring-info">
+              <div class="macro-ring-name">Carbs</div>
+              <div class="macro-ring-val" id="mp-carbs">—<span>g</span></div>
+              <div class="macro-ring-target" id="mp-carb-sub">today</div>
+            </div>
+          </div>
+          <div class="macro-ring-item">
+            <div class="macro-ring-dot fat"></div>
+            <div class="macro-ring-info">
+              <div class="macro-ring-name">Fat</div>
+              <div class="macro-ring-val" id="mp-fat">—<span>g</span></div>
+              <div class="macro-ring-target" id="mp-fat-sub">today</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -294,6 +334,47 @@
               <div style="font-size:10px;color:var(--muted)">% of daily RDA</div>
             </div>
             <div id="meals-micro-content" style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <!-- Vitamin functions reference -->
+        <div style="margin-top:16px">
+          <div class="card">
+            <div class="card-label" style="margin-bottom:12px">What Nutrients Support</div>
+            <div id="vitamin-functions-grid" class="nutrient-grid">
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Eyes & Vision</div>
+                <div class="nutrient-grid-cell-body">Vitamin A, Zinc, Omega-3, Vitamin E, Lutein</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Bones & Joints</div>
+                <div class="nutrient-grid-cell-body">Calcium, Vitamin D, Vitamin K, Magnesium, Phosphorus</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Brain & Focus</div>
+                <div class="nutrient-grid-cell-body">Omega-3, B12, Iron, Magnesium, Choline</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Immune System</div>
+                <div class="nutrient-grid-cell-body">Vitamin C, Vitamin D, Zinc, Selenium, Iron</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Energy & Metabolism</div>
+                <div class="nutrient-grid-cell-body">B1, B2, B3, B6, Iron, Magnesium</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Heart & Blood</div>
+                <div class="nutrient-grid-cell-body">Omega-3, Potassium, Magnesium, Folate, Iron</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Skin & Hair</div>
+                <div class="nutrient-grid-cell-body">Vitamin A, Vitamin C, Vitamin E, Biotin, Zinc</div>
+              </div>
+              <div class="nutrient-grid-cell">
+                <div class="nutrient-grid-cell-title">Muscle Recovery</div>
+                <div class="nutrient-grid-cell-body">Magnesium, Potassium, Vitamin D, Calcium, Leucine</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -348,6 +429,86 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ══ SLEEP PAGE ══ -->
+    <div class="page" id="page-sleep">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+        <div>
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Rest & Recovery</div>
+          <div style="font-family:var(--F);font-size:28px;font-weight:300">Your <em style="font-style:italic;color:var(--gold)">Sleep</em></div>
+        </div>
+        <div class="tf-group">
+          <button class="tf-btn active" onclick="setSleepRange(14, this)">2 Weeks</button>
+          <button class="tf-btn" onclick="setSleepRange(30, this)">30 Days</button>
+          <button class="tf-btn" onclick="setSleepRange(90, this)">90 Days</button>
+        </div>
+      </div>
+
+      <!-- Sleep score cards -->
+      <div class="sleep-scores" id="sleep-scores">
+        <div class="card">
+          <div class="card-label">Last Night</div>
+          <div class="stat-item-val" id="slp-last" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-last-sub">hours</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Average</div>
+          <div class="stat-item-val" id="slp-avg" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-avg-sub">hours/night</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Sleep Debt</div>
+          <div class="stat-item-val" id="slp-debt" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-debt-sub">hours this week</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Sleep Score</div>
+          <div class="stat-item-val" id="slp-score" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-score-sub">out of 100</div>
+        </div>
+      </div>
+
+      <!-- Stage breakdown over time -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-label" style="margin-bottom:16px">Sleep Stages Over Time</div>
+        <div id="sleep-stage-chart" style="min-height:160px"></div>
+        <div class="sleep-stage-legend" id="sleep-stage-legend">
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:var(--sleep-deep)"></span> Deep</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:var(--sleep-rem)"></span> REM</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:var(--sleep-core)"></span> Core</span>
+          <span class="sleep-legend-item"><span class="sleep-legend-dot" style="background:rgba(245,240,232,0.15)"></span> Awake</span>
+        </div>
+      </div>
+
+      <!-- Calendar view -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-label" style="margin-bottom:16px">Sleep Calendar</div>
+        <div class="sleep-calendar" id="sleep-calendar"></div>
+      </div>
+
+      <!-- Chat CTA -->
+      <div id="sleep-chat-cta" style="display:none;margin-top:20px">
+        <div class="vitality-chat-card" onclick="window.location.href='chat.html'">
+          <div class="vitality-chat-left">
+            <div class="vitality-chat-label">ASK HEALIX</div>
+            <div class="vitality-chat-title">How can I <em>improve my sleep</em>?</div>
+            <div class="vitality-chat-suggestions">
+              <span class="vcs">Why is my deep sleep low?</span>
+              <span class="vcs">What's causing my sleep debt?</span>
+            </div>
+          </div>
+          <div class="vitality-chat-arrow">→</div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div id="sleep-empty" style="display:none">
+        <div class="empty-state" style="padding:60px">
+          <div class="empty-state-icon">🌙</div>
+          <div class="empty-state-text">No sleep data yet.<br>Connect HealthBite to sync your sleep from Apple Watch.</div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ BLOODWORK PAGE ══ -->
@@ -425,11 +586,23 @@
           <div class="modal-row">
             <div class="modal-field">
               <label class="modal-label">Height</label>
-              <input class="modal-input" id="p-height" type="text" placeholder='e.g. 5&apos;11"'>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input class="modal-input" id="p-height" type="text" placeholder='e.g. 5&apos;11"' style="flex:1">
+                <div class="unit-toggle" id="height-unit-toggle" role="group">
+                  <button class="unit-btn active" data-unit="imperial" onclick="toggleHeightUnit('imperial')">ft/in</button>
+                  <button class="unit-btn" data-unit="metric" onclick="toggleHeightUnit('metric')">cm</button>
+                </div>
+              </div>
             </div>
             <div class="modal-field">
               <label class="modal-label">Weight</label>
-              <input class="modal-input" id="p-weight" type="text" placeholder="lbs">
+              <div style="display:flex;gap:6px;align-items:center">
+                <input class="modal-input" id="p-weight" type="text" placeholder="lbs" style="flex:1">
+                <div class="unit-toggle" id="weight-unit-toggle" role="group">
+                  <button class="unit-btn active" data-unit="lbs" onclick="toggleWeightUnit('lbs')">lbs</button>
+                  <button class="unit-btn" data-unit="kg" onclick="toggleWeightUnit('kg')">kg</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="modal-row">
@@ -756,7 +929,18 @@
   <div class="modal" style="position:relative">
     <button class="modal-close" onclick="closeModal('supplement-modal')">✕</button>
     <div class="modal-title">Add a <em>Supplement</em></div>
-    <div class="modal-sub">Define a supplement you take regularly. We'll look up its nutrient profile automatically.</div>
+    <div class="modal-sub">Take a photo of the label or type the name manually.</div>
+    <div id="supp-photo-section" style="margin-bottom:16px">
+      <input type="file" id="supp-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleSupplementPhoto(this)">
+      <button onclick="document.getElementById('supp-photo-input').click()" style="width:100%;padding:20px;background:var(--dark-3);border:1px dashed var(--gold-border);color:var(--gold);cursor:pointer;font-family:var(--B);font-size:13px;letter-spacing:.05em;display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .2s" onmouseover="this.style.borderColor='var(--gold-hover)'" onmouseout="this.style.borderColor='var(--gold-border)'">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Photo of Label
+      </button>
+      <div id="supp-photo-preview" style="display:none;margin-top:8px;position:relative">
+        <img id="supp-photo-img" style="width:100%;max-height:160px;object-fit:cover;border:1px solid var(--gold-border)">
+        <button onclick="clearSupplementPhoto()" style="position:absolute;top:6px;right:6px;background:var(--dark);border:1px solid var(--gold-border);color:var(--cream);width:24px;height:24px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+    </div>
     <div class="modal-field">
       <label class="modal-label">Supplement Name</label>
       <input class="modal-input" id="supp-name" type="text" placeholder="e.g. Centrum Men's Multivitamin">
