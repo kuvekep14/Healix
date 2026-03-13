@@ -503,11 +503,23 @@
           <div class="modal-row">
             <div class="modal-field">
               <label class="modal-label">Height</label>
-              <input class="modal-input" id="p-height" type="text" placeholder='e.g. 5&apos;11"'>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input class="modal-input" id="p-height" type="text" placeholder='e.g. 5&apos;11"' style="flex:1">
+                <div class="unit-toggle" id="height-unit-toggle">
+                  <button class="unit-btn active" data-unit="imperial" onclick="toggleHeightUnit('imperial')">ft/in</button>
+                  <button class="unit-btn" data-unit="metric" onclick="toggleHeightUnit('metric')">cm</button>
+                </div>
+              </div>
             </div>
             <div class="modal-field">
               <label class="modal-label">Weight</label>
-              <input class="modal-input" id="p-weight" type="text" placeholder="lbs">
+              <div style="display:flex;gap:6px;align-items:center">
+                <input class="modal-input" id="p-weight" type="text" placeholder="lbs" style="flex:1">
+                <div class="unit-toggle" id="weight-unit-toggle">
+                  <button class="unit-btn active" data-unit="lbs" onclick="toggleWeightUnit('lbs')">lbs</button>
+                  <button class="unit-btn" data-unit="kg" onclick="toggleWeightUnit('kg')">kg</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="modal-row">

@@ -3076,16 +3076,30 @@ function populateProfileForm(profile) {
   if (profile.birth_date) document.getElementById('p-dob').value = profile.birth_date;
   if (profile.gender) document.getElementById('p-sex').value = profile.gender;
   if (profile.primary_goal) document.getElementById('p-goal').value = profile.primary_goal;
-  // Height: stored as cm, display as feet/inches
+  // Restore unit preferences from localStorage
+  var savedHeightUnit = localStorage.getItem('healix_height_unit');
+  var savedWeightUnit = localStorage.getItem('healix_weight_unit');
+  if (savedHeightUnit) toggleHeightUnit(savedHeightUnit);
+  if (savedWeightUnit) toggleWeightUnit(savedWeightUnit);
+
+  // Height: stored as cm, display in user's preferred unit
   if (profile.height_cm) {
-    var totalInches = profile.height_cm / 2.54;
-    var feet = Math.floor(totalInches / 12);
-    var inches = Math.round(totalInches % 12);
-    document.getElementById('p-height').value = feet + "'" + inches + '"';
+    if (profileHeightUnit === 'metric') {
+      document.getElementById('p-height').value = Math.round(profile.height_cm);
+    } else {
+      var totalInches = profile.height_cm / 2.54;
+      var feet = Math.floor(totalInches / 12);
+      var inches = Math.round(totalInches % 12);
+      document.getElementById('p-height').value = feet + "'" + inches + '"';
+    }
   }
-  // Weight: stored as kg, display as lbs
+  // Weight: stored as kg, display in user's preferred unit
   if (profile.current_weight_kg) {
-    document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
+    if (profileWeightUnit === 'kg') {
+      document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 10) / 10;
+    } else {
+      document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
+    }
   }
   // Load health conditions
   if (profile.health_conditions) {
@@ -3124,10 +3138,78 @@ function populateProfileForm(profile) {
   }
 }
 
-function parseHeight(val) {
-  // Parse formats: 5'11", 5'11, 5 11, 71 (inches), 180cm
+var profileHeightUnit = 'imperial'; // 'imperial' or 'metric'
+var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
+
+function toggleHeightUnit(unit) {
+  var input = document.getElementById('p-height');
+  var oldUnit = profileHeightUnit;
+  profileHeightUnit = unit;
+  try { localStorage.setItem('healix_height_unit', unit); } catch(e) {}
+  // Update toggle buttons
+  var toggle = document.getElementById('height-unit-toggle');
+  toggle.querySelectorAll('.unit-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-unit') === unit);
+  });
+  // Convert current value
+  var currentVal = input.value.trim();
+  if (currentVal && oldUnit !== unit) {
+    var cm = parseHeight(currentVal, oldUnit);
+    if (cm) {
+      if (unit === 'metric') {
+        input.value = Math.round(cm);
+        input.placeholder = 'e.g. 180';
+      } else {
+        var totalInches = cm / 2.54;
+        var feet = Math.floor(totalInches / 12);
+        var inches = Math.round(totalInches % 12);
+        input.value = feet + "'" + inches + '"';
+        input.placeholder = 'e.g. 5\'11"';
+      }
+    }
+  } else {
+    input.placeholder = unit === 'metric' ? 'e.g. 180' : 'e.g. 5\'11"';
+  }
+}
+
+function toggleWeightUnit(unit) {
+  var input = document.getElementById('p-weight');
+  var oldUnit = profileWeightUnit;
+  profileWeightUnit = unit;
+  try { localStorage.setItem('healix_weight_unit', unit); } catch(e) {}
+  // Update toggle buttons
+  var toggle = document.getElementById('weight-unit-toggle');
+  toggle.querySelectorAll('.unit-btn').forEach(function(b) {
+    b.classList.toggle('active', b.getAttribute('data-unit') === unit);
+  });
+  // Convert current value
+  var currentVal = input.value.trim();
+  if (currentVal && oldUnit !== unit) {
+    var kg = parseWeight(currentVal, oldUnit);
+    if (kg) {
+      if (unit === 'kg') {
+        input.value = Math.round(kg * 10) / 10;
+        input.placeholder = 'kg';
+      } else {
+        input.value = Math.round(kg * 2.205);
+        input.placeholder = 'lbs';
+      }
+    }
+  } else {
+    input.placeholder = unit === 'kg' ? 'kg' : 'lbs';
+  }
+}
+
+function parseHeight(val, unit) {
+  // Parse height and return cm
   if (!val) return null;
-  val = val.trim();
+  val = (val + '').trim();
+  unit = unit || profileHeightUnit;
+  if (unit === 'metric') {
+    var num = parseFloat(val);
+    return !isNaN(num) ? num : null;
+  }
+  // Imperial: try ft'in" formats
   var cmMatch = val.match(/(\d+)\s*cm/i);
   if (cmMatch) return parseFloat(cmMatch[1]);
   var ftInMatch = val.match(/(\d+)\s*[''′]\s*(\d+)/);
@@ -3142,10 +3224,16 @@ function parseHeight(val) {
   return null;
 }
 
-function parseWeight(val) {
-  // Parse weight — assume lbs, convert to kg
+function parseWeight(val, unit) {
+  // Parse weight and return kg
   if (!val) return null;
-  val = val.trim();
+  val = (val + '').trim();
+  unit = unit || profileWeightUnit;
+  if (unit === 'kg') {
+    var num = parseFloat(val);
+    return !isNaN(num) ? num : null;
+  }
+  // Imperial: assume lbs
   var kgMatch = val.match(/(\d+\.?\d*)\s*kg/i);
   if (kgMatch) return parseFloat(kgMatch[1]);
   var num = parseFloat(val);
