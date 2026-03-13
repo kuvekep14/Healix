@@ -879,11 +879,12 @@ function buildInsightSentence(metrics, result) {
 // ── Sleep processing functions (session-based) ──
 function mapSleepStage(value) {
   if (!value) return null;
-  var stage = value.toLowerCase();
+  var stage = (typeof value === 'number') ? '' : value.toLowerCase();
   if (stage.includes('deep')) return 'deep';
   if (stage.includes('rem')) return 'rem';
   if (stage.includes('core')) return 'core';
-  if (stage.includes('awake')) return 'awake';
+  if (stage.includes('awake') || stage.includes('in_bed') || stage.includes('inbed')) return 'awake';
+  if (stage.includes('asleep') || stage === 'sleeping') return 'core';
   return null;
 }
 
@@ -983,11 +984,18 @@ async function loadSleepPage() {
       '&order=start_date.asc&limit=5000',
       'GET', null, token
     );
+    console.log('[Healix] Sleep page raw data:', data ? (data.error ? 'ERROR:'+JSON.stringify(data.error) : data.length + ' rows') : 'null');
+    if (data && data.length > 0) {
+      var sampleStages = {};
+      data.forEach(function(r) { var tv = r.text_value || r.value || 'null'; sampleStages[tv] = (sampleStages[tv] || 0) + 1; });
+      console.log('[Healix] Sleep sample stages:', JSON.stringify(sampleStages));
+    }
     if (!data || data.error || !Array.isArray(data) || data.length === 0) {
       showSleepEmpty(true);
       return;
     }
     sleepPageSessions = identifySleepSessions(data);
+    console.log('[Healix] Sleep sessions found:', sleepPageSessions.length);
     if (sleepPageSessions.length === 0) { showSleepEmpty(true); return; }
     showSleepEmpty(false);
     renderSleepPageData();
