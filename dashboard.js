@@ -88,6 +88,11 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
     headers: headers,
     body: body ? JSON.stringify(body) : undefined
   }).then(function(r) {
+    if (r.status === 401 || r.status === 403) {
+      console.warn('[Healix] Got ' + r.status + ' from ' + endpoint + ' — session expired');
+      handleAuthFailure();
+      return Promise.reject(new Error('auth_failure'));
+    }
     if (!r.ok) return r.text().then(function(t) { throw new Error(r.status + ': ' + t); });
     var ct = r.headers.get('content-type') || '';
     if (ct.indexOf('json') === -1) return null;
@@ -96,13 +101,40 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
 }
 
 // ── AUTH ──
-async function init() {
+var _authRedirecting = false;
+function handleAuthFailure() {
+  if (_authRedirecting) return;
+  _authRedirecting = true;
+  console.warn('[Healix] Auth failure — clearing session and redirecting');
+  localStorage.removeItem('healix_session');
+  localStorage.removeItem('healix_dashboard_cache');
+  window.location.href = 'login.html';
+}
+
+async function ensureFreshToken() {
   var session = getSession();
-  if (!session || !session.access_token) { window.location.href = 'login.html'; return; }
+  if (!session || !session.access_token) return null;
+  // If token expires within 5 minutes, proactively refresh
+  if (session.expires_at && session.expires_at < Date.now() + 5 * 60 * 1000) {
+    console.log('[Healix] Token expiring soon, refreshing...');
+    try {
+      await refreshSession();
+      return getSession();
+    } catch(e) {
+      console.warn('[Healix] Token refresh failed:', e);
+      return null;
+    }
+  }
+  return session;
+}
+
+async function init() {
+  var session = await ensureFreshToken();
+  if (!session || !session.access_token) { handleAuthFailure(); return; }
   currentSession = session;
   try {
     var user = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
-    if (!user || !user.id) { localStorage.removeItem('healix_session'); window.location.href = 'login.html'; return; }
+    if (!user || !user.id || user.error) { handleAuthFailure(); return; }
     currentUser = user;
     // Set initial name from auth metadata, will be overwritten by profile data if available
     var name = (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0];
@@ -1145,7 +1177,10 @@ function renderSleepCalendar(sessionData) {
 
 async function loadDashboardData() {
   if (!currentUser) return;
-  var token = currentSession.access_token;
+  var freshSession = await ensureFreshToken();
+  if (!freshSession) { handleAuthFailure(); return; }
+  currentSession = freshSession;
+  var token = freshSession.access_token;
   var today = localDateStr(new Date());
 
   // Real age from profile — try birth_date first, then dob
