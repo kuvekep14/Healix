@@ -183,7 +183,12 @@ async function init() {
     });
     loadFamilyHistoryForm();
     setWeightDateDefault();
-  } catch(e) { console.error('Auth error:', e); }
+  } catch(e) {
+    console.error('Auth error:', e);
+    localStorage.removeItem('healix_session');
+    window.location.href = 'login.html';
+    return;
+  }
 }
 
 function greet() {
