@@ -3852,17 +3852,25 @@ function onFitnessTestChange() {
 
   // Configure AMRAP fields for reps-only (bodyweight) tests
   var amrapLabel = document.getElementById('ft-amrap-label');
+  var weightField = document.getElementById('ft-amrap-weight').parentElement;
+  var unitField = document.getElementById('ft-amrap-unit').parentElement;
   if (isRepsOnly) {
-    amrapLabel.textContent = 'Added weight (optional) & reps to failure';
-    document.getElementById('ft-amrap-weight').placeholder = '0';
+    amrapLabel.textContent = 'Reps to failure';
+    weightField.style.display = 'none';
+    unitField.style.display = 'none';
+    document.getElementById('ft-amrap-weight').value = '0';
     document.getElementById('ft-amrap-weight').required = false;
-    document.getElementById('ft-amrap-wunit').textContent = 'lbs added (0 = bodyweight)';
-    document.getElementById('ft-amrap-reps').placeholder = 'reps';
+    document.getElementById('ft-amrap-reps').placeholder = 'max reps';
+    document.getElementById('ft-amrap-reps').style.flex = '1';
     document.getElementById('ft-amrap-1rm-preview').textContent = '';
   } else if (isAMRAP) {
     amrapLabel.textContent = 'Weight used & reps completed to failure';
+    weightField.style.display = '';
+    unitField.style.display = '';
+    document.getElementById('ft-amrap-weight').value = '';
     document.getElementById('ft-amrap-weight').placeholder = 'e.g. 185';
     document.getElementById('ft-amrap-weight').required = true;
+    document.getElementById('ft-amrap-reps').style.flex = '';
     document.getElementById('ft-amrap-wunit').textContent = 'lbs';
   }
 
