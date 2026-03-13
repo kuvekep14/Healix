@@ -241,7 +241,7 @@ function showPage(id, btn) {
 
   // Load page data
   if (id === 'meals') { loadMealsPage(); }
-  if (id === 'sleep') loadSleepPage();
+  if (id === 'sleep') { console.log('[Healix] showPage calling loadSleepPage'); loadSleepPage(); }
   if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
@@ -971,6 +971,7 @@ function setSleepRange(days, btn) {
 }
 
 async function loadSleepPage() {
+  console.log('[Healix] loadSleepPage called, currentUser:', !!currentUser, 'session:', !!getSession());
   if (!currentUser) return;
   var s = getSession(); if (!s) return;
   var token = s.access_token;
