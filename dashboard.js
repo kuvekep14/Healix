@@ -3360,11 +3360,13 @@ var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
 
 function toggleHeightUnit(unit) {
   var input = document.getElementById('p-height');
+  if (!input) { profileHeightUnit = unit; return; }
   var oldUnit = profileHeightUnit;
   profileHeightUnit = unit;
   try { localStorage.setItem('healix_height_unit', unit); } catch(e) {}
   // Update toggle buttons
   var toggle = document.getElementById('height-unit-toggle');
+  if (!toggle) return;
   toggle.querySelectorAll('.unit-btn').forEach(function(b) {
     b.classList.toggle('active', b.getAttribute('data-unit') === unit);
   });
@@ -3391,11 +3393,13 @@ function toggleHeightUnit(unit) {
 
 function toggleWeightUnit(unit) {
   var input = document.getElementById('p-weight');
+  if (!input) { profileWeightUnit = unit; return; }
   var oldUnit = profileWeightUnit;
   profileWeightUnit = unit;
   try { localStorage.setItem('healix_weight_unit', unit); } catch(e) {}
   // Update toggle buttons
   var toggle = document.getElementById('weight-unit-toggle');
+  if (!toggle) return;
   toggle.querySelectorAll('.unit-btn').forEach(function(b) {
     b.classList.toggle('active', b.getAttribute('data-unit') === unit);
   });
@@ -3465,20 +3469,44 @@ async function saveProfile() {
   var nameParts = document.getElementById('p-name').value.trim().split(/\s+/);
   var firstName = nameParts[0] || '';
   var lastName = nameParts.slice(1).join(' ') || '';
+
+  // Build data — only include fields that have values to avoid nullifying existing data
   var data = {
     first_name: firstName,
-    last_name: lastName,
-    primary_goal: document.getElementById('p-goal').value || null,
-    birth_date: document.getElementById('p-dob').value || null,
-    gender: document.getElementById('p-sex').value || null,
-    height_cm: heightCm,
-    current_weight_kg: weightKg
+    last_name: lastName
   };
+  var goal = document.getElementById('p-goal').value;
+  var dob = document.getElementById('p-dob').value;
+  var sex = document.getElementById('p-sex').value;
+  if (goal) data.primary_goal = goal;
+  if (dob) data.birth_date = dob;
+  if (sex) data.gender = sex;
+  if (heightCm) data.height_cm = heightCm;
+  if (weightKg) data.current_weight_kg = weightKg;
+
+  // Also save medical profile
+  if (medicalProfile.conditions.length > 0) data.health_conditions = medicalProfile.conditions.join(', ');
+  if (medicalProfile.allergies.length > 0) data.dietary_restrictions = medicalProfile.allergies.join(', ');
+
+  console.log('[Healix] Saving profile:', JSON.stringify(data));
+  var saveBtn = document.querySelector('.save-btn');
+  if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
+
   try {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
     window.userProfileData = Object.assign(window.userProfileData || {}, data);
-    alert('Profile saved.');
-  } catch(e) { alert('Could not save profile: ' + e.message); console.error('Profile save error:', e); }
+    if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
+    // Update sidebar name
+    var profileName = [firstName, lastName].filter(Boolean).join(' ');
+    if (profileName) {
+      document.getElementById('sb-name').textContent = profileName;
+      document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
+    }
+  } catch(e) {
+    console.error('[Healix] Profile save error:', e);
+    if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
+    alert('Could not save profile: ' + e.message);
+  }
 }
 
 // ── MODALS ──
