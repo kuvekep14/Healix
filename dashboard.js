@@ -163,6 +163,7 @@ async function init() {
         // Use cache if less than 10 minutes old
         if (c.cachedAt && (Date.now() - c.cachedAt < 10 * 60 * 1000)) {
           renderVitalityAge(c.result, c.realAge);
+          renderVitalityTimeline();
           renderDriverCards(c.metrics, c.result);
           if (c.timestamps) {
             renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', c.timestamps.heart_rate);
@@ -620,6 +621,112 @@ function renderVitalityAge(result, realAge) {
   }
 }
 
+// ── VITALITY AGE TIMELINE ──
+function saveVitalityHistory(result, realAge) {
+  if (!result || !result.vAge) return;
+  var today = localDateStr(new Date());
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem('healix_va_history') || '[]'); } catch(e) { history = []; }
+  // Update today's entry or add new one
+  var found = false;
+  for (var i = 0; i < history.length; i++) {
+    if (history[i].date === today) { history[i] = { date: today, vAge: result.vAge, composite: result.composite, realAge: realAge }; found = true; break; }
+  }
+  if (!found) history.push({ date: today, vAge: result.vAge, composite: result.composite, realAge: realAge });
+  // Keep last 365 days
+  history.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
+  if (history.length > 365) history = history.slice(-365);
+  try { localStorage.setItem('healix_va_history', JSON.stringify(history)); } catch(e) {}
+}
+
+function renderVitalityTimeline() {
+  var container = document.getElementById('va-timeline');
+  var chartEl = document.getElementById('va-tl-chart');
+  var rangeEl = document.getElementById('va-tl-range');
+  if (!container || !chartEl) return;
+
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem('healix_va_history') || '[]'); } catch(e) {}
+  if (history.length < 2) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = 'block';
+  var pts = history.slice(-90); // Last 90 days
+  var firstDate = new Date(pts[0].date + 'T12:00:00');
+  var lastDate = new Date(pts[pts.length - 1].date + 'T12:00:00');
+  if (rangeEl) {
+    rangeEl.textContent = firstDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' — ' + lastDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // Chart dimensions
+  var W = 812, H = 80, padX = 30, padY = 12;
+  var ages = pts.map(function(p) { return p.vAge; });
+  var minAge = Math.min.apply(null, ages) - 1;
+  var maxAge = Math.max.apply(null, ages) + 1;
+  if (maxAge - minAge < 4) { minAge -= 1; maxAge += 1; }
+  var rangeAge = maxAge - minAge || 1;
+
+  // Build points
+  var points = pts.map(function(p, i) {
+    var x = padX + (i / (pts.length - 1)) * (W - 2 * padX);
+    var y = padY + (1 - (p.vAge - minAge) / rangeAge) * (H - 2 * padY);
+    return { x: x, y: y, vAge: p.vAge, date: p.date };
+  });
+
+  var polyline = points.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+  // Area fill (close path at bottom)
+  var areaPath = 'M' + points[0].x + ',' + points[0].y;
+  for (var i = 1; i < points.length; i++) areaPath += ' L' + points[i].x + ',' + points[i].y;
+  areaPath += ' L' + points[points.length - 1].x + ',' + (H - padY) + ' L' + points[0].x + ',' + (H - padY) + ' Z';
+
+  // Real age reference line
+  var realAge = pts[pts.length - 1].realAge;
+  var realY = null;
+  if (realAge >= minAge && realAge <= maxAge) {
+    realY = padY + (1 - (realAge - minAge) / rangeAge) * (H - 2 * padY);
+  }
+
+  var svg = '<svg class="va-timeline-chart" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">';
+  svg += '<defs><linearGradient id="vaTimelineGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#B8975A" stop-opacity=".3"/><stop offset="100%" stop-color="#B8975A" stop-opacity="0"/></linearGradient>';
+  svg += '<linearGradient id="vaTimelineLineGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#B8975A"/><stop offset="100%" stop-color="#F5D89A"/></linearGradient></defs>';
+
+  // Grid lines
+  var gridSteps = 3;
+  for (var g = 0; g <= gridSteps; g++) {
+    var gy = padY + (g / gridSteps) * (H - 2 * padY);
+    svg += '<line x1="' + padX + '" y1="' + gy + '" x2="' + (W - padX) + '" y2="' + gy + '" class="va-tl-grid" stroke-width="1"/>';
+  }
+
+  // Real age dashed line
+  if (realY !== null) {
+    svg += '<line x1="' + padX + '" y1="' + realY + '" x2="' + (W - padX) + '" y2="' + realY + '" stroke="rgba(245,240,232,.1)" stroke-width="1" stroke-dasharray="4,4"/>';
+    svg += '<text x="' + (W - padX + 6) + '" y="' + (realY + 3) + '" class="va-tl-label" style="font-size:8px;fill:var(--muted)">Age ' + realAge + '</text>';
+  }
+
+  // Area + line
+  svg += '<path d="' + areaPath + '" class="va-tl-area"/>';
+  svg += '<polyline points="' + polyline + '" class="va-tl-line"/>';
+
+  // Dots — first, last, and any local min/max
+  var last = points[points.length - 1];
+  svg += '<circle cx="' + last.x + '" cy="' + last.y + '" r="4" class="va-tl-dot-latest"/>';
+  if (points.length > 2) {
+    svg += '<circle cx="' + points[0].x + '" cy="' + points[0].y + '" r="3" class="va-tl-dot"/>';
+  }
+
+  // Y-axis labels
+  svg += '<text x="' + (padX - 6) + '" y="' + (padY + 3) + '" class="va-tl-label" text-anchor="end">' + Math.round(maxAge) + '</text>';
+  svg += '<text x="' + (padX - 6) + '" y="' + (H - padY + 3) + '" class="va-tl-label" text-anchor="end">' + Math.round(minAge) + '</text>';
+
+  // Latest value label
+  svg += '<text x="' + (last.x + 8) + '" y="' + (last.y + 4) + '" style="font-family:var(--F);font-size:13px;fill:var(--gold-light);font-weight:300">' + last.vAge + '</text>';
+
+  svg += '</svg>';
+  chartEl.innerHTML = svg;
+}
+
 function renderDriverCards(metrics, result) {
   // Compute actual weights (accounting for redistribution)
   var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
@@ -1067,6 +1174,8 @@ async function loadDashboardData() {
   var result = calcVitalityAge(metrics);
   console.log('[Healix] vitalityResult:', result);
   renderVitalityAge(result, realAge);
+  saveVitalityHistory(result, realAge);
+  renderVitalityTimeline();
   renderDriverCards(metrics, result);
 
   // AI insight sentence
@@ -1289,23 +1398,36 @@ function getMacroTargets() {
 }
 
 function renderDayMacroUI(cal, prot, carbs, fat) {
-  var macroTotal = prot + carbs + fat || 1;
   var targets = getMacroTargets();
   var setEl = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
   var setHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
-  var setW = function(id,v) { var e=document.getElementById(id); if(e) e.style.width=v; };
 
-  // Top summary cards
+  // Center calorie display
   setEl('mp-cal', cal || '—');
-  setEl('mp-cal-sub', 'of ' + targets.cal + ' goal');
-  setHTML('mp-protein', (prot||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
+
+  // Legend values
+  setHTML('mp-protein', (prot||'—') + '<span>g</span>');
   setEl('mp-prot-sub', 'of ' + targets.prot + 'g goal');
-  setHTML('mp-carbs', (carbs||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
+  setHTML('mp-carbs', (carbs||'—') + '<span>g</span>');
   setEl('mp-carb-sub', 'of ' + targets.carbs + 'g goal');
-  setHTML('mp-fat', (fat||'—') + '<span style="font-size:16px;color:var(--muted)">g</span>');
+  setHTML('mp-fat', (fat||'—') + '<span>g</span>');
   setEl('mp-fat-sub', 'of ' + targets.fat + 'g goal');
 
-  // (macro proportion bars removed — summary cards above are sufficient)
+  // Animate rings
+  var rings = [
+    { id: 'ring-prot', value: prot || 0, target: targets.prot, circ: 439.8 },
+    { id: 'ring-carbs', value: carbs || 0, target: targets.carbs, circ: 351.9 },
+    { id: 'ring-fat', value: fat || 0, target: targets.fat, circ: 263.9 }
+  ];
+  setTimeout(function() {
+    rings.forEach(function(r) {
+      var el = document.getElementById(r.id);
+      if (!el) return;
+      var pct = Math.min(r.value / r.target, 1.15); // Allow slight overflow visual
+      var offset = r.circ * (1 - pct);
+      el.style.strokeDashoffset = Math.max(0, offset);
+    });
+  }, 100);
 }
 
 
@@ -1873,16 +1995,35 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var avgCarb = Math.round(carbsByDay.reduce(function(s,v){return s+v;},0) / numDays);
   var avgFat  = Math.round(fatsByDay.reduce(function(s,v){return s+v;},0) / numDays);
 
-  // Update top macro cards with avg label
+  // Update macro rings with avg values
   var periodLabel = mealsView === 'week' ? 'this week' : 'this month';
-  document.getElementById('mp-cal').textContent  = avgCal || '—';
-  document.getElementById('mp-cal-sub').textContent = 'avg/day ' + periodLabel;
-  document.getElementById('mp-protein').innerHTML = (avgProt || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-prot-sub').textContent = 'avg/day protein';
-  document.getElementById('mp-carbs').innerHTML   = (avgCarb || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-carb-sub').textContent = 'avg/day carbs';
-  document.getElementById('mp-fat').innerHTML     = (avgFat || '—') + '<span style="font-size:16px;color:var(--muted)">g</span>';
-  document.getElementById('mp-fat-sub').textContent = 'avg/day fat';
+  var safeSet = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
+  var safeHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
+  safeSet('mp-cal', avgCal || '—');
+  safeSet('mp-cal-sub', 'avg/day ' + periodLabel);
+  safeHTML('mp-protein', (avgProt || '—') + '<span>g</span>');
+  safeSet('mp-prot-sub', 'avg/day protein');
+  safeHTML('mp-carbs', (avgCarb || '—') + '<span>g</span>');
+  safeSet('mp-carb-sub', 'avg/day carbs');
+  safeHTML('mp-fat', (avgFat || '—') + '<span>g</span>');
+  safeSet('mp-fat-sub', 'avg/day fat');
+
+  // Animate rings for avg values
+  var targets = getMacroTargets();
+  var rings = [
+    { id: 'ring-prot', value: avgProt || 0, target: targets.prot, circ: 439.8 },
+    { id: 'ring-carbs', value: avgCarb || 0, target: targets.carbs, circ: 351.9 },
+    { id: 'ring-fat', value: avgFat || 0, target: targets.fat, circ: 263.9 }
+  ];
+  setTimeout(function() {
+    rings.forEach(function(r) {
+      var el = document.getElementById(r.id);
+      if (!el) return;
+      var pct = Math.min(r.value / r.target, 1.15);
+      var offset = r.circ * (1 - pct);
+      el.style.strokeDashoffset = Math.max(0, offset);
+    });
+  }, 100);
 
   // Avg macro cards
   document.getElementById('agg-cal').textContent     = avgCal || '—';
@@ -2442,6 +2583,54 @@ function renderBloodworkDate(dateStr) {
     + (prevDate ? '<div style="text-align:right"><div class="bw-score-label">Previous labs</div><div style="font-size:14px;color:var(--cream-dim);margin-top:4px">' + new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + '</div><div style="font-size:11px;color:var(--muted);margin-top:2px">' + allDates.length + ' total reports</div></div>' : '')
     + '</div>';
 
+  // Comparison highlight — show biggest changes when previous labs exist
+  var compareHtml = '';
+  if (prevDate && prevSamples.length > 0) {
+    var deltas = [];
+    samples.forEach(function(s) {
+      var prev = prevByName[s.biomarker_name];
+      if (!prev || prev.value === null || s.value === null) return;
+      var diff = s.value - prev.value;
+      if (Math.abs(diff) < 0.01) return;
+      var pctChange = prev.value !== 0 ? Math.round((diff / prev.value) * 100) : 0;
+      var name = s.biomarker_name.toLowerCase();
+      var range = getRange(s.biomarker_name);
+      var improved = false;
+      if (name.indexOf('hdl') !== -1) improved = diff > 0;
+      else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
+      else if (s.flag === 'L' || (!s.flag && range && s.value < range.optLow)) improved = diff > 0;
+      else improved = Math.abs(pctChange) <= 5;
+      deltas.push({ name: s.biomarker_name, oldVal: prev.value, newVal: s.value, diff: diff, pct: pctChange, improved: improved, unit: s.unit || '' });
+    });
+    // Sort by absolute pct change, take top 6
+    deltas.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
+    var topChanges = deltas.slice(0, 6);
+    if (topChanges.length > 0) {
+      var prevLabel = new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var curLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      compareHtml = '<div class="bw-compare">';
+      compareHtml += '<div class="bw-compare-header"><div class="bw-compare-label">Biggest Changes</div>';
+      compareHtml += '<div class="bw-compare-dates">' + prevLabel + ' → ' + curLabel + '</div></div>';
+      compareHtml += '<div class="bw-compare-grid">';
+      topChanges.forEach(function(d) {
+        var round = function(v) { return v % 1 === 0 ? v : Math.round(v * 10) / 10; };
+        var arrowDir = d.diff > 0 ? 'up' : 'down';
+        var arrowChar = d.diff > 0 ? '↑' : '↓';
+        var pctCls = d.improved ? 'improved' : (Math.abs(d.pct) <= 5 ? 'same' : 'worsened');
+        compareHtml += '<div class="bw-compare-item">';
+        compareHtml += '<div class="bw-compare-name">' + escapeHtml(d.name) + '</div>';
+        compareHtml += '<div class="bw-compare-values">';
+        compareHtml += '<span class="bw-compare-old">' + round(d.oldVal) + '</span>';
+        compareHtml += '<span class="bw-compare-arrow ' + arrowDir + '">' + arrowChar + '</span>';
+        compareHtml += '<span class="bw-compare-new">' + round(d.newVal) + '</span>';
+        compareHtml += '</div>';
+        compareHtml += '<div class="bw-compare-pct ' + pctCls + '">' + (d.pct > 0 ? '+' : '') + d.pct + '%</div>';
+        compareHtml += '</div>';
+      });
+      compareHtml += '</div></div>';
+    }
+  }
+
   // Group by category
   var byCategory = {};
   samples.forEach(function(s) {
@@ -2452,7 +2641,7 @@ function renderBloodworkDate(dateStr) {
   });
 
   // Render biomarker cards
-  var html = '';
+  var html = compareHtml;
   var categoryOrder = ['Lipid Panel', 'Metabolic', 'CBC', 'Liver', 'Kidney', 'Thyroid', 'Hormones', 'Inflammation', 'Vitamins', 'Blood', 'Other'];
   categoryOrder.forEach(function(cat) {
     var catSamples = byCategory[cat];

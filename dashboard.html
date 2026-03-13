@@ -133,6 +133,15 @@
           <span id="va-insight-text"></span>
         </div>
 
+        <!-- Vitality Age Timeline -->
+        <div class="va-timeline" id="va-timeline" style="display:none">
+          <div class="va-timeline-header">
+            <div class="va-timeline-label">Your Vitality Age Over Time</div>
+            <div class="va-timeline-range" id="va-tl-range"></div>
+          </div>
+          <div id="va-tl-chart"></div>
+        </div>
+
         <!-- Driver cards -->
         <div class="vitality-drivers" id="va-drivers">
           <div class="driver-card" id="drv-heart" onclick="showPage('dashboard',null)">
@@ -238,27 +247,55 @@
         </div>
       </div>
 
-      <!-- Macro summary cards (shown in all views) -->
-      <div class="meals-summary">
-        <div class="card">
-          <div class="card-label">Calories</div>
-          <div class="stat-item-val" id="mp-cal" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral" id="mp-cal-sub">of 2000 goal</div>
+      <!-- Macro rings (shown in all views) -->
+      <div class="macro-rings-wrap" id="macro-rings-wrap">
+        <div class="macro-rings-svg-wrap">
+          <svg class="macro-rings-svg" viewBox="0 0 160 160">
+            <defs>
+              <linearGradient id="ringProtGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6fcf8a"/><stop offset="100%" stop-color="#4fb86a"/></linearGradient>
+              <linearGradient id="ringCarbGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D4B483"/><stop offset="100%" stop-color="#B8975A"/></linearGradient>
+              <linearGradient id="ringFatGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e0a070"/><stop offset="100%" stop-color="#d08050"/></linearGradient>
+            </defs>
+            <!-- Protein ring (outer, r=70) -->
+            <circle cx="80" cy="80" r="70" class="macro-ring-track" style="stroke:rgba(111,207,138,.12)"/>
+            <circle cx="80" cy="80" r="70" id="ring-prot" class="macro-ring-fill" stroke="url(#ringProtGrad)" stroke-width="8" stroke-dasharray="439.8" stroke-dashoffset="439.8" transform="rotate(-90 80 80)"/>
+            <!-- Carbs ring (middle, r=56) -->
+            <circle cx="80" cy="80" r="56" class="macro-ring-track" style="stroke:rgba(184,151,90,.12)"/>
+            <circle cx="80" cy="80" r="56" id="ring-carbs" class="macro-ring-fill" stroke="url(#ringCarbGrad)" stroke-width="8" stroke-dasharray="351.9" stroke-dashoffset="351.9" transform="rotate(-90 80 80)"/>
+            <!-- Fat ring (inner, r=42) -->
+            <circle cx="80" cy="80" r="42" class="macro-ring-track" style="stroke:rgba(224,160,112,.12)"/>
+            <circle cx="80" cy="80" r="42" id="ring-fat" class="macro-ring-fill" stroke="url(#ringFatGrad)" stroke-width="8" stroke-dasharray="263.9" stroke-dashoffset="263.9" transform="rotate(-90 80 80)"/>
+          </svg>
+          <div class="macro-rings-center">
+            <div class="macro-rings-cal" id="mp-cal">—</div>
+            <div class="macro-rings-cal-label" id="mp-cal-sub">kcal</div>
+          </div>
         </div>
-        <div class="card">
-          <div class="card-label">Protein</div>
-          <div class="stat-item-val" id="mp-protein" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral" id="mp-prot-sub">of 150g goal</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Carbs</div>
-          <div class="stat-item-val" id="mp-carbs" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral" id="mp-carb-sub">today</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Fat</div>
-          <div class="stat-item-val" id="mp-fat" style="font-family:var(--F);font-size:36px;font-weight:300">—<span style="font-size:16px;color:var(--muted)">g</span></div>
-          <div class="stat-item-delta delta-neutral" id="mp-fat-sub">today</div>
+        <div class="macro-rings-legend">
+          <div class="macro-ring-item">
+            <div class="macro-ring-dot protein"></div>
+            <div class="macro-ring-info">
+              <div class="macro-ring-name">Protein</div>
+              <div class="macro-ring-val" id="mp-protein">—<span>g</span></div>
+              <div class="macro-ring-target" id="mp-prot-sub">of 150g goal</div>
+            </div>
+          </div>
+          <div class="macro-ring-item">
+            <div class="macro-ring-dot carbs"></div>
+            <div class="macro-ring-info">
+              <div class="macro-ring-name">Carbs</div>
+              <div class="macro-ring-val" id="mp-carbs">—<span>g</span></div>
+              <div class="macro-ring-target" id="mp-carb-sub">today</div>
+            </div>
+          </div>
+          <div class="macro-ring-item">
+            <div class="macro-ring-dot fat"></div>
+            <div class="macro-ring-info">
+              <div class="macro-ring-name">Fat</div>
+              <div class="macro-ring-val" id="mp-fat">—<span>g</span></div>
+              <div class="macro-ring-target" id="mp-fat-sub">today</div>
+            </div>
+          </div>
         </div>
       </div>
 
