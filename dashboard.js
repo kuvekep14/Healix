@@ -624,7 +624,7 @@ function saveVitalityHistory(result, realAge) {
   if (!result || !result.vAge) return;
   var today = localDateStr(new Date());
   var history = [];
-  try { history = JSON.parse(localStorage.getItem('healix_va_history') || '[]'); } catch(e) { history = []; }
+  try { history = JSON.parse(localStorage.getItem('healix_va_history_' + currentUser.id) || '[]'); } catch(e) { history = []; }
   // Update today's entry or add new one
   var found = false;
   for (var i = 0; i < history.length; i++) {
@@ -634,7 +634,7 @@ function saveVitalityHistory(result, realAge) {
   // Keep last 365 days
   history.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
   if (history.length > 365) history = history.slice(-365);
-  try { localStorage.setItem('healix_va_history', JSON.stringify(history)); } catch(e) {}
+  try { localStorage.setItem('healix_va_history_' + currentUser.id, JSON.stringify(history)); } catch(e) {}
 }
 
 function renderVitalityTimeline() {
@@ -644,7 +644,7 @@ function renderVitalityTimeline() {
   if (!container || !chartEl) return;
 
   var history = [];
-  try { history = JSON.parse(localStorage.getItem('healix_va_history') || '[]'); } catch(e) {}
+  try { history = JSON.parse(localStorage.getItem(currentUser ? 'healix_va_history_' + currentUser.id : 'healix_va_history') || '[]'); } catch(e) {}
   if (history.length < 2) {
     container.style.display = 'none';
     return;
@@ -1238,6 +1238,17 @@ async function loadDashboardData() {
 
     }
   } catch(e) { console.error('Health error:', e); }
+
+  // 1b. Pre-fetch weight logs so getMacroTargets() can use them as fallback
+  try {
+    var wlData = await supabaseRequest(
+      '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=14',
+      'GET', null, token
+    );
+    if (wlData && !wlData.error && wlData.length > 0) {
+      weightEntries = wlData;
+    }
+  } catch(e) { console.error('Weight pre-fetch error:', e); }
 
   // 2. Meals / nutrition score
   try {
@@ -2526,6 +2537,12 @@ async function saveSupplement() {
   var name = nameEl.value.trim();
   var dosage = dosageEl.value.trim();
   if (!name) { alert('Please enter a supplement name.'); return; }
+  if (_suppPhotoAnalyzing) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--gold)';
+    statusEl.textContent = 'Photo still analyzing, please wait...';
+    return;
+  }
 
   statusEl.style.display = 'block';
   statusEl.textContent = 'Looking up nutrient profile...';
@@ -2579,6 +2596,7 @@ async function saveSupplement() {
 
 // ── SUPPLEMENT PHOTO ──
 var _suppPhotoNutrients = null;
+var _suppPhotoAnalyzing = false;
 
 function handleSupplementPhoto(input) {
   var file = input.files && input.files[0];
@@ -2595,6 +2613,7 @@ function handleSupplementPhoto(input) {
 
 function clearSupplementPhoto() {
   _suppPhotoNutrients = null;
+  _suppPhotoAnalyzing = false;
   document.getElementById('supp-photo-preview').style.display = 'none';
   document.getElementById('supp-photo-input').value = '';
   var statusEl = document.getElementById('supp-status');
@@ -2607,6 +2626,7 @@ async function analyzeSupplementPhoto(base64) {
   var statusEl = document.getElementById('supp-status');
   var nameEl = document.getElementById('supp-name');
   var dosageEl = document.getElementById('supp-dosage');
+  _suppPhotoAnalyzing = true;
   statusEl.style.display = 'block';
   statusEl.style.color = 'var(--gold)';
   statusEl.textContent = 'Reading supplement label...';
@@ -2636,10 +2656,12 @@ async function analyzeSupplementPhoto(base64) {
 
     statusEl.style.color = 'var(--up)';
     statusEl.textContent = 'Label read — review and save.';
+    _suppPhotoAnalyzing = false;
   } catch(e) {
     console.error('[Healix] Supplement photo analysis error:', e);
     statusEl.style.color = 'var(--muted)';
     statusEl.textContent = 'Could not read label. Enter details manually.';
+    _suppPhotoAnalyzing = false;
   }
 }
 
@@ -2872,7 +2894,7 @@ function renderBloodworkDate(dateStr) {
       if (name.indexOf('hdl') !== -1) improved = diff > 0;
       else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
       else if (s.flag === 'L' || (!s.flag && range && s.value < range.optLow)) improved = diff > 0;
-      else improved = Math.abs(pctChange) <= 5;
+      else improved = true;
       deltas.push({ name: s.biomarker_name, oldVal: prev.value, newVal: s.value, diff: diff, pct: pctChange, improved: improved, unit: s.unit || '' });
     });
     // Sort by absolute pct change, take top 6
@@ -3280,8 +3302,8 @@ function populateProfileForm(profile) {
   if (profile.gender) document.getElementById('p-sex').value = profile.gender;
   if (profile.primary_goal) document.getElementById('p-goal').value = profile.primary_goal;
   // Restore unit preferences from localStorage
-  var savedHeightUnit = localStorage.getItem('healix_height_unit');
-  var savedWeightUnit = localStorage.getItem('healix_weight_unit');
+  var savedHeightUnit = localStorage.getItem('healix_height_unit_' + currentUser.id);
+  var savedWeightUnit = localStorage.getItem('healix_weight_unit_' + currentUser.id);
   if (savedHeightUnit) toggleHeightUnit(savedHeightUnit);
   if (savedWeightUnit) toggleWeightUnit(savedWeightUnit);
 
@@ -3348,7 +3370,7 @@ function toggleHeightUnit(unit) {
   if (!input) { profileHeightUnit = unit; return; }
   var oldUnit = profileHeightUnit;
   profileHeightUnit = unit;
-  try { localStorage.setItem('healix_height_unit', unit); } catch(e) {}
+  try { localStorage.setItem(currentUser ? 'healix_height_unit_' + currentUser.id : 'healix_height_unit', unit); } catch(e) {}
   // Update toggle buttons
   var toggle = document.getElementById('height-unit-toggle');
   if (!toggle) return;
@@ -3381,7 +3403,7 @@ function toggleWeightUnit(unit) {
   if (!input) { profileWeightUnit = unit; return; }
   var oldUnit = profileWeightUnit;
   profileWeightUnit = unit;
-  try { localStorage.setItem('healix_weight_unit', unit); } catch(e) {}
+  try { localStorage.setItem(currentUser ? 'healix_weight_unit_' + currentUser.id : 'healix_weight_unit', unit); } catch(e) {}
   // Update toggle buttons
   var toggle = document.getElementById('weight-unit-toggle');
   if (!toggle) return;
