@@ -30,6 +30,9 @@
       <button class="nav-item" onclick="showPage('meals', this)">
         <span class="nav-icon">⊕</span> Meals
       </button>
+      <button class="nav-item" onclick="showPage('bloodwork', this)">
+        <span class="nav-icon">◐</span> Bloodwork
+      </button>
       <button class="nav-item" onclick="showPage('documents', this)">
         <span class="nav-icon">◻</span> Documents
       </button>
@@ -174,7 +177,7 @@
             <div class="driver-detail" id="drv-sleep-trend" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
             <div class="driver-freshness" id="drv-sleep-freshness"></div>
           </div>
-          <div class="driver-card" id="drv-bloodwork" onclick="showPage('documents',null)" style="opacity:0.6">
+          <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)" style="opacity:0.6">
             <div class="driver-icon">◐</div>
             <div class="driver-label">Blood Work</div>
             <div class="driver-val" id="drv-bloodwork-val" style="font-size:14px;color:var(--muted)">Not connected</div>
@@ -182,6 +185,20 @@
             <div class="driver-status" id="drv-bloodwork-status" style="color:var(--muted)">Upload labs →</div>
             <div class="driver-freshness" id="drv-bloodwork-freshness"></div>
           </div>
+        </div>
+
+        <!-- Weekly health summary -->
+        <div id="health-summary-section" style="display:none">
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">Weekly Snapshot</div>
+          <div class="card" id="health-summary-card">
+            <div id="health-summary-content" style="font-size:13px;color:var(--cream-dim);line-height:1.7"></div>
+          </div>
+        </div>
+
+        <!-- Weekly insights -->
+        <div id="weekly-insights-section" style="display:none">
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">This Week's Insights</div>
+          <div id="weekly-insights-list"></div>
         </div>
 
         <!-- Chat prompt -->
@@ -331,6 +348,42 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ══ BLOODWORK PAGE ══ -->
+    <div class="page" id="page-bloodwork">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
+        <div>
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Lab Results</div>
+          <div style="font-family:var(--F);font-size:28px;font-weight:300">Your <em style="font-style:italic;color:var(--gold)">Bloodwork</em></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <select class="modal-input" id="bw-date-select" onchange="onBloodworkDateChange()" aria-label="Select test date" style="width:auto;padding:8px 14px;font-size:12px;cursor:pointer"></select>
+          <button class="share-btn" id="bw-share-btn" onclick="shareBloodwork()" style="display:none">Share Report</button>
+          <button class="upload-btn" onclick="document.getElementById('doc-input-full').click()">+ Upload Labs</button>
+        </div>
+      </div>
+      <div id="bw-summary" style="margin-bottom:20px"></div>
+      <div id="bw-biomarkers">
+        <div class="empty-state" style="padding:60px">
+          <div class="empty-state-icon">🧬</div>
+          <div class="empty-state-text">No bloodwork uploaded yet.<br>Upload lab results to see your biomarkers here.</div>
+          <button class="upload-btn" onclick="document.getElementById('doc-input-full').click()" style="margin:16px auto 0;display:flex">+ Upload Lab Results</button>
+        </div>
+      </div>
+      <div id="bw-chat-cta" style="display:none;margin-top:24px">
+        <div class="vitality-chat-card" onclick="window.location.href='chat.html'">
+          <div class="vitality-chat-left">
+            <div class="vitality-chat-label">ASK HEALIX</div>
+            <div class="vitality-chat-title">What do my <em>lab results</em> mean?</div>
+            <div class="vitality-chat-suggestions">
+              <span class="vcs">Are any of my biomarkers concerning?</span>
+              <span class="vcs">How can I improve my cholesterol?</span>
+            </div>
+          </div>
+          <div class="vitality-chat-arrow">→</div>
+        </div>
+      </div>
     </div>
 
     <!-- ══ DOCUMENTS PAGE ══ -->
