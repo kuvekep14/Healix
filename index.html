@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://mfjfcfuwjbhqgqmtmhwe.supabase.co https://nuihvxluxdpdjgkvtdih.supabase.co http://127.0.0.1:54321; img-src 'self' data:; frame-ancestors 'none';">
 <title>Healix — Your Health, Unified</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css">
@@ -56,7 +57,7 @@ nav.s { border-bottom-color: var(--gold-border); }
 .btn-p { font-size: 11px; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; background: var(--gold); color: var(--dark); padding: 18px 48px; border: none; cursor: pointer; transition: all .3s; text-decoration: none; }
 .btn-p:hover { background: var(--gold-light); transform: translateY(-2px); box-shadow: 0 12px 40px var(--gold-glow); }
 .btn-g { font-size: 11px; letter-spacing: .15em; text-transform: uppercase; color: var(--cream-dim); background: none; padding: 18px 32px; border: 1px solid var(--gold-border); cursor: pointer; transition: all .3s; text-decoration: none; }
-.btn-g:hover { color: var(--cream); border-color: rgba(245,240,232,.4); }
+.btn-g:hover { color: var(--cream); border-color: var(--neutral); }
 .scroll-hint { position: absolute; bottom: 48px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0; animation: fadeIn 1s 1.4s forwards; }
 .scroll-line { width: 1px; height: 48px; background: linear-gradient(to bottom, var(--gold), transparent); animation: sd 2s 1.5s infinite; }
 .scroll-lbl { font-size: 9px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
@@ -72,7 +73,7 @@ nav.s { border-bottom-color: var(--gold-border); }
 .how { padding: 140px 64px; background: var(--dark-2); }
 .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--gold-border); border: 1px solid var(--gold-border); margin-top: 80px; }
 .sc { background: var(--dark-2); padding: 60px 48px; position: relative; overflow: hidden; transition: background .4s; }
-.sc:hover { background: #121212; }
+.sc:hover { background: var(--dark-3); }
 .sc::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, var(--gold-faint), transparent); opacity: 0; transition: opacity .4s; }
 .sc:hover::after { opacity: 1; }
 .si { font-family: var(--F); font-size: 96px; font-weight: 300; color: rgba(184,151,90,.1); line-height: 1; margin-bottom: 32px; }
@@ -293,8 +294,6 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   .hq-choices-multi { grid-template-columns: 1fr; }
   .hq-q-text { padding-right: 0; }
   .hq-q-ghost { display: none; }
-  .hq-email-form { flex-direction: column; }
-  .hq-email-input { border-right: 1px solid var(--gold-border); border-bottom: none; }
   .hq-rec { padding: 28px 24px; }
 }
 
@@ -644,6 +643,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   </div>
 </footer>
 
+<script src="config.js"></script>
 <script>
 // Nav scroll
 window.addEventListener('scroll',()=>document.getElementById('nav').classList.toggle('s',scrollY>40));
@@ -659,11 +659,8 @@ function tFaq(btn){
   if(!open) item.classList.add('open');
 }
 
-// CTA form — Supabase email capture
+// CTA form — Supabase email capture (uses config.js globals)
 (function(){
-  var SUPABASE_URL = 'https://mfjfcfuwjbhqgqmtmhwe.supabase.co';
-  var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1mamZjZnV3amJocWdxbXRtaHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NzYzMTYsImV4cCI6MjA1NzU1MjMxNn0.OYxDRBfsooHDY6prjI6R_7vJqqLCtlSMd_8mF-sLt0E';
-
   var form = document.getElementById('cta-email-form');
   if(!form) return;
   form.addEventListener('submit', function(e){
@@ -674,16 +671,18 @@ function tFaq(btn){
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
         'Prefer': 'return=minimal'
       },
       body: JSON.stringify({ email: email })
-    }).then(function(){
+    }).then(function(res){
+      if (!res.ok) throw new Error('Signup failed');
       form.style.display = 'none';
       document.getElementById('cta-success').style.display = 'block';
     }).catch(function(){
       form.style.display = 'none';
+      document.getElementById('cta-success').textContent = 'Something went wrong — please try again later.';
       document.getElementById('cta-success').style.display = 'block';
     });
   });

@@ -358,7 +358,7 @@
           <div style="font-family:var(--F);font-size:28px;font-weight:300">Your <em style="font-style:italic;color:var(--gold)">Bloodwork</em></div>
         </div>
         <div style="display:flex;align-items:center;gap:12px">
-          <select class="modal-input" id="bw-date-select" onchange="onBloodworkDateChange()" style="width:auto;padding:8px 14px;font-size:12px;cursor:pointer"></select>
+          <select class="modal-input" id="bw-date-select" onchange="onBloodworkDateChange()" aria-label="Select test date" style="width:auto;padding:8px 14px;font-size:12px;cursor:pointer"></select>
           <button class="share-btn" id="bw-share-btn" onclick="shareBloodwork()" style="display:none">Share Report</button>
           <button class="upload-btn" onclick="document.getElementById('doc-input-full').click()">+ Upload Labs</button>
         </div>

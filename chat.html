@@ -798,11 +798,13 @@ function renderNutrientChart(chartData) {
 function useSuggestion(el) { textarea.value=el.querySelector('.suggestion-text').textContent; textarea.dispatchEvent(new Event('input')); textarea.focus(); }
 
 // Handle ?q= param (pre-filled question from dashboard insights)
+// If ?q= is present, start a new conversation instead of resuming the last one
 (function() {
   var params = new URLSearchParams(window.location.search);
   var q = params.get('q');
   if (q) {
-    // Wait for page load then fill and optionally send
+    localStorage.removeItem('healix_last_conversation');
+    // Wait for context load then fill textarea
     setTimeout(function() {
       textarea.value = q;
       textarea.dispatchEvent(new Event('input'));
@@ -1062,7 +1064,10 @@ async function sendMessage() {
             } else if (evt.type === 'tool_call') {
               // Show contextual tool usage indicator
               var toolLabel = getToolLabel(evt.tool_name);
-              if (!fullContent) updateStreamingMessage(streamEl, '<div class="tool-status"><div class="tool-status-dot"></div>' + escapeHtml(toolLabel) + '</div>');
+              if (!fullContent) {
+                var toolBubble = streamEl.querySelector('.message-bubble');
+                if (toolBubble) toolBubble.innerHTML = '<div class="tool-status"><div class="tool-status-dot"></div>' + escapeHtml(toolLabel) + '</div>';
+              }
             } else if (evt.type === 'tool_result') {
               // Render micronutrient chart if data is available
               if (evt.chart_data && evt.chart_data.type === 'micronutrient_chart') {

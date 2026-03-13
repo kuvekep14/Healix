@@ -1923,7 +1923,7 @@ async function saveMeal() {
   var fat = document.getElementById('ml-fat').value;
   if (!name) { alert('Please enter a meal name.'); return; }
   var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
-  var mealData = {};
+  var mealData = null;
   if (cals || prot || carbs || fat) {
     mealData = {
       calories: parseFloat(cals) || 0,
@@ -2230,11 +2230,10 @@ var BIOMARKER_RANGES = {
 
 function getRange(name) {
   if (BIOMARKER_RANGES[name]) return BIOMARKER_RANGES[name];
-  // Fuzzy match
+  // Case-insensitive exact match only — avoids false positives from substring matching
   var lower = name.toLowerCase();
   for (var key in BIOMARKER_RANGES) {
     if (key.toLowerCase() === lower) return BIOMARKER_RANGES[key];
-    if (lower.indexOf(key.toLowerCase()) !== -1 || key.toLowerCase().indexOf(lower) !== -1) return BIOMARKER_RANGES[key];
   }
   return null;
 }
@@ -2403,7 +2402,7 @@ function renderBiomarkerCard(sample, prevSample) {
   var deltaHtml = '';
   if (prevSample && prevSample.value !== null && val !== null) {
     var diff = val - prevSample.value;
-    var pctChange = Math.round((diff / prevSample.value) * 100);
+    var pctChange = prevSample.value !== 0 ? Math.round((diff / prevSample.value) * 100) : 0;
     if (Math.abs(diff) > 0.01) {
       var improved = false;
       // For most markers, lower is better if flagged high; for HDL, higher is better
@@ -2418,7 +2417,7 @@ function renderBiomarkerCard(sample, prevSample) {
     }
   }
 
-  var displayVal = val !== null ? (val % 1 === 0 ? val : Math.round(val * 10) / 10) : (sample.value_text || '—');
+  var displayVal = val !== null ? (val % 1 === 0 ? val : Math.round(val * 10) / 10) : escapeHtml(sample.value_text || '—');
 
   return '<div class="bw-card">'
     + '<div class="bw-card-name">' + escapeHtml(sample.biomarker_name) + '</div>'
@@ -2551,12 +2550,21 @@ async function handleDocUpload(input) {
       }
 
       // Check if this was detected as blood_work and redirect
+      // Poll for processing completion since process-document runs async
       if (upload_id) {
         try {
-          var updatedDoc = await supabaseRequest(
-            '/rest/v1/uploads?id=eq.' + upload_id + '&select=document_type,status',
-            'GET', null, currentSession.access_token
-          );
+          var pollAttempts = 0;
+          var maxPollAttempts = 10;
+          var updatedDoc = null;
+          while (pollAttempts < maxPollAttempts) {
+            updatedDoc = await supabaseRequest(
+              '/rest/v1/uploads?id=eq.' + upload_id + '&select=document_type,status',
+              'GET', null, currentSession.access_token
+            );
+            if (updatedDoc && updatedDoc[0] && updatedDoc[0].status !== 'processing') break;
+            await new Promise(function(resolve) { setTimeout(resolve, 1500); });
+            pollAttempts++;
+          }
           if (updatedDoc && updatedDoc[0] && updatedDoc[0].document_type === 'blood_work') {
             // Count extracted biomarkers
             var extracted = await supabaseRequest(
@@ -4175,7 +4183,9 @@ async function loadWeeklyInsights() {
   try {
     // Get insights from current week
     var weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
+    var dayOfWeek = weekStart.getDay();
+    var daysBack = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    weekStart.setDate(weekStart.getDate() - daysBack); // Monday
     var weekStartStr = localDateStr(weekStart);
     var insights = await supabaseRequest(
       '/rest/v1/weekly_insights?user_id=eq.' + currentUser.id + '&week_start=gte.' + weekStartStr + '&order=created_at.desc&limit=5',
@@ -4272,7 +4282,7 @@ function shareBloodwork() {
     var flagCls = s.flag === 'H' ? 'flag-h' : s.flag === 'L' ? 'flag-l' : 'flag-normal';
     var flagLabel = s.flag === 'H' ? 'HIGH' : s.flag === 'L' ? 'LOW' : s.flag === 'A' ? 'ABN' : 'Normal';
     html += '<tr><td>' + escapeHtml(s.biomarker_name) + '</td>'
-      + '<td><strong>' + (s.value !== null ? s.value : (s.value_text || '—')) + '</strong></td>'
+      + '<td><strong>' + (s.value !== null ? s.value : escapeHtml(s.value_text || '—')) + '</strong></td>'
       + '<td>' + escapeHtml(s.unit || '') + '</td>'
       + '<td>' + escapeHtml(s.reference_range || '') + '</td>'
       + '<td class="' + flagCls + '">' + flagLabel + '</td></tr>';
@@ -4286,9 +4296,10 @@ function shareBloodwork() {
 }
 
 // ── PREMIUM GATES ──
+// TODO: When beta ends, integrate Stripe and update getUserTier() to check subscription status.
+// The renderPremiumGate() CTA currently links to profile page, which has no upgrade flow yet.
 function getUserTier() {
   // For now, all users are premium during beta
-  // This function will check the profile tier field when Stripe is integrated
   var profile = window.userProfileData || {};
   return profile.tier || 'premium';
 }
@@ -4316,7 +4327,7 @@ function checkOnboarding() {
   if (localStorage.getItem('healix_onboarding_done')) return;
   // Check if user has meaningful data
   var profile = window.userProfileData || {};
-  var hasBloodwork = document.getElementById('drv-bloodwork-val') && document.getElementById('drv-bloodwork-val').textContent !== 'Not connected' && document.getElementById('drv-bloodwork-val').textContent !== '—';
+  var hasBloodwork = allBloodworkSamples && allBloodworkSamples.length > 0;
   var hasWeight = profile.current_weight_kg;
   var hasDob = profile.birth_date || profile.dob;
   var hasHeight = profile.height_cm;
@@ -4413,6 +4424,7 @@ var editingMealId = null;
 
 function openEditMeal(mealId) {
   editingMealId = mealId;
+  // Re-read meals from the latest data to avoid stale cache
   var meals = window._healixMeals || [];
   var meal = meals.find(function(m) { return m.id === mealId; });
   if (!meal) return;
