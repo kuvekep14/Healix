@@ -763,12 +763,6 @@ function renderDriverCards(metrics, result) {
     if (barEl) { barEl.style.width = score + '%'; barEl.className = 'driver-bar-fill ' + (score > 0 ? cls : ''); }
     if (stEl) { stEl.textContent = label; stEl.className = 'driver-status ' + cls; }
     if (card) { card.className = 'driver-card ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : ''); }
-    // Show weight percentage in label
-    var labelEl = card ? card.querySelector('.driver-label') : null;
-    if (labelEl) {
-      var baseName = { heart: 'Heart Rate', weight: 'Weight', strength: 'Strength', aerobic: 'VO2 Max', sleep: 'Sleep', bloodwork: 'Blood Work' };
-      labelEl.innerHTML = (baseName[key] || key) + ' <span style="color:var(--muted);font-size:10px;font-weight:300">' + pctLabel(key, score > 0) + '</span>';
-    }
   }
 
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
