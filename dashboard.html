@@ -179,16 +179,6 @@
             <div class="driver-status" id="drv-aerobic-status"></div>
             <div class="driver-freshness" id="drv-aerobic-freshness"></div>
           </div>
-          <div class="driver-card" id="drv-sleep" onclick="showPage('sleep',null)" role="button" tabindex="0" onkeydown="if(event.key==='Enter')this.click()" style="cursor:pointer">
-            <div class="driver-icon">◑</div>
-            <div class="driver-label">Sleep</div>
-            <div class="driver-val" id="drv-sleep-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-sleep-bar"></div></div>
-            <div class="driver-status" id="drv-sleep-status"></div>
-            <div class="driver-detail" id="drv-sleep-detail" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
-            <div class="driver-detail" id="drv-sleep-trend" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
-            <div class="driver-freshness" id="drv-sleep-freshness"></div>
-          </div>
           <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)" style="opacity:0.6">
             <div class="driver-icon">◐</div>
             <div class="driver-label">Blood Work</div>
@@ -214,14 +204,14 @@
         </div>
 
         <!-- Chat prompt -->
-        <div class="vitality-chat-card" onclick="window.location.href='chat.html'">
+        <div class="vitality-chat-card" onclick="window.location.href='chat.html?q=' + encodeURIComponent('What\'s driving my vitality age today?')">
           <div class="vitality-chat-left">
             <div class="vitality-chat-label">ASK HEALIX</div>
             <div class="vitality-chat-title">What's <em>driving</em> my vitality age today?</div>
             <div class="vitality-chat-suggestions">
-              <span class="vcs">Why has my sleep been off?</span>
-              <span class="vcs">How close am I to my protein goal?</span>
-              <span class="vcs">What should I focus on this week?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('Why has my sleep been off?')">Why has my sleep been off?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('How close am I to my protein goal?')">How close am I to my protein goal?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('What should I focus on this week?')">What should I focus on this week?</span>
             </div>
           </div>
           <div class="vitality-chat-arrow">→</div>
@@ -252,52 +242,52 @@
 
       <!-- Macro rings (shown in all views) -->
       <div class="macro-rings-wrap" id="macro-rings-wrap">
-        <div class="macro-rings-svg-wrap">
-          <svg class="macro-rings-svg" viewBox="0 0 160 160">
-            <defs>
-              <linearGradient id="ringProtGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6fcf8a"/><stop offset="100%" stop-color="#4fb86a"/></linearGradient>
-              <linearGradient id="ringCarbGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D4B483"/><stop offset="100%" stop-color="#B8975A"/></linearGradient>
-              <linearGradient id="ringFatGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e0a070"/><stop offset="100%" stop-color="#d08050"/></linearGradient>
-            </defs>
-            <!-- Protein ring (outer, r=70) -->
-            <circle cx="80" cy="80" r="70" class="macro-ring-track" style="stroke:rgba(111,207,138,.12)"/>
-            <circle cx="80" cy="80" r="70" id="ring-prot" class="macro-ring-fill" stroke="url(#ringProtGrad)" stroke-width="8" stroke-dasharray="439.8" stroke-dashoffset="439.8" transform="rotate(-90 80 80)"/>
-            <!-- Carbs ring (middle, r=56) -->
-            <circle cx="80" cy="80" r="56" class="macro-ring-track" style="stroke:rgba(184,151,90,.12)"/>
-            <circle cx="80" cy="80" r="56" id="ring-carbs" class="macro-ring-fill" stroke="url(#ringCarbGrad)" stroke-width="8" stroke-dasharray="351.9" stroke-dashoffset="351.9" transform="rotate(-90 80 80)"/>
-            <!-- Fat ring (inner, r=42) -->
-            <circle cx="80" cy="80" r="42" class="macro-ring-track" style="stroke:rgba(224,160,112,.12)"/>
-            <circle cx="80" cy="80" r="42" id="ring-fat" class="macro-ring-fill" stroke="url(#ringFatGrad)" stroke-width="8" stroke-dasharray="263.9" stroke-dashoffset="263.9" transform="rotate(-90 80 80)"/>
-          </svg>
-          <div class="macro-rings-center">
-            <div class="macro-rings-cal" id="mp-cal">—</div>
-            <div class="macro-rings-cal-label" id="mp-cal-sub">kcal</div>
-          </div>
+        <div class="macro-rings-cal-header">
+          <div class="macro-rings-cal" id="mp-cal">—</div>
+          <div class="macro-rings-cal-label" id="mp-cal-sub">kcal</div>
         </div>
-        <div class="macro-rings-legend">
-          <div class="macro-ring-item">
-            <div class="macro-ring-dot protein"></div>
-            <div class="macro-ring-info">
-              <div class="macro-ring-name">Protein</div>
-              <div class="macro-ring-val" id="mp-protein">—<span>g</span></div>
-              <div class="macro-ring-target" id="mp-prot-sub">of 150g goal</div>
+        <div class="macro-rings-row">
+          <div class="macro-ring-cell">
+            <div class="macro-ring-svg-wrap">
+              <svg viewBox="0 0 120 120">
+                <defs><linearGradient id="ringProtGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6fcf8a"/><stop offset="100%" stop-color="#4fb86a"/></linearGradient></defs>
+                <circle cx="60" cy="60" r="50" class="macro-ring-track" style="stroke:rgba(111,207,138,.12)"/>
+                <circle cx="60" cy="60" r="50" id="ring-prot" class="macro-ring-fill" stroke="url(#ringProtGrad)" stroke-width="7" stroke-dasharray="314.2" stroke-dashoffset="314.2" transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="macro-ring-center">
+                <div class="macro-ring-val" id="mp-protein">—<span>g</span></div>
+              </div>
             </div>
+            <div class="macro-ring-name">Protein</div>
+            <div class="macro-ring-target" id="mp-prot-sub">of 150g goal</div>
           </div>
-          <div class="macro-ring-item">
-            <div class="macro-ring-dot carbs"></div>
-            <div class="macro-ring-info">
-              <div class="macro-ring-name">Carbs</div>
-              <div class="macro-ring-val" id="mp-carbs">—<span>g</span></div>
-              <div class="macro-ring-target" id="mp-carb-sub">today</div>
+          <div class="macro-ring-cell">
+            <div class="macro-ring-svg-wrap">
+              <svg viewBox="0 0 120 120">
+                <defs><linearGradient id="ringCarbGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#D4B483"/><stop offset="100%" stop-color="#B8975A"/></linearGradient></defs>
+                <circle cx="60" cy="60" r="50" class="macro-ring-track" style="stroke:rgba(184,151,90,.12)"/>
+                <circle cx="60" cy="60" r="50" id="ring-carbs" class="macro-ring-fill" stroke="url(#ringCarbGrad)" stroke-width="7" stroke-dasharray="314.2" stroke-dashoffset="314.2" transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="macro-ring-center">
+                <div class="macro-ring-val" id="mp-carbs">—<span>g</span></div>
+              </div>
             </div>
+            <div class="macro-ring-name">Carbs</div>
+            <div class="macro-ring-target" id="mp-carb-sub">today</div>
           </div>
-          <div class="macro-ring-item">
-            <div class="macro-ring-dot fat"></div>
-            <div class="macro-ring-info">
-              <div class="macro-ring-name">Fat</div>
-              <div class="macro-ring-val" id="mp-fat">—<span>g</span></div>
-              <div class="macro-ring-target" id="mp-fat-sub">today</div>
+          <div class="macro-ring-cell">
+            <div class="macro-ring-svg-wrap">
+              <svg viewBox="0 0 120 120">
+                <defs><linearGradient id="ringFatGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#e0a070"/><stop offset="100%" stop-color="#d08050"/></linearGradient></defs>
+                <circle cx="60" cy="60" r="50" class="macro-ring-track" style="stroke:rgba(224,160,112,.12)"/>
+                <circle cx="60" cy="60" r="50" id="ring-fat" class="macro-ring-fill" stroke="url(#ringFatGrad)" stroke-width="7" stroke-dasharray="314.2" stroke-dashoffset="314.2" transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="macro-ring-center">
+                <div class="macro-ring-val" id="mp-fat">—<span>g</span></div>
+              </div>
             </div>
+            <div class="macro-ring-name">Fat</div>
+            <div class="macro-ring-target" id="mp-fat-sub">today</div>
           </div>
         </div>
       </div>
@@ -489,13 +479,13 @@
 
       <!-- Chat CTA -->
       <div id="sleep-chat-cta" style="display:none;margin-top:20px">
-        <div class="vitality-chat-card" onclick="window.location.href='chat.html'">
+        <div class="vitality-chat-card" onclick="window.location.href='chat.html?q=' + encodeURIComponent('How can I improve my sleep?')">
           <div class="vitality-chat-left">
             <div class="vitality-chat-label">ASK HEALIX</div>
             <div class="vitality-chat-title">How can I <em>improve my sleep</em>?</div>
             <div class="vitality-chat-suggestions">
-              <span class="vcs">Why is my deep sleep low?</span>
-              <span class="vcs">What's causing my sleep debt?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('Why is my deep sleep low?')">Why is my deep sleep low?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('What\'s causing my sleep debt?')">What's causing my sleep debt?</span>
             </div>
           </div>
           <div class="vitality-chat-arrow">→</div>
@@ -533,13 +523,13 @@
         </div>
       </div>
       <div id="bw-chat-cta" style="display:none;margin-top:24px">
-        <div class="vitality-chat-card" onclick="window.location.href='chat.html'">
+        <div class="vitality-chat-card" onclick="window.location.href='chat.html?q=' + encodeURIComponent('What do my lab results mean?')">
           <div class="vitality-chat-left">
             <div class="vitality-chat-label">ASK HEALIX</div>
             <div class="vitality-chat-title">What do my <em>lab results</em> mean?</div>
             <div class="vitality-chat-suggestions">
-              <span class="vcs">Are any of my biomarkers concerning?</span>
-              <span class="vcs">How can I improve my cholesterol?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('Are any of my biomarkers concerning?')">Are any of my biomarkers concerning?</span>
+              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('How can I improve my cholesterol?')">How can I improve my cholesterol?</span>
             </div>
           </div>
           <div class="vitality-chat-arrow">→</div>
@@ -897,24 +887,29 @@
         <input class="modal-input" id="ml-datetime" type="datetime-local">
       </div>
     </div>
-    <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Calories</label>
-        <input class="modal-input" id="ml-cals" type="number" placeholder="kcal">
+    <button type="button" id="ml-nutrition-toggle" onclick="toggleMealNutrition()" style="background:none;border:1px solid var(--gold-border);color:var(--gold);cursor:pointer;font-family:var(--B);font-size:12px;letter-spacing:.05em;padding:8px 14px;margin-top:4px;transition:border-color .2s;display:flex;align-items:center;gap:6px">
+      <span id="ml-nutrition-arrow" style="font-size:10px;transition:transform .2s;display:inline-block">▶</span> Add Nutrition Info
+    </button>
+    <div id="ml-nutrition-fields" style="display:none">
+      <div class="modal-row" style="margin-top:12px">
+        <div class="modal-field">
+          <label class="modal-label">Calories</label>
+          <input class="modal-input" id="ml-cals" type="number" placeholder="kcal">
+        </div>
       </div>
-    </div>
-    <div class="modal-row">
-      <div class="modal-field">
-        <label class="modal-label">Protein (g)</label>
-        <input class="modal-input" id="ml-protein" type="number" placeholder="g">
-      </div>
-      <div class="modal-field">
-        <label class="modal-label">Carbs (g)</label>
-        <input class="modal-input" id="ml-carbs" type="number" placeholder="g">
-      </div>
-      <div class="modal-field">
-        <label class="modal-label">Fat (g)</label>
-        <input class="modal-input" id="ml-fat" type="number" placeholder="g">
+      <div class="modal-row">
+        <div class="modal-field">
+          <label class="modal-label">Protein (g)</label>
+          <input class="modal-input" id="ml-protein" type="number" placeholder="g">
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Carbs (g)</label>
+          <input class="modal-input" id="ml-carbs" type="number" placeholder="g">
+        </div>
+        <div class="modal-field">
+          <label class="modal-label">Fat (g)</label>
+          <input class="modal-input" id="ml-fat" type="number" placeholder="g">
+        </div>
       </div>
     </div>
     <div class="modal-actions">

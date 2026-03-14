@@ -53,7 +53,7 @@
     + '  background: var(--gold, #B8975A); color: var(--dark, #0B0B0B);'
     + '}'
     + '.confirm-btn-danger {'
-    + '  background: var(--down, #e07070); color: #fff;'
+    + '  background: var(--down, #e07070); color: var(--cream, #F5F0E8);'
     + '}';
   document.head.appendChild(style);
 
