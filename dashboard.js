@@ -5195,7 +5195,7 @@ function renderProfileCompleteness() {
     { key: 'birth_date', label: 'date of birth', has: !!(profile.birth_date || profile.dob) },
     { key: 'height_cm', label: 'height', has: !!profile.height_cm },
     { key: 'current_weight_kg', label: 'weight', has: !!profile.current_weight_kg },
-    { key: 'sex', label: 'biological sex', has: !!profile.sex }
+    { key: 'gender', label: 'biological sex', has: !!(profile.gender || profile.sex) }
   ];
   var filled = fields.filter(function(f) { return f.has; }).length;
   var pct = Math.round((filled / fields.length) * 100);
