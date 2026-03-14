@@ -71,6 +71,9 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .conv-item-title { font-size: 12px; color: var(--cream-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-item.active .conv-item-title { color: var(--cream); }
 .conv-item-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.conv-delete-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 4px 6px; opacity: 0; transition: opacity .2s, color .2s; flex-shrink: 0; }
+.conv-item:hover .conv-delete-btn { opacity: 1; }
+.conv-delete-btn:hover { color: var(--error); }
 /* Tool call status */
 .tool-status { display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: var(--gold); font-size: 12px; letter-spacing: .05em; animation: fade-in .3s ease; }
 .tool-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: tool-pulse 1.5s infinite; }
@@ -235,6 +238,7 @@ textarea::placeholder { color: var(--muted); }
   </div>
 </div>
 <script src="config.js"></script>
+<script src="components/confirm-modal.js"></script>
 <script>
 function supabaseRequest(endpoint, method, body, token) {
   return fetch(SUPABASE_URL + endpoint, {
@@ -325,7 +329,7 @@ function updateWelcomeName(name) {
     em.textContent = firstName + '.';
     titleEl.appendChild(em);
   }
-  if (avatarEl) avatarEl.textContent = firstName.charAt(0).toUpperCase();
+  if (avatarEl) avatarEl.textContent = firstName !== 'there' ? firstName.charAt(0).toUpperCase() : 'H';
 }
 
 async function loadUserProfile() {
@@ -336,11 +340,13 @@ async function loadUserProfile() {
     var userData = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
     if (userData && userData.id) {
       currentUser = userData;
-      var name = userData.user_metadata && userData.user_metadata.full_name;
-      if (name) { updateWelcomeName(name); } 
-      else {
-        var profile = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + userData.id + '&select=*&limit=1', 'GET', null, session.access_token);
-        updateWelcomeName(profile && profile[0] ? (profile[0].full_name || profile[0].email || '') : (userData.email ? userData.email.split('@')[0] : 'there'));
+      var profile = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + userData.id + '&select=first_name,last_name&limit=1', 'GET', null, session.access_token);
+      var profileFirst = profile && profile[0] && profile[0].first_name;
+      if (profileFirst) {
+        updateWelcomeName(profileFirst);
+      } else {
+        var metaName = userData.user_metadata && userData.user_metadata.full_name;
+        updateWelcomeName(metaName || '');
       }
     } else { localStorage.removeItem('healix_session'); window.location.href = 'login.html'; }
   } catch(e) { updateWelcomeName('there'); }
@@ -804,12 +810,12 @@ function useSuggestion(el) { textarea.value=el.querySelector('.suggestion-text')
   var q = params.get('q');
   if (q) {
     localStorage.removeItem('healix_last_conversation');
-    // Wait for context load then fill textarea
+    // Wait for context load then auto-submit
     setTimeout(function() {
       textarea.value = q;
       textarea.dispatchEvent(new Event('input'));
-      textarea.focus();
-    }, 500);
+      sendMessage();
+    }, 1000);
   }
 })();
 
@@ -857,7 +863,9 @@ function renderConversations() {
       + '<div class="conv-item-info">'
       + '<div class="conv-item-title">' + safeTitle + '</div>'
       + '<div class="conv-item-meta">' + escapeHtml(timeStr) + (c.message_count ? ' · ' + c.message_count + ' msgs' : '') + '</div>'
-      + '</div></div>';
+      + '</div>'
+      + '<button class="conv-delete-btn" onclick="event.stopPropagation();deleteConversation(\'' + c.id + '\')" title="Delete conversation">✕</button>'
+      + '</div>';
   }).join('');
 }
 
@@ -872,6 +880,29 @@ function formatRelativeTime(date, now) {
   if (diffDays === 1) return 'Yesterday';
   if (diffDays < 7) return diffDays + 'd ago';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+async function deleteConversation(convId) {
+  var confirmed = await confirmModal('This conversation will be permanently deleted.', { title: 'Delete Conversation', confirmText: 'Delete', danger: true });
+  if (!confirmed) return;
+  var session = getSession();
+  if (!session) return;
+  try {
+    // Delete messages first, then conversation
+    await supabaseRequest('/rest/v1/messages?conversation_id=eq.' + convId, 'DELETE', null, session.access_token);
+    await supabaseRequest('/rest/v1/conversations?id=eq.' + convId, 'DELETE', null, session.access_token);
+    // Remove from local list
+    conversations = conversations.filter(function(c) { return c.id !== convId; });
+    // If this was the active conversation, clear it
+    if (currentConversationId === convId) {
+      currentConversationId = null;
+      localStorage.removeItem('healix_last_conversation');
+      showWelcome();
+    }
+    renderConversations();
+  } catch(e) {
+    console.error('[Chat] deleteConversation error:', e);
+  }
 }
 
 async function selectConversation(convId) {
@@ -932,8 +963,8 @@ function showWelcome() {
   // Re-create the welcome element
   var firstName = 'there';
   if (currentUser) {
-    var name = (currentUser.user_metadata && currentUser.user_metadata.full_name) || currentUser.email.split('@')[0];
-    firstName = name.split(' ')[0];
+    var metaName = currentUser.user_metadata && currentUser.user_metadata.full_name;
+    firstName = metaName ? metaName.split(' ')[0] : 'there';
   }
   var html = '<div class="chat-welcome" id="chat-welcome">'
     + '<div class="welcome-icon">✦</div>'
@@ -1168,7 +1199,7 @@ function addMessage(role, text, skipAnimation) {
   var el = document.createElement('div'); el.className = 'message '+role;
   if (skipAnimation) el.style.animation = 'none';
   var html = safeMarkdown(text);
-  var avatarChar = isUser ? (currentUser ? (currentUser.user_metadata && currentUser.user_metadata.full_name || currentUser.email || 'A').charAt(0).toUpperCase() : 'A') : 'H';
+  var avatarChar = isUser ? (currentUser ? ((currentUser.user_metadata && currentUser.user_metadata.full_name) || '').charAt(0).toUpperCase() || 'H' : 'H') : 'H';
   el.innerHTML = '<div class="message-avatar">'+ avatarChar +'</div><div class="message-body"><div class="message-name">'+(isUser?'You':'Healix')+'</div><div class="message-bubble">'+html+'</div></div>';
   container.appendChild(el); container.scrollTop = container.scrollHeight;
   messages.push({role:role,text:text});

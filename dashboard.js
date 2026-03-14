@@ -88,6 +88,11 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
     headers: headers,
     body: body ? JSON.stringify(body) : undefined
   }).then(function(r) {
+    if (r.status === 401 || r.status === 403) {
+      console.warn('[Healix] Got ' + r.status + ' from ' + endpoint + ' — session expired');
+      handleAuthFailure();
+      return Promise.reject(new Error('auth_failure'));
+    }
     if (!r.ok) return r.text().then(function(t) { throw new Error(r.status + ': ' + t); });
     var ct = r.headers.get('content-type') || '';
     if (ct.indexOf('json') === -1) return null;
@@ -96,19 +101,46 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
 }
 
 // ── AUTH ──
-async function init() {
+var _authRedirecting = false;
+function handleAuthFailure() {
+  if (_authRedirecting) return;
+  _authRedirecting = true;
+  console.warn('[Healix] Auth failure — clearing session and redirecting');
+  localStorage.removeItem('healix_session');
+  localStorage.removeItem('healix_dashboard_cache');
+  window.location.href = 'login.html';
+}
+
+async function ensureFreshToken() {
   var session = getSession();
-  if (!session || !session.access_token) { window.location.href = 'login.html'; return; }
+  if (!session || !session.access_token) return null;
+  // If token expires within 5 minutes, proactively refresh
+  if (session.expires_at && session.expires_at < Date.now() + 5 * 60 * 1000) {
+    console.log('[Healix] Token expiring soon, refreshing...');
+    try {
+      await refreshSession();
+      return getSession();
+    } catch(e) {
+      console.warn('[Healix] Token refresh failed:', e);
+      return null;
+    }
+  }
+  return session;
+}
+
+async function init() {
+  var session = await ensureFreshToken();
+  if (!session || !session.access_token) { handleAuthFailure(); return; }
   currentSession = session;
   try {
     var user = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
-    if (!user || !user.id) { localStorage.removeItem('healix_session'); window.location.href = 'login.html'; return; }
+    if (!user || !user.id || user.error) { handleAuthFailure(); return; }
     currentUser = user;
     // Set initial name from auth metadata, will be overwritten by profile data if available
-    var name = (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0];
-    var firstName = name.split(' ')[0];
-    document.getElementById('sb-name').textContent = name;
-    document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
+    var name = (user.user_metadata && user.user_metadata.full_name) || '';
+    var firstName = name ? name.split(' ')[0] : 'there';
+    document.getElementById('sb-name').textContent = name || 'Healix User';
+    document.getElementById('sb-avatar').textContent = firstName !== 'there' ? firstName.charAt(0).toUpperCase() : 'H';
     document.getElementById('page-title').textContent = greet() + ', ' + firstName;
 
     // Fetch profile from Supabase before loading dashboard so DOB/weight are available
@@ -167,7 +199,6 @@ async function init() {
           renderDriverCards(c.metrics, c.result);
           if (c.timestamps) {
             renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', c.timestamps.heart_rate);
-            renderFreshnessIndicator('drv-sleep-freshness', 'sleep', c.timestamps.sleep);
             renderFreshnessIndicator('drv-weight-freshness', 'weight', c.timestamps.weight);
             renderFreshnessIndicator('drv-strength-freshness', 'strength', c.timestamps.strength);
             renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', c.timestamps.vo2max);
@@ -202,14 +233,15 @@ function showPage(id, btn) {
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   if (currentUser) {
-    var name = (currentUser.user_metadata && currentUser.user_metadata.full_name) || currentUser.email.split('@')[0];
-    var firstName = name.split(' ')[0];
+    var profileFirst = window.userProfileData && window.userProfileData.first_name;
+    var metaName = currentUser.user_metadata && currentUser.user_metadata.full_name;
+    var firstName = profileFirst || (metaName ? metaName.split(' ')[0] : 'there');
     document.getElementById('page-title').textContent = id === 'dashboard' ? greet() + ', ' + firstName : pageTitles[id] || id;
   }
 
   // Load page data
   if (id === 'meals') { loadMealsPage(); }
-  if (id === 'sleep') loadSleepPage();
+  if (id === 'sleep') { loadSleepPage(); }
   if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
@@ -781,34 +813,7 @@ function renderDriverCards(metrics, result) {
   setDriver('strength',  strVal, strScore, '');
   setDriver('aerobic',   aerVal, aerScore, '');
 
-  // Sleep driver card
-  var slpData = metrics.sleepData;
-  var slpScore = slpData ? (scoreSleep(slpData) || 0) : 0;
-  if (slpData) {
-    var debtLabel = slpData.debt <= 1 ? 'Minimal debt' : slpData.debt <= 3 ? 'Mild debt' : slpData.debt <= 7 ? 'Moderate debt' : 'High debt';
-    var slpVal = slpData.latest + 'h last night';
-    setDriver('sleep', slpVal, slpScore, '');
-    var statusText = debtLabel + ' · ' + slpData.debt + 'h';
-    if (slpData.efficiency) statusText += ' · ' + slpData.efficiency + '% eff';
-    var slpSt = document.getElementById('drv-sleep-status');
-    if (slpSt) slpSt.textContent = statusText;
-    var slpDetail = document.getElementById('drv-sleep-detail');
-    if (slpDetail && slpData.bedtime && slpData.wakeTime) {
-      var detailParts = [slpData.bedtime + ' – ' + slpData.wakeTime];
-      if (slpData.stages) {
-        if (slpData.stages.deep) detailParts.push('Deep ' + slpData.stages.deep.pct + '%');
-        if (slpData.stages.rem) detailParts.push('REM ' + slpData.stages.rem.pct + '%');
-      }
-      slpDetail.textContent = detailParts.join(' · ');
-    }
-    var slpTrend = document.getElementById('drv-sleep-trend');
-    if (slpTrend && slpData.trend) {
-      var arrow = slpData.trend.direction === 'improving' ? '↑' : slpData.trend.direction === 'declining' ? '↓' : '→';
-      slpTrend.textContent = arrow + ' ' + Math.abs(slpData.trend.deltaHours) + 'h vs last wk';
-    }
-  } else {
-    setDriver('sleep', null, 0, '');
-  }
+  // Sleep driver card removed — sleep data is still shown on the Sleep page
 
   // Blood work — show connected state if available
   var bwScore = scoreBloodwork(metrics.bloodwork);
@@ -847,11 +852,12 @@ function buildInsightSentence(metrics, result) {
 // ── Sleep processing functions (session-based) ──
 function mapSleepStage(value) {
   if (!value) return null;
-  var stage = value.toLowerCase();
+  var stage = (typeof value === 'number') ? '' : value.toLowerCase();
   if (stage.includes('deep')) return 'deep';
   if (stage.includes('rem')) return 'rem';
   if (stage.includes('core')) return 'core';
-  if (stage.includes('awake')) return 'awake';
+  if (stage.includes('awake') || stage.includes('in_bed') || stage.includes('inbed')) return 'awake';
+  if (stage.includes('asleep') || stage === 'sleeping') return 'core';
   return null;
 }
 
@@ -1145,7 +1151,10 @@ function renderSleepCalendar(sessionData) {
 
 async function loadDashboardData() {
   if (!currentUser) return;
-  var token = currentSession.access_token;
+  var freshSession = await ensureFreshToken();
+  if (!freshSession) { handleAuthFailure(); return; }
+  currentSession = freshSession;
+  var token = freshSession.access_token;
   var today = localDateStr(new Date());
 
   // Real age from profile — try birth_date first, then dob
@@ -1411,7 +1420,6 @@ async function loadDashboardData() {
 
   // Freshness indicators
   renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', timestamps.heart_rate);
-  renderFreshnessIndicator('drv-sleep-freshness', 'sleep', timestamps.sleep);
   renderFreshnessIndicator('drv-weight-freshness', 'weight', timestamps.weight);
   renderFreshnessIndicator('drv-strength-freshness', 'strength', timestamps.strength);
   renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', timestamps.vo2max);
@@ -1621,9 +1629,9 @@ function getMacroTargets() {
 
 function animateMacroRings(prot, carbs, fat, targets) {
   var rings = [
-    { id: 'ring-prot', value: prot || 0, target: targets.prot, circ: 439.8 },
-    { id: 'ring-carbs', value: carbs || 0, target: targets.carbs, circ: 351.9 },
-    { id: 'ring-fat', value: fat || 0, target: targets.fat, circ: 263.9 }
+    { id: 'ring-prot', value: prot || 0, target: targets.prot, circ: 314.2 },
+    { id: 'ring-carbs', value: carbs || 0, target: targets.carbs, circ: 314.2 },
+    { id: 'ring-fat', value: fat || 0, target: targets.fat, circ: 314.2 }
   ];
   setTimeout(function() {
     rings.forEach(function(r) {
@@ -2376,6 +2384,18 @@ function drillToDay(dateStr) {
 }
 
 
+function toggleMealNutrition() {
+  var fields = document.getElementById('ml-nutrition-fields');
+  var arrow = document.getElementById('ml-nutrition-arrow');
+  if (fields.style.display === 'none') {
+    fields.style.display = 'block';
+    arrow.style.transform = 'rotate(90deg)';
+  } else {
+    fields.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+
 function setMealDateTimeDefault() {
   var now = new Date();
   // Format as YYYY-MM-DDTHH:MM for datetime-local input
@@ -2396,6 +2416,8 @@ async function saveMeal() {
   var carbs = document.getElementById('ml-carbs').value;
   var fat = document.getElementById('ml-fat').value;
   if (!name) { alert('Please enter a meal name.'); return; }
+  // Capitalize meal type to match DB convention (e.g. 'lunch' → 'Lunch')
+  type = type.charAt(0).toUpperCase() + type.slice(1);
   var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
   var mealData = null;
   if (cals || prot || carbs || fat) {
@@ -2435,6 +2457,11 @@ async function saveMeal() {
     document.querySelector('#meal-modal .modal-title').innerHTML = 'Log a <em>Meal</em>';
     document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Log Meal';
     ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
+    // Reset nutrition toggle
+    var nf = document.getElementById('ml-nutrition-fields');
+    var na = document.getElementById('ml-nutrition-arrow');
+    if (nf) nf.style.display = 'none';
+    if (na) na.style.transform = '';
     loadMealsPage();
     loadDashboardData();
   } catch(e) { alert('Could not save meal: ' + e.message); }
@@ -2901,8 +2928,8 @@ function renderBloodworkDate(dateStr) {
     deltas.sort(function(a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
     var topChanges = deltas.slice(0, 6);
     if (topChanges.length > 0) {
-      var prevLabel = new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      var curLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var prevLabel = new Date(prevDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      var curLabel = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       compareHtml = '<div class="bw-compare">';
       compareHtml += '<div class="bw-compare-header"><div class="bw-compare-label">Biggest Changes</div>';
       compareHtml += '<div class="bw-compare-dates">' + prevLabel + ' → ' + curLabel + '</div></div>';
@@ -3058,8 +3085,8 @@ async function loadDocumentsPage() {
       var sizeStr = doc.file_size > 1024*1024 ? (doc.file_size/(1024*1024)).toFixed(1) + ' MB' : (doc.file_size/1024).toFixed(0) + ' KB';
       var dateStr = new Date(doc.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
       var tag = doc.document_type === 'blood_work' ? 'Bloodwork' : doc.file_type === 'application/pdf' ? 'PDF' : 'Image';
-      var statusStyle = doc.status === 'error' ? 'background:rgba(220,50,50,0.15);color:#e55' : doc.status === 'processing' ? 'background:rgba(184,151,90,0.12);color:var(--gold-light)' : '';
-      var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:#e55;margin-top:4px">Processing error</div>' : doc.status === 'processing' ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">Processing…</div>' : '';
+      var statusStyle = doc.status === 'error' ? 'background:var(--error-bg);color:var(--error)' : doc.status === 'processing' ? 'background:rgba(184,151,90,0.12);color:var(--gold-light)' : '';
+      var statusLabel = doc.status === 'error' ? '<div style="font-size:10px;color:var(--error);margin-top:4px">Processing error</div>' : doc.status === 'processing' ? '<div style="font-size:10px;color:var(--gold);margin-top:4px">Processing…</div>' : '';
       return '<div class="doc-card" style="position:relative;' + statusStyle + '">'
         + '<button class="doc-card-delete" onclick="event.stopPropagation();deleteDocument(\'' + doc.id + '\',\'' + (doc.file_url || '').replace(/'/g, "\\'") + '\')" title="Delete document">&times;</button>'
         + '<div class="doc-card-icon">' + icon + '</div>'
@@ -3169,7 +3196,9 @@ async function handleDocUpload(input) {
             await new Promise(function(resolve) { setTimeout(resolve, 1500); });
             pollAttempts++;
           }
-          if (updatedDoc && updatedDoc[0] && updatedDoc[0].document_type === 'blood_work') {
+          var docType = updatedDoc && updatedDoc[0] && updatedDoc[0].document_type;
+          var docStatus = updatedDoc && updatedDoc[0] && updatedDoc[0].status;
+          if (docType === 'blood_work') {
             // Count extracted biomarkers
             var extracted = await supabaseRequest(
               '/rest/v1/blood_work_samples?upload_id=eq.' + upload_id + '&select=id',
@@ -3177,9 +3206,15 @@ async function handleDocUpload(input) {
             );
             var count = (extracted && Array.isArray(extracted)) ? extracted.length : 0;
             if (count > 0) {
+              // Show inline success on the temp card
+              if (tempCard) {
+                tempCard.style.opacity = '1';
+                tempCard.style.background = 'var(--success-bg)';
+                tempCard.style.border = '1px solid var(--success-border)';
+                tempCard.querySelector('.doc-card-meta').innerHTML = '<span style="color:var(--up)">✓ Extracted ' + count + ' biomarkers</span>';
+              }
               // Navigate to bloodwork page with success message
               showPage('bloodwork', null);
-              // Brief delay for page render then show success
               setTimeout(function() {
                 var summary = document.getElementById('bw-summary');
                 if (summary) {
@@ -3192,6 +3227,15 @@ async function handleDocUpload(input) {
               }, 500);
               continue; // skip loadDocumentsPage for this file
             }
+          } else if (docStatus === 'completed' || docStatus === 'failed') {
+            // Not detected as lab report — show specific feedback inline
+            if (tempCard) {
+              tempCard.style.opacity = '1';
+              tempCard.style.background = 'var(--error-bg)';
+              tempCard.style.border = '1px solid var(--error-border)';
+              tempCard.querySelector('.doc-card-icon').textContent = '⚠';
+              tempCard.querySelector('.doc-card-meta').innerHTML = '<span style="color:var(--error)">Not a lab report. Please upload a valid bloodwork document.</span>';
+            }
           }
         } catch(e2) { /* non-critical, just skip redirect */ }
       }
@@ -3200,9 +3244,10 @@ async function handleDocUpload(input) {
       var tempCard = document.getElementById(tempId);
       if (tempCard) {
         tempCard.style.opacity = '1';
-        tempCard.style.background = 'rgba(220,50,50,0.1)';
+        tempCard.style.background = 'var(--error-bg)';
+        tempCard.style.border = '1px solid var(--error-border)';
         tempCard.querySelector('.doc-card-icon').textContent = '⚠';
-        tempCard.querySelector('.doc-card-meta').textContent = 'Upload failed';
+        tempCard.querySelector('.doc-card-meta').innerHTML = '<span style="color:var(--error)">Upload failed. Please try again.</span>';
       }
     }
   }
@@ -4153,6 +4198,10 @@ function onFitnessTestChange() {
 }
 
 function openLogTestModal(preselect) {
+  editingTestId = null;
+  // Remove delete button if present (from previous edit mode)
+  var delBtn = document.getElementById('ft-delete-btn');
+  if (delBtn) delBtn.remove();
   document.getElementById('ft-date').value = localDateStr(new Date());
   document.getElementById('ft-value').value = '';
   document.getElementById('ft-mins').value = '';
@@ -4181,6 +4230,54 @@ function openLogTestModal(preselect) {
   if (preselect) document.getElementById('ft-test').value = preselect;
   onFitnessTestChange();
   openModal('fitness-modal');
+}
+
+var editingTestId = null;
+
+async function openEditTestModal(testKey, testId) {
+  editingTestId = testId;
+  openLogTestModal(testKey);
+  // Update modal title and button for edit mode
+  document.querySelector('#fitness-modal .modal-title').innerHTML = 'Edit <em>Test</em>';
+  document.querySelector('#fitness-modal .modal-btn-primary').textContent = 'Save Changes';
+  // Add delete button if not already present
+  var actions = document.querySelector('#fitness-modal .modal-actions');
+  var existingDel = document.getElementById('ft-delete-btn');
+  if (!existingDel && actions) {
+    var delBtn = document.createElement('button');
+    delBtn.id = 'ft-delete-btn';
+    delBtn.className = 'modal-btn-secondary';
+    delBtn.style.cssText = 'color:var(--error);border-color:var(--error-border);margin-right:auto';
+    delBtn.textContent = 'Delete';
+    delBtn.onclick = function() { deleteFitnessTest(testId); };
+    actions.insertBefore(delBtn, actions.firstChild);
+  } else if (existingDel) {
+    existingDel.onclick = function() { deleteFitnessTest(testId); };
+  }
+  // Fetch test data and pre-populate
+  try {
+    var data = await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + testId + '&limit=1', 'GET', null, currentSession.access_token);
+    if (!data || !data[0]) return;
+    var test = data[0];
+    var dateStr = test.tested_at ? test.tested_at.split('T')[0] : '';
+    if (dateStr) document.getElementById('ft-date').value = dateStr;
+    if (test.notes) document.getElementById('ft-notes').value = test.notes;
+    var key = test.test_key;
+    if (key === 'mile_time') {
+      var totalMins = parseFloat(test.raw_value);
+      document.getElementById('ft-mins').value = Math.floor(totalMins);
+      document.getElementById('ft-secs').value = Math.round((totalMins - Math.floor(totalMins)) * 60);
+    } else if (AMRAP_TESTS.includes(key)) {
+      // Can't reverse 1RM to weight+reps, show 1RM as info
+      document.getElementById('ft-amrap-1rm-preview').textContent = 'Current 1RM: ' + Math.round(test.raw_value) + ' ' + (test.unit || 'lbs');
+    } else if (REPS_ONLY_TESTS.includes(key)) {
+      document.getElementById('ft-amrap-reps').value = Math.round(test.raw_value);
+    } else {
+      document.getElementById('ft-value').value = test.raw_value;
+    }
+  } catch(e) {
+    console.error('[Fitness] Error loading test data:', e);
+  }
 }
 
 async function saveFitnessTest() {
@@ -4226,8 +4323,19 @@ async function saveFitnessTest() {
   try {
     var btn = document.querySelector('#fitness-modal .modal-btn-primary');
     btn.textContent = 'Saving…'; btn.disabled = true;
-    await supabaseRequest('/rest/v1/fitness_tests', 'POST', payload, currentSession.access_token);
+    if (editingTestId) {
+      // Update existing test
+      delete payload.user_id;
+      delete payload.created_at;
+      await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + editingTestId, 'PATCH', payload, currentSession.access_token);
+      editingTestId = null;
+    } else {
+      await supabaseRequest('/rest/v1/fitness_tests', 'POST', payload, currentSession.access_token);
+    }
     closeModal('fitness-modal');
+    // Reset modal title
+    document.querySelector('#fitness-modal .modal-title').innerHTML = 'Log a <em>Test</em>';
+    document.querySelector('#fitness-modal .modal-btn-primary').textContent = 'Save Result';
     renderStrengthPage();
   } catch(e) {
     console.error(e);
@@ -4235,6 +4343,21 @@ async function saveFitnessTest() {
   } finally {
     var b = document.querySelector('#fitness-modal .modal-btn-primary');
     if (b) { b.textContent = 'Save Result'; b.disabled = false; }
+  }
+}
+
+async function deleteFitnessTest(testId) {
+  var confirmed = await confirmModal('This test result will be permanently deleted.', { title: 'Delete Test', confirmText: 'Delete', danger: true });
+  if (!confirmed) return;
+  try {
+    await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + testId, 'DELETE', null, currentSession.access_token);
+    closeModal('fitness-modal');
+    document.querySelector('#fitness-modal .modal-title').innerHTML = 'Log a <em>Test</em>';
+    document.querySelector('#fitness-modal .modal-btn-primary').textContent = 'Save Result';
+    editingTestId = null;
+    renderStrengthPage();
+  } catch(e) {
+    console.error('[Fitness] Delete test error:', e);
   }
 }
 
@@ -4306,10 +4429,11 @@ async function renderStrengthPage() {
           }).join('');
         }
 
-        var dateStr = latest ? new Date(latest.tested_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+        var dateStr = latest ? new Date(latest.tested_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
 
         var isRec = recommended.indexOf(key) !== -1;
-        html += '<div class="card" style="padding:20px;position:relative' + (isRec ? ';border-color:rgba(184,151,90,.5)' : '') + '">'
+        var latestId = latest ? latest.id : '';
+        html += '<div class="card fitness-test-card" data-key="' + key + '" data-test-id="' + latestId + '" style="padding:20px;position:relative;cursor:pointer' + (isRec ? ';border-color:rgba(184,151,90,.5)' : '') + '">'
           + (isRec ? '<div style="position:absolute;top:12px;right:12px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);background:rgba(184,151,90,.12);border:1px solid var(--gold-border);padding:2px 8px">Recommended</div>' : '')
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'
           + '<div>'
@@ -4335,10 +4459,24 @@ async function renderStrengthPage() {
 
     container.innerHTML = html;
 
-    // Delegated listener for log buttons
+    // Delegated listener for log buttons and card clicks
     container.addEventListener('click', function(e) {
       var logBtn = e.target.closest('.log-test-btn');
-      if (logBtn) { openLogTestModal(logBtn.getAttribute('data-key')); }
+      if (logBtn) {
+        e.stopPropagation();
+        openLogTestModal(logBtn.getAttribute('data-key'));
+        return;
+      }
+      var card = e.target.closest('.fitness-test-card');
+      if (card) {
+        var testKey = card.getAttribute('data-key');
+        var testId = card.getAttribute('data-test-id');
+        if (testId) {
+          openEditTestModal(testKey, testId);
+        } else {
+          openLogTestModal(testKey);
+        }
+      }
     });
 
   } catch(e) {
@@ -5151,7 +5289,7 @@ function renderProfileCompleteness() {
     { key: 'birth_date', label: 'date of birth', has: !!(profile.birth_date || profile.dob) },
     { key: 'height_cm', label: 'height', has: !!profile.height_cm },
     { key: 'current_weight_kg', label: 'weight', has: !!profile.current_weight_kg },
-    { key: 'sex', label: 'biological sex', has: !!profile.sex }
+    { key: 'gender', label: 'biological sex', has: !!(profile.gender || profile.sex) }
   ];
   var filled = fields.filter(function(f) { return f.has; }).length;
   var pct = Math.round((filled / fields.length) * 100);
@@ -5200,8 +5338,8 @@ function openEditMeal(mealId) {
   var meal = meals.find(function(m) { return m.id === mealId; });
   if (!meal) return;
   var macros = getMacrosFromMeal(meal);
-  document.getElementById('ml-name').value = meal.meal_description || '';
-  document.getElementById('ml-type').value = meal.meal_type || 'lunch';
+  document.getElementById('ml-name').value = meal.meal_description || meal.description || '';
+  document.getElementById('ml-type').value = (meal.meal_type || 'lunch').toLowerCase();
   if (meal.meal_time) {
     var dt = new Date(meal.meal_time);
     var y = dt.getFullYear();
@@ -5215,6 +5353,14 @@ function openEditMeal(mealId) {
   document.getElementById('ml-protein').value = macros.prot ? Math.round(macros.prot) : '';
   document.getElementById('ml-carbs').value = macros.carb ? Math.round(macros.carb) : '';
   document.getElementById('ml-fat').value = macros.fat ? Math.round(macros.fat) : '';
+  // Show nutrition fields if meal has macro data
+  var hasNutrition = macros.cal || macros.prot || macros.carb || macros.fat;
+  var nutritionFields = document.getElementById('ml-nutrition-fields');
+  var nutritionArrow = document.getElementById('ml-nutrition-arrow');
+  if (hasNutrition && nutritionFields) {
+    nutritionFields.style.display = 'block';
+    if (nutritionArrow) nutritionArrow.style.transform = 'rotate(90deg)';
+  }
   // Update modal title and button
   document.querySelector('#meal-modal .modal-title').innerHTML = 'Edit <em>Meal</em>';
   document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Save Changes';
