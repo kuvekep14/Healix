@@ -138,10 +138,12 @@ async function init() {
     currentUser = user;
     // Set initial name from auth metadata, will be overwritten by profile data if available
     var name = (user.user_metadata && user.user_metadata.full_name) || '';
-    var firstName = name ? name.split(' ')[0] : 'there';
-    document.getElementById('sb-name').textContent = name || 'Healix User';
-    document.getElementById('sb-avatar').textContent = firstName !== 'there' ? firstName.charAt(0).toUpperCase() : 'H';
-    document.getElementById('page-title').textContent = greet() + ', ' + firstName;
+    var firstName = name ? name.split(' ')[0] : '';
+    // Skip single-character initials — wait for profile to provide real name
+    if (firstName.length <= 1) firstName = '';
+    document.getElementById('sb-name').textContent = name.length > 1 ? name : 'Healix User';
+    document.getElementById('sb-avatar').textContent = firstName ? firstName.charAt(0).toUpperCase() : 'H';
+    document.getElementById('page-title').textContent = greet() + ', ' + (firstName || 'there');
 
     // Fetch profile from Supabase before loading dashboard so DOB/weight are available
     try {
@@ -154,11 +156,16 @@ async function init() {
         console.log('[Healix] profile loaded:', Object.keys(window.userProfileData), 'birth_date:', window.userProfileData.birth_date);
         populateProfileForm(profileData[0]);
         // Update sidebar and greeting with profile name
-        var profileName = [profileData[0].first_name, profileData[0].last_name].filter(Boolean).join(' ');
-        if (profileName) {
-          document.getElementById('sb-name').textContent = profileName;
-          document.getElementById('sb-avatar').textContent = profileName.charAt(0).toUpperCase();
-          document.getElementById('page-title').textContent = greet() + ', ' + profileData[0].first_name;
+        // Try first_name, then full_name from profile, then full_name from auth metadata
+        var profileFirst = profileData[0].first_name
+          || (profileData[0].full_name ? profileData[0].full_name.split(' ')[0] : '')
+          || (user.user_metadata && user.user_metadata.full_name ? user.user_metadata.full_name.split(' ')[0] : '');
+        var profileLast = profileData[0].last_name || '';
+        var profileName = [profileFirst, profileLast].filter(Boolean).join(' ');
+        if (profileFirst && profileFirst.length > 1) {
+          document.getElementById('sb-name').textContent = profileName || profileFirst;
+          document.getElementById('sb-avatar').textContent = profileFirst.charAt(0).toUpperCase();
+          document.getElementById('page-title').textContent = greet() + ', ' + profileFirst;
         }
       } else {
         // No profile row exists — create one so PATCH calls work later
@@ -234,8 +241,12 @@ function showPage(id, btn) {
   if (btn) btn.classList.add('active');
   if (currentUser) {
     var profileFirst = window.userProfileData && window.userProfileData.first_name;
+    var profileFull = window.userProfileData && window.userProfileData.full_name;
     var metaName = currentUser.user_metadata && currentUser.user_metadata.full_name;
-    var firstName = profileFirst || (metaName ? metaName.split(' ')[0] : 'there');
+    var firstName = profileFirst
+      || (profileFull ? profileFull.split(' ')[0] : '')
+      || (metaName && metaName.length > 1 ? metaName.split(' ')[0] : '')
+      || 'there';
     document.getElementById('page-title').textContent = id === 'dashboard' ? greet() + ', ' + firstName : pageTitles[id] || id;
   }
 
