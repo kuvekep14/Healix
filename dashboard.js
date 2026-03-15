@@ -2508,7 +2508,7 @@ async function saveMeal() {
       var insertPayload = {
         user_id: currentUser.id, meal_type: type,
         raw_input: name, meal_time: mealTime,
-        data: mealData
+        data: mealData || {}
       };
       if (mealDescription) insertPayload.meal_description = mealDescription;
       else insertPayload.meal_description = name;
