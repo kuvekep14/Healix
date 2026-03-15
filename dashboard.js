@@ -2432,7 +2432,7 @@ async function saveMeal() {
   var prot = document.getElementById('ml-protein').value;
   var carbs = document.getElementById('ml-carbs').value;
   var fat = document.getElementById('ml-fat').value;
-  if (!name) { alert('Please enter a meal name.'); return; }
+  if (!name) { alert('Please enter a meal description.'); return; }
   // Capitalize meal type to match DB convention (e.g. 'lunch' → 'Lunch')
   type = type.charAt(0).toUpperCase() + type.slice(1);
   var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
@@ -2457,7 +2457,7 @@ async function saveMeal() {
     if (editingMealId) {
       // Update existing meal
       await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH', {
-        meal_type: type, meal_description: name, meal_time: mealTime,
+        meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime,
         data: mealData
       }, currentSession.access_token);
       editingMealId = null;
@@ -2465,7 +2465,7 @@ async function saveMeal() {
       // Create new meal
       await supabaseRequest('/rest/v1/meal_log', 'POST', {
         user_id: currentUser.id, meal_type: type,
-        meal_description: name, meal_time: mealTime,
+        meal_description: name, raw_input: name, meal_time: mealTime,
         data: mealData
       }, currentSession.access_token);
     }
