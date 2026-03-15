@@ -802,7 +802,10 @@ function renderDriverCards(metrics, result) {
     }
     if (barEl) { barEl.style.width = score + '%'; barEl.className = 'driver-bar-fill ' + (score > 0 ? cls : ''); }
     if (stEl) { stEl.textContent = label; stEl.className = 'driver-status ' + cls; }
-    if (card) { card.className = 'driver-card ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : ''); }
+    if (card) {
+      var extraCls = card.classList.contains('driver-hero') ? ' driver-hero' : '';
+      card.className = 'driver-card' + extraCls + ' ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : '');
+    }
   }
 
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
@@ -810,7 +813,10 @@ function renderDriverCards(metrics, result) {
   var strScore = metrics.strengthData !== null ? (scoreStrength(metrics.strengthData) || 0) : 0;
   var aerScore = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || 0) : 0;
 
-  var hrVal  = metrics.hr !== null ? metrics.hr + ' bpm' : null;
+  var hrVal  = metrics.hr !== null ? metrics.hr : null;
+  // Update hero unit label
+  var hrUnit = document.getElementById('drv-heart-unit');
+  if (hrUnit) hrUnit.textContent = metrics.hr !== null ? 'bpm resting' : '';
   var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
   var strVal = metrics.strengthData !== null
     ? metrics.strengthData.testCount + ' tests · ' + metrics.strengthData.avgPercentile + 'th pctl'
