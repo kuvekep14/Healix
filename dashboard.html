@@ -145,47 +145,54 @@
           <div id="va-tl-chart"></div>
         </div>
 
-        <!-- Driver cards -->
-        <div class="vitality-drivers" id="va-drivers">
-          <div class="driver-card" id="drv-heart" onclick="showPage('dashboard',null)">
-            <div class="driver-icon">◇</div>
-            <div class="driver-label">Heart Rate</div>
-            <div class="driver-val" id="drv-heart-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
-            <div class="driver-status" id="drv-heart-status"></div>
-            <div class="driver-freshness" id="drv-heart-freshness"></div>
+        <!-- Driver cards: Hero + Grid layout -->
+        <div id="va-drivers">
+          <div class="driver-card driver-hero" id="drv-heart" onclick="showPage('dashboard',null)">
+            <div class="driver-hero-left">
+              <div class="driver-icon">◇</div>
+              <div class="driver-label">Heart Rate</div>
+              <div class="driver-bar-track" style="width:180px;margin-top:10px"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
+              <div class="driver-status" id="drv-heart-status"></div>
+              <div class="driver-freshness" id="drv-heart-freshness"></div>
+            </div>
+            <div class="driver-hero-right">
+              <div class="driver-hero-val" id="drv-heart-val">—</div>
+              <div class="driver-hero-unit" id="drv-heart-unit">bpm resting</div>
+            </div>
           </div>
-          <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
-            <div class="driver-icon">◉</div>
-            <div class="driver-label">Weight</div>
-            <div class="driver-val" id="drv-weight-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-weight-bar"></div></div>
-            <div class="driver-status" id="drv-weight-status"></div>
-            <div class="driver-freshness" id="drv-weight-freshness"></div>
-          </div>
-          <div class="driver-card" id="drv-strength" onclick="showPage('strength',null)">
-            <div class="driver-icon">◈</div>
-            <div class="driver-label">Strength</div>
-            <div class="driver-val" id="drv-strength-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
-            <div class="driver-status" id="drv-strength-status"></div>
-            <div class="driver-freshness" id="drv-strength-freshness"></div>
-          </div>
-          <div class="driver-card" id="drv-aerobic" onclick="showPage('strength','vo2max')">
-            <div class="driver-icon">◎</div>
-            <div class="driver-label">VO2 Max</div>
-            <div class="driver-val" id="drv-aerobic-val">—</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
-            <div class="driver-status" id="drv-aerobic-status"></div>
-            <div class="driver-freshness" id="drv-aerobic-freshness"></div>
-          </div>
-          <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)" style="opacity:0.6">
-            <div class="driver-icon">◐</div>
-            <div class="driver-label">Blood Work</div>
-            <div class="driver-val" id="drv-bloodwork-val" style="font-size:14px;color:var(--muted)">Not connected</div>
-            <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
-            <div class="driver-status" id="drv-bloodwork-status" style="color:var(--muted)">Upload labs →</div>
-            <div class="driver-freshness" id="drv-bloodwork-freshness"></div>
+          <div class="vitality-drivers">
+            <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
+              <div class="driver-icon">◉</div>
+              <div class="driver-label">Weight</div>
+              <div class="driver-val" id="drv-weight-val">—</div>
+              <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-weight-bar"></div></div>
+              <div class="driver-status" id="drv-weight-status"></div>
+              <div class="driver-freshness" id="drv-weight-freshness"></div>
+            </div>
+            <div class="driver-card" id="drv-strength" onclick="showPage('strength',null)">
+              <div class="driver-icon">◈</div>
+              <div class="driver-label">Strength</div>
+              <div class="driver-val" id="drv-strength-val">—</div>
+              <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
+              <div class="driver-status" id="drv-strength-status"></div>
+              <div class="driver-freshness" id="drv-strength-freshness"></div>
+            </div>
+            <div class="driver-card" id="drv-aerobic" onclick="showPage('strength','vo2max')">
+              <div class="driver-icon">◎</div>
+              <div class="driver-label">VO2 Max</div>
+              <div class="driver-val" id="drv-aerobic-val">—</div>
+              <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
+              <div class="driver-status" id="drv-aerobic-status"></div>
+              <div class="driver-freshness" id="drv-aerobic-freshness"></div>
+            </div>
+            <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)" style="opacity:0.6">
+              <div class="driver-icon">◐</div>
+              <div class="driver-label">Blood Work</div>
+              <div class="driver-val" id="drv-bloodwork-val" style="font-size:14px;color:var(--muted)">Not connected</div>
+              <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
+              <div class="driver-status" id="drv-bloodwork-status" style="color:var(--muted)">Upload labs →</div>
+              <div class="driver-freshness" id="drv-bloodwork-freshness"></div>
+            </div>
           </div>
         </div>
 
