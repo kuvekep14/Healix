@@ -830,7 +830,8 @@ function renderVitalityTimeline() {
 }
 
 // ── DATA CONNECTIVITY STATE ──
-var CONNECTIVITY_WEIGHTS = { profile: 0.10, wearable: 0.30, meals: 0.10, fitness: 0.15, bloodwork: 0.35 };
+// Weights reflect Vitality Age scoring — meals excluded (not part of score)
+var CONNECTIVITY_WEIGHTS = { profile: 0.10, wearable: 0.35, fitness: 0.20, bloodwork: 0.35 };
 
 function getDataConnectivityState() {
   var profile = window.userProfileData || {};
@@ -847,9 +848,6 @@ function getDataConnectivityState() {
 
   var dashMetrics = window._lastDashboardMetrics || {};
   var wearableConnected = dashMetrics.hr !== null && dashMetrics.hr !== undefined;
-  // Check any meal history, not just today's nutritionScore
-  var mealsLogged = (dashMetrics.nutritionScore !== null && dashMetrics.nutritionScore > 0)
-    || (window._lastDashboardMeals && window._lastDashboardMeals.length > 0);
   var fitnessTested = (dashMetrics.strengthData !== null && dashMetrics.strengthData !== undefined)
     || (dashMetrics.vo2max !== null && dashMetrics.vo2max !== undefined);
   // Check dashboard bloodwork data (always loaded), fall back to bloodwork page data
@@ -859,25 +857,22 @@ function getDataConnectivityState() {
   var totalConnected = 0;
   if (profileConnected) totalConnected++;
   if (wearableConnected) totalConnected++;
-  if (mealsLogged) totalConnected++;
   if (fitnessTested) totalConnected++;
   if (bloodworkUploaded) totalConnected++;
 
   var progressPct = 0;
   if (profileConnected) progressPct += CONNECTIVITY_WEIGHTS.profile * 100;
   if (wearableConnected) progressPct += CONNECTIVITY_WEIGHTS.wearable * 100;
-  if (mealsLogged) progressPct += CONNECTIVITY_WEIGHTS.meals * 100;
   if (fitnessTested) progressPct += CONNECTIVITY_WEIGHTS.fitness * 100;
   if (bloodworkUploaded) progressPct += CONNECTIVITY_WEIGHTS.bloodwork * 100;
   progressPct = Math.round(progressPct);
 
   var isFirstRun = totalConnected === 0 && profilePct < 50;
-  var allComplete = totalConnected === 5;
+  var allComplete = totalConnected === 4;
 
   return {
     profile: { filled: profileFilled, pct: profilePct, missing: profileMissing, connected: profileConnected },
     wearable: { connected: wearableConnected },
-    meals: { logged: mealsLogged },
     fitness: { tested: fitnessTested },
     bloodwork: { uploaded: bloodworkUploaded },
     totalConnected: totalConnected,
@@ -5526,13 +5521,12 @@ function renderOnboardingChecklist() {
   var items = [
     { key: 'profile', label: 'Complete profile', time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
     { key: 'wearable', label: 'Connect wearable', time: '1 min', done: state.wearable.connected, action: 'window.open(\'https://apps.apple.com/app/healthbite/id6738970819\', \'_blank\')' },
-    { key: 'meals', label: 'Log a meal', time: '1 min', done: state.meals.logged, action: 'setMealDateTimeDefault();openModal(\'meal-modal\')' },
     { key: 'fitness', label: 'Log fitness test', time: '3 min', done: state.fitness.tested, action: 'showPage(\'strength\', null)' },
     { key: 'bloodwork', label: 'Upload bloodwork', time: '2 min', done: state.bloodwork.uploaded, action: 'showPage(\'documents\', null)' }
   ];
 
   var squaresHtml = '';
-  for (var i = 0; i < 5; i++) {
+  for (var i = 0; i < 4; i++) {
     var filled = i < currentCount;
     squaresHtml += '<div class="checklist-square' + (filled ? ' filled' : '') + (filled && newlyCompleted && i === currentCount - 1 ? ' flash' : '') + '"></div>';
   }
@@ -5550,7 +5544,7 @@ function renderOnboardingChecklist() {
   container.innerHTML = '<div class="checklist-card">'
     + '<div class="checklist-header">'
     + '<div class="checklist-title">Your Healix Score</div>'
-    + '<div class="checklist-count">' + currentCount + ' of 5 connected</div>'
+    + '<div class="checklist-count">' + currentCount + ' of 4 connected</div>'
     + '</div>'
     + '<div class="checklist-squares">' + squaresHtml + '</div>'
     + '<div class="checklist-items">' + itemsHtml + '</div>'
