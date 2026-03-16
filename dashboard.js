@@ -217,7 +217,7 @@ async function init() {
 
     loadDashboardData().then(function() {
       renderProfileCompleteness();
-      renderSmartEmptyStates();
+      renderSmartEmptyStates(window._lastVitalityResult);
       checkOnboarding();
     });
     loadFamilyHistoryForm();
@@ -1420,6 +1420,7 @@ async function loadDashboardData() {
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
   var result = calcVitalityAge(metrics);
+  window._lastVitalityResult = result;
   console.log('[Healix] vitalityResult:', result);
   renderVitalityAge(result, realAge);
   saveVitalityHistory(result, realAge);
@@ -5440,13 +5441,12 @@ function renderProfileCompleteness() {
 }
 
 // ── SMART EMPTY STATES ──
-function renderSmartEmptyStates() {
-  // Vitality Age — show guidance when it's showing "—"
-  var vaAge = document.getElementById('va-age');
-  if (vaAge && vaAge.textContent === '—') {
+function renderSmartEmptyStates(vitalityResult) {
+  // Vitality Age — show guidance only when no result was calculated
+  if (!vitalityResult) {
     var confidence = document.getElementById('va-confidence');
     if (confidence) {
-      confidence.innerHTML = 'Upload bloodwork (40% of your score) or add your height and weight to unlock your Vitality Age.';
+      confidence.innerHTML = 'Upload bloodwork (35% of your score) or add your height and weight to unlock your Vitality Age.';
       confidence.className = 'vitality-confidence amber';
     }
   }
