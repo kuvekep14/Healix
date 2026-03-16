@@ -216,9 +216,15 @@ async function init() {
     } catch(e) { /* cache parse error, ignore */ }
 
     loadDashboardData().then(function() {
-      renderProfileCompleteness();
+      renderVitalityUnlockState();
+      var state = getDataConnectivityState();
+      if (state.isFirstRun && !localStorage.getItem('healix_onboarding_done')
+          && !localStorage.getItem('healix_firstrun_done')) {
+        renderFirstRunExperience();
+      } else {
+        renderOnboardingChecklist();
+      }
       renderSmartEmptyStates(window._lastVitalityResult);
-      checkOnboarding();
     });
     loadFamilyHistoryForm();
     setWeightDateDefault();
@@ -607,7 +613,56 @@ function calcVitalityAge(metrics) {
   };
 }
 
+// ── VITALITY AGE UNLOCK MECHANIC ──
+function renderVitalityUnlockState() {
+  var state = getDataConnectivityState();
+  var ageEl = document.getElementById('va-age');
+  var ringWrap = document.getElementById('va-unlock-ring');
+  var ringFill = document.getElementById('va-ring-fill');
+  var ringLabel = document.getElementById('va-ring-label');
+  var UNLOCK_THRESHOLD = 40;
+  var isLocked = state.progressPct < UNLOCK_THRESHOLD;
+
+  var unlockKey = 'healix_va_unlocked_' + (currentUser ? currentUser.id : '');
+  var wasUnlocked = localStorage.getItem(unlockKey) === '1';
+
+  if (wasUnlocked) isLocked = false;
+
+  if (!isLocked && !wasUnlocked && state.progressPct >= UNLOCK_THRESHOLD) {
+    localStorage.setItem(unlockKey, '1');
+    if (ageEl) {
+      ageEl.classList.remove('va-locked');
+      ageEl.classList.add('va-unlock-reveal');
+    }
+    if (ringWrap) ringWrap.style.display = 'none';
+    return true;
+  }
+
+  if (isLocked) {
+    if (ageEl) ageEl.classList.add('va-locked');
+    if (ringWrap) {
+      ringWrap.style.display = '';
+      var circumference = 2 * Math.PI * 54;
+      if (ringFill) {
+        setTimeout(function() {
+          ringFill.style.strokeDashoffset = circumference * (1 - state.progressPct / 100);
+        }, 100);
+      }
+      if (ringLabel) {
+        ringLabel.textContent = state.progressPct + '% — Connect more data to unlock your Vitality Age';
+      }
+    }
+    return false;
+  }
+
+  if (ageEl) ageEl.classList.remove('va-locked');
+  if (ringWrap) ringWrap.style.display = 'none';
+  return true;
+}
+
 function renderVitalityAge(result, realAge) {
+  var unlocked = renderVitalityUnlockState();
+
   var ageEl = document.getElementById('va-age');
   var deltaEl = document.getElementById('va-delta');
   var realEl = document.getElementById('va-real-age');
@@ -616,6 +671,12 @@ function renderVitalityAge(result, realAge) {
 
   if (realEl) realEl.textContent = realAge;
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+  if (!unlocked) {
+    if (ageEl) ageEl.textContent = '??';
+    if (deltaEl) { deltaEl.textContent = ''; deltaEl.className = 'vitality-delta'; }
+    return;
+  }
 
   if (!result) {
     if (ageEl) ageEl.textContent = '—';
@@ -768,6 +829,68 @@ function renderVitalityTimeline() {
   chartEl.innerHTML = svg;
 }
 
+// ── DATA CONNECTIVITY STATE ──
+var CONNECTIVITY_WEIGHTS = { profile: 0.10, wearable: 0.30, meals: 0.10, fitness: 0.15, bloodwork: 0.35 };
+
+function getDataConnectivityState() {
+  var profile = window.userProfileData || {};
+  var profileFields = [
+    { key: 'birth_date', has: !!(profile.birth_date || profile.dob) },
+    { key: 'gender', has: !!(profile.gender || profile.sex) },
+    { key: 'height_cm', has: !!profile.height_cm },
+    { key: 'current_weight_kg', has: !!profile.current_weight_kg }
+  ];
+  var profileFilled = profileFields.filter(function(f) { return f.has; }).length;
+  var profilePct = Math.round((profileFilled / profileFields.length) * 100);
+  var profileMissing = profileFields.filter(function(f) { return !f.has; }).map(function(f) { return f.key; });
+  var profileConnected = profilePct >= 75;
+
+  var dashMetrics = window._lastDashboardMetrics || {};
+  var wearableConnected = dashMetrics.hr !== null && dashMetrics.hr !== undefined;
+  var mealsLogged = dashMetrics.nutritionScore !== null && dashMetrics.nutritionScore > 0;
+  var fitnessTested = (dashMetrics.strengthData !== null && dashMetrics.strengthData !== undefined)
+    || (dashMetrics.vo2max !== null && dashMetrics.vo2max !== undefined);
+  var bloodworkUploaded = allBloodworkSamples && allBloodworkSamples.length > 0;
+
+  var totalConnected = 0;
+  if (profileConnected) totalConnected++;
+  if (wearableConnected) totalConnected++;
+  if (mealsLogged) totalConnected++;
+  if (fitnessTested) totalConnected++;
+  if (bloodworkUploaded) totalConnected++;
+
+  var progressPct = 0;
+  if (profileConnected) progressPct += CONNECTIVITY_WEIGHTS.profile * 100;
+  if (wearableConnected) progressPct += CONNECTIVITY_WEIGHTS.wearable * 100;
+  if (mealsLogged) progressPct += CONNECTIVITY_WEIGHTS.meals * 100;
+  if (fitnessTested) progressPct += CONNECTIVITY_WEIGHTS.fitness * 100;
+  if (bloodworkUploaded) progressPct += CONNECTIVITY_WEIGHTS.bloodwork * 100;
+  progressPct = Math.round(progressPct);
+
+  var isFirstRun = totalConnected === 0 && profilePct < 50;
+  var allComplete = totalConnected === 5;
+
+  return {
+    profile: { filled: profileFilled, pct: profilePct, missing: profileMissing, connected: profileConnected },
+    wearable: { connected: wearableConnected },
+    meals: { logged: mealsLogged },
+    fitness: { tested: fitnessTested },
+    bloodwork: { uploaded: bloodworkUploaded },
+    totalConnected: totalConnected,
+    progressPct: progressPct,
+    isFirstRun: isFirstRun,
+    allComplete: allComplete
+  };
+}
+
+var GHOST_CTAS = {
+  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Apple Watch →', action: function() { window.open('https://apps.apple.com/app/healthbite/id6738970819', '_blank'); } },
+  weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); } },
+  strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); } },
+  aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); } },
+  bloodwork: { text: 'Blood biomarkers are worth 35% of your score — the most impactful data you can add.', cta: 'Upload labs →', action: function() { showPage('documents', null); } }
+};
+
 function renderDriverCards(metrics, result) {
   // Compute actual weights (accounting for redistribution)
   var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
@@ -792,6 +915,26 @@ function renderDriverCards(metrics, result) {
     var valEl = document.getElementById('drv-' + key + '-val');
     var barEl = document.getElementById('drv-' + key + '-bar');
     var stEl = document.getElementById('drv-' + key + '-status');
+
+    // Ghost card for missing data
+    if (val === null && score === 0 && GHOST_CTAS[key]) {
+      var ghost = GHOST_CTAS[key];
+      if (card) {
+        card.className = 'driver-card driver-card-ghost';
+        card.onclick = ghost.action;
+      }
+      if (valEl) {
+        valEl.innerHTML = '<span class="ghost-cta-text">' + escapeHtml(ghost.text) + '</span>';
+        valEl.style.fontSize = '12px'; valEl.style.color = '';
+      }
+      if (barEl) { barEl.style.width = '0%'; barEl.className = 'driver-bar-fill'; }
+      if (stEl) {
+        stEl.innerHTML = '<span class="ghost-cta-link">' + escapeHtml(ghost.cta) + '</span>';
+        stEl.className = 'driver-status ghost';
+      }
+      return;
+    }
+
     if (valEl) {
       if (val !== null) {
         valEl.textContent = val + (unit||'');
@@ -829,12 +972,12 @@ function renderDriverCards(metrics, result) {
 
   // Sleep driver card removed — sleep data is still shown on the Sleep page
 
-  // Blood work — show connected state if available
+  // Blood work — show connected state or ghost card
   var bwScore = scoreBloodwork(metrics.bloodwork);
-  var bwCard = document.getElementById('drv-bloodwork');
   if (bwScore !== null) {
     setDriver('bloodwork', bwScore + '%', bwScore, '');
-    if (bwCard) bwCard.style.opacity = '1';
+  } else {
+    setDriver('bloodwork', null, 0, '');
   }
 }
 
@@ -1416,6 +1559,7 @@ async function loadDashboardData() {
 
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
+  window._lastDashboardMetrics = metrics;
   var result = calcVitalityAge(metrics);
   window._lastVitalityResult = result;
   console.log('[Healix] vitalityResult:', result);
@@ -5352,89 +5496,174 @@ function renderPremiumGate(containerId, featureName) {
   );
 }
 
-// ── ONBOARDING ──
-function checkOnboarding() {
-  // Skip if user already dismissed onboarding
-  if (localStorage.getItem('healix_onboarding_done')) return;
-  // Check if user has meaningful data
-  var profile = window.userProfileData || {};
-  var hasBloodwork = allBloodworkSamples && allBloodworkSamples.length > 0;
-  var hasWeight = profile.current_weight_kg;
-  var hasDob = profile.birth_date || profile.dob;
-  var hasHeight = profile.height_cm;
-  // If user has most core data, skip onboarding
-  if (hasBloodwork && hasWeight && hasDob && hasHeight) {
-    localStorage.setItem('healix_onboarding_done', '1');
+// ── ONBOARDING CHECKLIST ──
+function renderOnboardingChecklist() {
+  var state = getDataConnectivityState();
+  var container = document.getElementById('onboarding-checklist');
+  if (!container) return;
+
+  if (state.allComplete) {
+    container.style.display = 'none';
     return;
   }
-  showOnboarding();
-}
 
-function showOnboarding() {
-  var overlay = document.createElement('div');
-  overlay.className = 'onboarding-overlay';
-  overlay.id = 'onboarding-overlay';
-  overlay.innerHTML = '<div class="onboarding-card">'
-    + '<div class="onboarding-title">Welcome to <em>Healix</em></div>'
-    + '<div class="onboarding-sub">Get the most out of your health dashboard. Start with any of these — each one makes your insights smarter.</div>'
-    + '<div class="onboarding-actions">'
-    + '<div class="onboarding-action" onclick="dismissOnboarding();showPage(\'documents\',null)">'
-    + '<div class="onboarding-action-icon">🧬</div>'
-    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Upload lab results</div><div class="onboarding-action-desc">Blood work is worth 40% of your Vitality Age. Upload a PDF — we extract everything automatically.</div></div>'
-    + '<div class="onboarding-action-badge">Fastest path</div>'
-    + '</div>'
-    + '<div class="onboarding-action" onclick="dismissOnboarding();showPage(\'profile\',null)">'
-    + '<div class="onboarding-action-icon">📋</div>'
-    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Complete your profile</div><div class="onboarding-action-desc">Add date of birth, height, and weight for an accurate Vitality Age calculation.</div></div>'
-    + '</div>'
-    + '<div class="onboarding-action" onclick="dismissOnboarding();setMealDateTimeDefault();openModal(\'meal-modal\')">'
-    + '<div class="onboarding-action-icon">🍽</div>'
-    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Log your first meal</div><div class="onboarding-action-desc">Track nutrition and get AI-powered dietary insights.</div></div>'
-    + '</div>'
-    + '</div>'
-    + '<div class="onboarding-skip" onclick="dismissOnboarding()">I\'ll explore on my own</div>'
-    + '</div>';
-  document.body.appendChild(overlay);
-}
+  var prevCount = parseInt(localStorage.getItem('healix_checklist_count_' + currentUser.id) || '0');
+  var currentCount = state.totalConnected;
+  var newlyCompleted = currentCount > prevCount;
+  localStorage.setItem('healix_checklist_count_' + currentUser.id, currentCount.toString());
 
-function dismissOnboarding() {
-  localStorage.setItem('healix_onboarding_done', '1');
-  var overlay = document.getElementById('onboarding-overlay');
-  if (overlay) overlay.remove();
-}
-
-// ── PROFILE COMPLETENESS ──
-function renderProfileCompleteness() {
-  var profile = window.userProfileData || {};
-  var fields = [
-    { key: 'first_name', label: 'name', has: !!profile.first_name },
-    { key: 'birth_date', label: 'date of birth', has: !!(profile.birth_date || profile.dob) },
-    { key: 'height_cm', label: 'height', has: !!profile.height_cm },
-    { key: 'current_weight_kg', label: 'weight', has: !!profile.current_weight_kg },
-    { key: 'gender', label: 'biological sex', has: !!(profile.gender || profile.sex) }
+  var items = [
+    { key: 'profile', label: 'Complete profile', time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
+    { key: 'wearable', label: 'Connect wearable', time: '1 min', done: state.wearable.connected, action: 'window.open(\'https://apps.apple.com/app/healthbite/id6738970819\', \'_blank\')' },
+    { key: 'meals', label: 'Log a meal', time: '1 min', done: state.meals.logged, action: 'setMealDateTimeDefault();openModal(\'meal-modal\')' },
+    { key: 'fitness', label: 'Log fitness test', time: '3 min', done: state.fitness.tested, action: 'showPage(\'strength\', null)' },
+    { key: 'bloodwork', label: 'Upload bloodwork', time: '2 min', done: state.bloodwork.uploaded, action: 'showPage(\'documents\', null)' }
   ];
-  var filled = fields.filter(function(f) { return f.has; }).length;
-  var pct = Math.round((filled / fields.length) * 100);
-  if (pct >= 100) return; // Don't show if complete
-  var missing = fields.filter(function(f) { return !f.has; }).map(function(f) { return f.label; });
-  var missingText = 'Add ' + missing.join(', ') + ' for accurate Vitality Age.';
-  // Insert before the vitality hero
+
+  var squaresHtml = '';
+  for (var i = 0; i < 5; i++) {
+    var filled = i < currentCount;
+    squaresHtml += '<div class="checklist-square' + (filled ? ' filled' : '') + (filled && newlyCompleted && i === currentCount - 1 ? ' flash' : '') + '"></div>';
+  }
+
+  var itemsHtml = '';
+  items.forEach(function(item) {
+    itemsHtml += '<div class="checklist-item' + (item.done ? ' done' : '') + '" onclick="' + item.action + '">'
+      + '<div class="checklist-check">' + (item.done ? '&#10003;' : '&#9675;') + '</div>'
+      + '<div class="checklist-label">' + escapeHtml(item.label) + '</div>'
+      + '<div class="checklist-time">' + escapeHtml(item.time) + '</div>'
+      + '</div>';
+  });
+
+  container.style.display = '';
+  container.innerHTML = '<div class="checklist-card">'
+    + '<div class="checklist-header">'
+    + '<div class="checklist-title">Your Healix Score</div>'
+    + '<div class="checklist-count">' + currentCount + ' of 5 connected</div>'
+    + '</div>'
+    + '<div class="checklist-squares">' + squaresHtml + '</div>'
+    + '<div class="checklist-items">' + itemsHtml + '</div>'
+    + '</div>';
+}
+
+// ── FIRST-RUN GUIDED EXPERIENCE ──
+function renderFirstRunExperience() {
   var container = document.querySelector('.vitality-page');
   if (!container) return;
-  var existing = document.getElementById('profile-completeness');
-  if (existing) existing.remove();
-  var el = document.createElement('div');
-  el.className = 'profile-completeness';
-  el.id = 'profile-completeness';
-  el.style.cursor = 'pointer';
-  el.onclick = function() { showPage('profile', null); };
-  el.innerHTML = '<div class="profile-pct">' + pct + '%</div>'
-    + '<div class="profile-pct-info">'
-    + '<div class="profile-pct-label">Profile completeness</div>'
-    + '<div class="profile-pct-hint">' + escapeHtml(missingText) + '</div>'
-    + '<div class="profile-pct-bar"><div class="profile-pct-fill" style="width:' + pct + '%"></div></div>'
+
+  var hiddenEls = container.querySelectorAll('.vitality-hero, .vitality-confidence, .vitality-insight-bar, .va-timeline, #va-drivers, #onboarding-checklist, #health-summary-section, #weekly-insights-section, .vitality-chat-card');
+  hiddenEls.forEach(function(el) { el.style.display = 'none'; });
+
+  var wizard = document.createElement('div');
+  wizard.className = 'firstrun-wizard';
+  wizard.id = 'firstrun-wizard';
+  container.insertBefore(wizard, container.firstChild);
+
+  renderFirstRunStep(1);
+}
+
+function renderFirstRunStep(step) {
+  var wizard = document.getElementById('firstrun-wizard');
+  if (!wizard) return;
+
+  var stepsIndicator = '<div class="firstrun-steps">'
+    + '<div class="firstrun-step-dot' + (step >= 1 ? ' active' : '') + '">1</div>'
+    + '<div class="firstrun-step-line' + (step >= 2 ? ' active' : '') + '"></div>'
+    + '<div class="firstrun-step-dot' + (step >= 2 ? ' active' : '') + '">2</div>'
+    + '<div class="firstrun-step-line' + (step >= 3 ? ' active' : '') + '"></div>'
+    + '<div class="firstrun-step-dot' + (step >= 3 ? ' active' : '') + '">3</div>'
     + '</div>';
-  container.insertBefore(el, container.firstChild);
+
+  var html = '';
+  if (step === 1) {
+    html = '<div class="firstrun-card">'
+      + stepsIndicator
+      + '<div class="firstrun-title">Welcome to <em>Healix</em></div>'
+      + '<div class="firstrun-sub">Let\'s set up your profile so we can calculate your Vitality Age.</div>'
+      + '<div class="firstrun-form">'
+      + '<div class="firstrun-form-row">'
+      + '<div class="firstrun-field"><label class="firstrun-label">Date of Birth</label>'
+      + '<input type="date" id="fr-dob" class="firstrun-input"></div>'
+      + '<div class="firstrun-field"><label class="firstrun-label">Biological Sex</label>'
+      + '<select id="fr-sex" class="firstrun-input"><option value="">Select...</option>'
+      + '<option value="male">Male</option><option value="female">Female</option></select></div>'
+      + '</div>'
+      + '<div class="firstrun-form-row">'
+      + '<div class="firstrun-field"><label class="firstrun-label">Height</label>'
+      + '<input type="text" id="fr-height" class="firstrun-input" placeholder="5\'10&quot; or 178cm"></div>'
+      + '<div class="firstrun-field"><label class="firstrun-label">Weight</label>'
+      + '<input type="text" id="fr-weight" class="firstrun-input" placeholder="165 lbs or 75 kg"></div>'
+      + '</div>'
+      + '</div>'
+      + '<button class="firstrun-btn" onclick="saveFirstRunProfile()">Continue</button>'
+      + '<div class="firstrun-skip" onclick="renderFirstRunStep(2)">Skip for now</div>'
+      + '</div>';
+  } else if (step === 2) {
+    html = '<div class="firstrun-card">'
+      + stepsIndicator
+      + '<div class="firstrun-title">Connect Your <em>Wearable</em></div>'
+      + '<div class="firstrun-sub">Heart rate data from your Apple Watch or iPhone is worth 30% of your Vitality Age score.</div>'
+      + '<div class="firstrun-wearable-cta">'
+      + '<div class="firstrun-wearable-icon">&#9201;</div>'
+      + '<div><div class="firstrun-wearable-title">Download HealthBite</div>'
+      + '<div class="firstrun-wearable-desc">Our companion app syncs Apple Health data to Healix automatically.</div></div>'
+      + '</div>'
+      + '<a href="https://apps.apple.com/app/healthbite/id6738970819" target="_blank" class="firstrun-btn" style="text-decoration:none;text-align:center;display:block">Open App Store</a>'
+      + '<div class="firstrun-skip" onclick="renderFirstRunStep(3)">I\'ll do this later</div>'
+      + '</div>';
+  } else if (step === 3) {
+    var state = getDataConnectivityState();
+    html = '<div class="firstrun-card">'
+      + stepsIndicator
+      + '<div class="firstrun-title">You\'re <em>Ready</em></div>'
+      + '<div class="firstrun-sub">Your dashboard is set up with ' + state.progressPct + '% data connectivity. Add more data sources to improve your Vitality Age accuracy.</div>'
+      + '<button class="firstrun-btn" onclick="dismissFirstRun()">Go to Dashboard</button>'
+      + '</div>';
+  }
+
+  wizard.innerHTML = html;
+}
+
+async function saveFirstRunProfile() {
+  var dob = document.getElementById('fr-dob').value;
+  var sex = document.getElementById('fr-sex').value;
+  var heightStr = document.getElementById('fr-height').value;
+  var weightStr = document.getElementById('fr-weight').value;
+
+  var heightCm = parseHeight(heightStr);
+  var weightKg = parseWeight(weightStr);
+
+  var data = {};
+  if (dob) data.birth_date = dob;
+  if (sex) data.gender = sex;
+  if (heightCm) data.height_cm = heightCm;
+  if (weightKg) data.current_weight_kg = weightKg;
+
+  if (Object.keys(data).length > 0 && currentUser && currentSession) {
+    try {
+      await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+      window.userProfileData = Object.assign(window.userProfileData || {}, data);
+    } catch(e) {
+      console.error('[Healix] First-run profile save error:', e);
+    }
+  }
+
+  renderFirstRunStep(2);
+}
+
+function dismissFirstRun() {
+  localStorage.setItem('healix_firstrun_done', '1');
+  var wizard = document.getElementById('firstrun-wizard');
+  if (wizard) wizard.remove();
+
+  var container = document.querySelector('.vitality-page');
+  if (container) {
+    var hidden = container.querySelectorAll('.vitality-hero, .vitality-confidence, .vitality-insight-bar, .va-timeline, #va-drivers, #onboarding-checklist, #health-summary-section, #weekly-insights-section, .vitality-chat-card');
+    hidden.forEach(function(el) { el.style.display = ''; });
+  }
+
+  renderVitalityUnlockState();
+  renderOnboardingChecklist();
 }
 
 // ── SMART EMPTY STATES ──

@@ -104,6 +104,19 @@
         <div class="vitality-hero">
           <div class="vitality-hero-inner">
             <div class="vitality-eyebrow">YOUR VITALITY AGE</div>
+            <div class="va-unlock-ring" id="va-unlock-ring" style="display:none">
+              <svg viewBox="0 0 120 120" class="va-ring-svg">
+                <circle cx="60" cy="60" r="54" stroke="rgba(184,151,90,0.12)" stroke-width="4" fill="none"/>
+                <circle id="va-ring-fill" cx="60" cy="60" r="54" stroke="url(#vaRingGrad)" stroke-width="4" fill="none" stroke-dasharray="339.3" stroke-dashoffset="339.3" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1)"/>
+                <defs>
+                  <linearGradient id="vaRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#B8975A"/>
+                    <stop offset="100%" stop-color="#F5D89A"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="va-ring-label" id="va-ring-label"></div>
+            </div>
             <div class="vitality-age-wrap">
               <div class="vitality-age" id="va-age">—</div>
               <div class="vitality-age-context">
@@ -180,16 +193,19 @@
               <div class="driver-status" id="drv-aerobic-status"></div>
               <div class="driver-freshness" id="drv-aerobic-freshness"></div>
             </div>
-            <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)" style="opacity:0.6">
+            <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)">
               <div class="driver-icon">◐</div>
               <div class="driver-label">Blood Work</div>
-              <div class="driver-val" id="drv-bloodwork-val" style="font-size:14px;color:var(--muted)">Not connected</div>
+              <div class="driver-val" id="drv-bloodwork-val">—</div>
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
-              <div class="driver-status" id="drv-bloodwork-status" style="color:var(--muted)">Upload labs →</div>
+              <div class="driver-status" id="drv-bloodwork-status"></div>
               <div class="driver-freshness" id="drv-bloodwork-freshness"></div>
             </div>
           </div>
         </div>
+
+        <!-- Onboarding checklist -->
+        <div id="onboarding-checklist" style="display:none"></div>
 
         <!-- Weekly health summary -->
         <div id="health-summary-section" style="display:none">
