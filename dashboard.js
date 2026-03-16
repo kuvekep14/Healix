@@ -847,10 +847,14 @@ function getDataConnectivityState() {
 
   var dashMetrics = window._lastDashboardMetrics || {};
   var wearableConnected = dashMetrics.hr !== null && dashMetrics.hr !== undefined;
-  var mealsLogged = dashMetrics.nutritionScore !== null && dashMetrics.nutritionScore > 0;
+  // Check any meal history, not just today's nutritionScore
+  var mealsLogged = (dashMetrics.nutritionScore !== null && dashMetrics.nutritionScore > 0)
+    || (window._lastDashboardMeals && window._lastDashboardMeals.length > 0);
   var fitnessTested = (dashMetrics.strengthData !== null && dashMetrics.strengthData !== undefined)
     || (dashMetrics.vo2max !== null && dashMetrics.vo2max !== undefined);
-  var bloodworkUploaded = allBloodworkSamples && allBloodworkSamples.length > 0;
+  // Check dashboard bloodwork data (always loaded), fall back to bloodwork page data
+  var bloodworkUploaded = (dashMetrics.bloodwork !== null && dashMetrics.bloodwork !== undefined)
+    || (allBloodworkSamples && allBloodworkSamples.length > 0);
 
   var totalConnected = 0;
   if (profileConnected) totalConnected++;
@@ -1423,6 +1427,9 @@ async function loadDashboardData() {
       'GET', null, token
     );
     console.log('[Healix] mealLogs:', mealLogs ? (mealLogs.error ? 'ERROR' : mealLogs.length) : 'null');
+    if (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) {
+      window._lastDashboardMeals = mealLogs;
+    }
     if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
       var todayMeals = mealLogs.filter(function(m) {
         return localDateStr(new Date(m.meal_time || m.created_at)) === today;
