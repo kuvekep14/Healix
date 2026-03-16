@@ -1156,6 +1156,34 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .va-ring-svg { width: 80px; height: 80px; }
 .va-ring-label { font-size: 11px; color: var(--muted); margin-top: 8px; letter-spacing: .03em; }
 
+/* ── MEAL STREAK ── */
+.meal-streak-card {
+  background: var(--dark-2); border: 1px solid var(--gold-border);
+  padding: 16px 24px; margin-top: 10px; cursor: pointer;
+  display: flex; align-items: center; gap: 16px;
+  transition: border-color .2s, background .2s;
+}
+.meal-streak-card:hover { border-color: rgba(184,151,90,.4); background: var(--dark-3); }
+.meal-streak-card.at-risk { border-color: rgba(224,160,112,.35); }
+.meal-streak-card.at-risk:hover { border-color: rgba(224,160,112,.6); }
+.meal-streak-count-num {
+  font-family: var(--F); font-size: 32px; font-weight: 300; color: var(--gold);
+  line-height: 1; flex-shrink: 0; min-width: 40px; text-align: center;
+}
+.meal-streak-card.at-risk .meal-streak-count-num { color: var(--warn); }
+.meal-streak-info { flex: 1; }
+.meal-streak-label {
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 3px;
+}
+.meal-streak-card.at-risk .meal-streak-label { color: var(--warn); }
+.meal-streak-msg { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.meal-streak-action {
+  font-size: 11px; color: var(--gold); letter-spacing: .08em;
+  flex-shrink: 0; white-space: nowrap;
+}
+.meal-streak-card.at-risk .meal-streak-action { color: var(--warn); }
+
 /* ── FIRST-RUN WIZARD ── */
 .firstrun-wizard { animation: fade-in .4s ease; }
 .firstrun-card {

@@ -1586,6 +1586,10 @@ async function loadDashboardData() {
   renderSyncBanner(timestamps);
   renderVitalityConfidence(timestamps);
 
+  // Meal streak
+  var streakMeals = (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) ? mealLogs : [];
+  renderMealStreak(streakMeals);
+
   // Load weekly insights and health summary (non-blocking)
   loadWeeklyInsights();
   loadHealthSummary();
@@ -5664,6 +5668,80 @@ function dismissFirstRun() {
 
   renderVitalityUnlockState();
   renderOnboardingChecklist();
+}
+
+// ── MEAL STREAK ──
+function calculateMealStreak(meals) {
+  if (!meals || meals.length === 0) return { streak: 0, todayLogged: false, atRisk: false };
+
+  var dates = {};
+  meals.forEach(function(m) {
+    var d = localDateStr(new Date(m.meal_time || m.created_at));
+    dates[d] = true;
+  });
+
+  var today = localDateStr(new Date());
+  var todayLogged = !!dates[today];
+  var streak = 0;
+  var checkDate = new Date();
+
+  if (todayLogged) {
+    while (dates[localDateStr(checkDate)]) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+  } else {
+    checkDate.setDate(checkDate.getDate() - 1);
+    while (dates[localDateStr(checkDate)]) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+  }
+
+  return { streak: streak, todayLogged: todayLogged, atRisk: !todayLogged && streak > 0 };
+}
+
+function renderMealStreak(meals) {
+  var container = document.getElementById('meal-streak');
+  if (!container) return;
+
+  var result = calculateMealStreak(meals);
+
+  if (result.streak === 0 && !result.todayLogged) {
+    container.style.display = '';
+    container.innerHTML = '<div class="meal-streak-card" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+      + '<div class="meal-streak-count-num">0</div>'
+      + '<div class="meal-streak-info">'
+      + '<div class="meal-streak-label">Meal Streak</div>'
+      + '<div class="meal-streak-msg">Log your first meal to start building consistency.</div>'
+      + '</div>'
+      + '<div class="meal-streak-action">Log meal →</div>'
+      + '</div>';
+    return;
+  }
+
+  var msg = '';
+  if (result.atRisk) {
+    msg = 'Log a meal today to keep your streak alive.';
+  } else if (result.streak >= 14) {
+    msg = 'Two weeks strong. Your data is building a clear picture.';
+  } else if (result.streak >= 7) {
+    msg = 'One week running. Consistency is compounding.';
+  } else if (result.streak >= 3) {
+    msg = 'Keep it going — momentum is building.';
+  } else {
+    msg = 'Great start. Tomorrow makes it stronger.';
+  }
+
+  container.style.display = '';
+  container.innerHTML = '<div class="meal-streak-card' + (result.atRisk ? ' at-risk' : '') + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+    + '<div class="meal-streak-count-num">' + result.streak + '</div>'
+    + '<div class="meal-streak-info">'
+    + '<div class="meal-streak-label">' + result.streak + '-day meal streak' + (result.atRisk ? ' — at risk' : '') + '</div>'
+    + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
+    + '</div>'
+    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal') + '</div>'
+    + '</div>';
 }
 
 // ── SMART EMPTY STATES ──
