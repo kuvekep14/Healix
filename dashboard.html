@@ -145,22 +145,17 @@
           <div id="va-tl-chart"></div>
         </div>
 
-        <!-- Driver cards: Hero + Grid layout -->
+        <!-- Driver cards: 5-column row -->
         <div id="va-drivers">
-          <div class="driver-card driver-hero" id="drv-heart" onclick="showPage('dashboard',null)">
-            <div class="driver-hero-left">
+          <div class="vitality-drivers">
+            <div class="driver-card" id="drv-heart" onclick="showPage('dashboard',null)">
               <div class="driver-icon">◇</div>
               <div class="driver-label">Heart Rate</div>
-              <div class="driver-bar-track" style="width:180px;margin-top:10px"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
+              <div class="driver-val" id="drv-heart-val">—</div>
+              <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
               <div class="driver-status" id="drv-heart-status"></div>
               <div class="driver-freshness" id="drv-heart-freshness"></div>
             </div>
-            <div class="driver-hero-right">
-              <div class="driver-hero-val" id="drv-heart-val">—</div>
-              <div class="driver-hero-unit" id="drv-heart-unit">bpm resting</div>
-            </div>
-          </div>
-          <div class="vitality-drivers">
             <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
               <div class="driver-icon">◉</div>
               <div class="driver-label">Weight</div>

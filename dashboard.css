@@ -181,9 +181,9 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .vitality-insight-icon { color: var(--gold); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
 #va-insight-text { font-size: 13px; color: var(--cream-dim); line-height: 1.6; }
 
-/* Driver cards — Hero + 2×2 Grid */
+/* Driver cards — 5-column row */
 .vitality-drivers {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;
   margin-top: 10px;
 }
 .driver-card {

@@ -814,9 +814,6 @@ function renderDriverCards(metrics, result) {
   var aerScore = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || 0) : 0;
 
   var hrVal  = metrics.hr !== null ? metrics.hr : null;
-  // Update hero unit label
-  var hrUnit = document.getElementById('drv-heart-unit');
-  if (hrUnit) hrUnit.textContent = metrics.hr !== null ? 'bpm resting' : '';
   var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
   var strVal = metrics.strengthData !== null
     ? metrics.strengthData.testCount + ' tests · ' + metrics.strengthData.avgPercentile + 'th pctl'
@@ -825,7 +822,7 @@ function renderDriverCards(metrics, result) {
     ? metrics.vo2max + ' ml/kg/min'
     : null;
 
-  setDriver('heart',     hrVal,  hrScore,  '');
+  setDriver('heart',     hrVal,  hrScore,  ' bpm');
   setDriver('weight',    wtVal,  wtScore,  '');
   setDriver('strength',  strVal, strScore, '');
   setDriver('aerobic',   aerVal, aerScore, '');
