@@ -16,13 +16,13 @@ Add `?env=` to any page URL. The choice is saved in `localStorage` and persists 
 
 ```
 # Switch to dev
-https://tryhealix.xyz/dashboard.html?env=dev
+https://usehealix.com/dashboard.html?env=dev
 
 # Switch to local (requires local Supabase running)
 http://localhost:8080/dashboard.html?env=local
 
 # Switch back to production
-https://tryhealix.xyz/dashboard.html?env=prod
+https://usehealix.com/dashboard.html?env=prod
 ```
 
 Once set, you don't need the query param on subsequent pages — it's remembered until you change it.

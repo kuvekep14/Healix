@@ -4,7 +4,7 @@
 
 Healix is a static web application that serves as a health intelligence dashboard. It connects wearable data (Apple HealthKit via HealthBite), bloodwork, meal logs, and fitness assessments into a unified AI-powered view. It shares the same Supabase backend as the HealthBite mobile app.
 
-**Live site**: [tryhealix.xyz](https://tryhealix.xyz)
+**Live site**: [usehealix.com](https://usehealix.com)
 
 ## Tech Stack
 
@@ -27,7 +27,7 @@ healix/
 ├── dashboard.css       # Dashboard styles
 ├── chat.html           # AI chat interface (calls chat-with-ai edge function)
 ├── config.js           # Environment config (prod/dev/local Supabase switching)
-├── CNAME               # GitHub Pages custom domain (tryhealix.xyz)
+├── CNAME               # GitHub Pages custom domain (usehealix.com)
 ├── docs/
 │   └── environments.md # Environment switching guide
 └── .github/
@@ -177,8 +177,8 @@ See `docs/environments.md` for full details.
 ## Deployment
 
 GitHub Actions auto-deploys on push:
-- `main` branch → root of site (`tryhealix.xyz/`)
-- `dev` branch → `/dev/` subdirectory (`tryhealix.xyz/dev/`)
+- `main` branch → root of site (`usehealix.com/`)
+- `dev` branch → `/dev/` subdirectory (`usehealix.com/dev/`)
 
 Both branches deploy the same static files with the same `config.js` — environment is controlled by the user via query param, not by branch.
 
