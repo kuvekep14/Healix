@@ -177,9 +177,23 @@ async function init() {
             first_name: nameParts[0] || '',
             last_name: nameParts.slice(1).join(' ') || '',
             email: user.email || ''
-          }, session.access_token, { 'Prefer': 'return=representation' });
+          }, session.access_token, { 'Prefer': 'return=representation', 'on-conflict': 'auth_user_id' });
           console.log('[Healix] profile row created for new user');
-          // Re-fetch so userProfileData is populated
+        } catch(e) {
+          console.warn('[Healix] Profile INSERT failed, trying upsert:', e.message);
+          // Fallback: try upsert in case RLS blocks INSERT but allows PATCH
+          try {
+            await supabaseRequest('/rest/v1/profiles?on_conflict=auth_user_id', 'POST', {
+              auth_user_id: user.id,
+              first_name: nameParts[0] || '',
+              last_name: nameParts.slice(1).join(' ') || '',
+              email: user.email || ''
+            }, session.access_token, { 'Prefer': 'resolution=merge-duplicates,return=representation' });
+            console.log('[Healix] profile row upserted for new user');
+          } catch(e2) { console.error('[Healix] Profile upsert also failed:', e2.message); }
+        }
+        // Re-fetch so userProfileData is populated
+        try {
           var newProfile = await supabaseRequest(
             '/rest/v1/profiles?auth_user_id=eq.' + user.id + '&limit=1',
             'GET', null, session.access_token
@@ -188,7 +202,7 @@ async function init() {
             window.userProfileData = newProfile[0];
             populateProfileForm(newProfile[0]);
           }
-        } catch(e) { console.warn('Profile creation error:', e); }
+        } catch(e) { console.warn('[Healix] Profile re-fetch error:', e.message); }
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
@@ -216,9 +230,15 @@ async function init() {
     } catch(e) { /* cache parse error, ignore */ }
 
     loadDashboardData().then(function() {
-      renderProfileCompleteness();
-      renderSmartEmptyStates();
-      checkOnboarding();
+      renderVitalityUnlockState();
+      var state = getDataConnectivityState();
+      if (state.isFirstRun && !localStorage.getItem('healix_onboarding_done')
+          && !localStorage.getItem('healix_firstrun_done')) {
+        renderFirstRunExperience();
+      } else {
+        renderOnboardingChecklist();
+      }
+      renderSmartEmptyStates(window._lastVitalityResult);
     });
     loadFamilyHistoryForm();
     setWeightDateDefault();
@@ -607,7 +627,56 @@ function calcVitalityAge(metrics) {
   };
 }
 
+// ── VITALITY AGE UNLOCK MECHANIC ──
+function renderVitalityUnlockState() {
+  var state = getDataConnectivityState();
+  var ageEl = document.getElementById('va-age');
+  var ringWrap = document.getElementById('va-unlock-ring');
+  var ringFill = document.getElementById('va-ring-fill');
+  var ringLabel = document.getElementById('va-ring-label');
+  var UNLOCK_THRESHOLD = 40;
+  var isLocked = state.progressPct < UNLOCK_THRESHOLD;
+
+  var unlockKey = 'healix_va_unlocked_' + (currentUser ? currentUser.id : '');
+  var wasUnlocked = localStorage.getItem(unlockKey) === '1';
+
+  if (wasUnlocked) isLocked = false;
+
+  if (!isLocked && !wasUnlocked && state.progressPct >= UNLOCK_THRESHOLD) {
+    localStorage.setItem(unlockKey, '1');
+    if (ageEl) {
+      ageEl.classList.remove('va-locked');
+      ageEl.classList.add('va-unlock-reveal');
+    }
+    if (ringWrap) ringWrap.style.display = 'none';
+    return true;
+  }
+
+  if (isLocked) {
+    if (ageEl) ageEl.classList.add('va-locked');
+    if (ringWrap) {
+      ringWrap.style.display = '';
+      var circumference = 2 * Math.PI * 54;
+      if (ringFill) {
+        setTimeout(function() {
+          ringFill.style.strokeDashoffset = circumference * (1 - state.progressPct / 100);
+        }, 100);
+      }
+      if (ringLabel) {
+        ringLabel.textContent = state.progressPct + '% — Connect more data to unlock your Vitality Age';
+      }
+    }
+    return false;
+  }
+
+  if (ageEl) ageEl.classList.remove('va-locked');
+  if (ringWrap) ringWrap.style.display = 'none';
+  return true;
+}
+
 function renderVitalityAge(result, realAge) {
+  var unlocked = renderVitalityUnlockState();
+
   var ageEl = document.getElementById('va-age');
   var deltaEl = document.getElementById('va-delta');
   var realEl = document.getElementById('va-real-age');
@@ -616,6 +685,12 @@ function renderVitalityAge(result, realAge) {
 
   if (realEl) realEl.textContent = realAge;
   if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+
+  if (!unlocked) {
+    if (ageEl) ageEl.textContent = '??';
+    if (deltaEl) { deltaEl.textContent = ''; deltaEl.className = 'vitality-delta'; }
+    return;
+  }
 
   if (!result) {
     if (ageEl) ageEl.textContent = '—';
@@ -768,6 +843,67 @@ function renderVitalityTimeline() {
   chartEl.innerHTML = svg;
 }
 
+// ── DATA CONNECTIVITY STATE ──
+// Weights reflect Vitality Age scoring — meals excluded (not part of score)
+var CONNECTIVITY_WEIGHTS = { profile: 0.10, wearable: 0.35, fitness: 0.20, bloodwork: 0.35 };
+
+function getDataConnectivityState() {
+  var profile = window.userProfileData || {};
+  var profileFields = [
+    { key: 'birth_date', has: !!(profile.birth_date || profile.dob) },
+    { key: 'gender', has: !!(profile.gender || profile.sex) },
+    { key: 'height_cm', has: !!profile.height_cm },
+    { key: 'current_weight_kg', has: !!profile.current_weight_kg }
+  ];
+  var profileFilled = profileFields.filter(function(f) { return f.has; }).length;
+  var profilePct = Math.round((profileFilled / profileFields.length) * 100);
+  var profileMissing = profileFields.filter(function(f) { return !f.has; }).map(function(f) { return f.key; });
+  var profileConnected = profilePct >= 75;
+
+  var dashMetrics = window._lastDashboardMetrics || {};
+  var wearableConnected = dashMetrics.hr !== null && dashMetrics.hr !== undefined;
+  var fitnessTested = (dashMetrics.strengthData !== null && dashMetrics.strengthData !== undefined)
+    || (dashMetrics.vo2max !== null && dashMetrics.vo2max !== undefined);
+  // Check dashboard bloodwork data (always loaded), fall back to bloodwork page data
+  var bloodworkUploaded = (dashMetrics.bloodwork !== null && dashMetrics.bloodwork !== undefined)
+    || (allBloodworkSamples && allBloodworkSamples.length > 0);
+
+  var totalConnected = 0;
+  if (profileConnected) totalConnected++;
+  if (wearableConnected) totalConnected++;
+  if (fitnessTested) totalConnected++;
+  if (bloodworkUploaded) totalConnected++;
+
+  var progressPct = 0;
+  if (profileConnected) progressPct += CONNECTIVITY_WEIGHTS.profile * 100;
+  if (wearableConnected) progressPct += CONNECTIVITY_WEIGHTS.wearable * 100;
+  if (fitnessTested) progressPct += CONNECTIVITY_WEIGHTS.fitness * 100;
+  if (bloodworkUploaded) progressPct += CONNECTIVITY_WEIGHTS.bloodwork * 100;
+  progressPct = Math.round(progressPct);
+
+  var isFirstRun = totalConnected === 0 && profilePct < 50;
+  var allComplete = totalConnected === 4;
+
+  return {
+    profile: { filled: profileFilled, pct: profilePct, missing: profileMissing, connected: profileConnected },
+    wearable: { connected: wearableConnected },
+    fitness: { tested: fitnessTested },
+    bloodwork: { uploaded: bloodworkUploaded },
+    totalConnected: totalConnected,
+    progressPct: progressPct,
+    isFirstRun: isFirstRun,
+    allComplete: allComplete
+  };
+}
+
+var GHOST_CTAS = {
+  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Apple Watch →', action: function() { window.open('https://apps.apple.com/app/healthbite/id6738970819', '_blank'); } },
+  weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); } },
+  strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); } },
+  aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); } },
+  bloodwork: { text: 'Blood biomarkers are worth 35% of your score — the most impactful data you can add.', cta: 'Upload labs →', action: function() { showPage('documents', null); } }
+};
+
 function renderDriverCards(metrics, result) {
   // Compute actual weights (accounting for redistribution)
   var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
@@ -792,6 +928,26 @@ function renderDriverCards(metrics, result) {
     var valEl = document.getElementById('drv-' + key + '-val');
     var barEl = document.getElementById('drv-' + key + '-bar');
     var stEl = document.getElementById('drv-' + key + '-status');
+
+    // Ghost card for missing data
+    if (val === null && score === 0 && GHOST_CTAS[key]) {
+      var ghost = GHOST_CTAS[key];
+      if (card) {
+        card.className = 'driver-card driver-card-ghost';
+        card.onclick = ghost.action;
+      }
+      if (valEl) {
+        valEl.innerHTML = '<span class="ghost-cta-text">' + escapeHtml(ghost.text) + '</span>';
+        valEl.style.fontSize = '12px'; valEl.style.color = '';
+      }
+      if (barEl) { barEl.style.width = '0%'; barEl.className = 'driver-bar-fill'; }
+      if (stEl) {
+        stEl.innerHTML = '<span class="ghost-cta-link">' + escapeHtml(ghost.cta) + '</span>';
+        stEl.className = 'driver-status ghost';
+      }
+      return;
+    }
+
     if (valEl) {
       if (val !== null) {
         valEl.textContent = val + (unit||'');
@@ -814,9 +970,6 @@ function renderDriverCards(metrics, result) {
   var aerScore = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || 0) : 0;
 
   var hrVal  = metrics.hr !== null ? metrics.hr : null;
-  // Update hero unit label
-  var hrUnit = document.getElementById('drv-heart-unit');
-  if (hrUnit) hrUnit.textContent = metrics.hr !== null ? 'bpm resting' : '';
   var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
   var strVal = metrics.strengthData !== null
     ? metrics.strengthData.testCount + ' tests · ' + metrics.strengthData.avgPercentile + 'th pctl'
@@ -825,19 +978,19 @@ function renderDriverCards(metrics, result) {
     ? metrics.vo2max + ' ml/kg/min'
     : null;
 
-  setDriver('heart',     hrVal,  hrScore,  '');
+  setDriver('heart',     hrVal,  hrScore,  ' bpm');
   setDriver('weight',    wtVal,  wtScore,  '');
   setDriver('strength',  strVal, strScore, '');
   setDriver('aerobic',   aerVal, aerScore, '');
 
   // Sleep driver card removed — sleep data is still shown on the Sleep page
 
-  // Blood work — show connected state if available
+  // Blood work — show connected state or ghost card
   var bwScore = scoreBloodwork(metrics.bloodwork);
-  var bwCard = document.getElementById('drv-bloodwork');
   if (bwScore !== null) {
     setDriver('bloodwork', bwScore + '%', bwScore, '');
-    if (bwCard) bwCard.style.opacity = '1';
+  } else {
+    setDriver('bloodwork', null, 0, '');
   }
 }
 
@@ -1283,6 +1436,9 @@ async function loadDashboardData() {
       'GET', null, token
     );
     console.log('[Healix] mealLogs:', mealLogs ? (mealLogs.error ? 'ERROR' : mealLogs.length) : 'null');
+    if (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) {
+      window._lastDashboardMeals = mealLogs;
+    }
     if (mealLogs && !mealLogs.error && mealLogs.length > 0) {
       var todayMeals = mealLogs.filter(function(m) {
         return localDateStr(new Date(m.meal_time || m.created_at)) === today;
@@ -1419,7 +1575,9 @@ async function loadDashboardData() {
 
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
+  window._lastDashboardMetrics = metrics;
   var result = calcVitalityAge(metrics);
+  window._lastVitalityResult = result;
   console.log('[Healix] vitalityResult:', result);
   renderVitalityAge(result, realAge);
   saveVitalityHistory(result, realAge);
@@ -1443,6 +1601,10 @@ async function loadDashboardData() {
   renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', timestamps.bloodwork);
   renderSyncBanner(timestamps);
   renderVitalityConfidence(timestamps);
+
+  // Meal streak
+  var streakMeals = (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) ? mealLogs : [];
+  renderMealStreak(streakMeals);
 
   // Load weekly insights and health summary (non-blocking)
   loadWeeklyInsights();
@@ -2906,43 +3068,76 @@ var bloodworkByDate = {};
 var selectedBloodworkDate = null;
 
 // Optimal ranges for biomarkers — extracted from scoreBloodwork logic + clinical refs
+// Sex-specific markers use { male: {...}, female: {...}, unit, category } format
 var BIOMARKER_RANGES = {
+  // ── Metabolic ──
   'Glucose':           { low: 70, optLow: 70, optHigh: 99,  high: 126, unit: 'mg/dL', category: 'Metabolic' },
   'Hemoglobin A1c':    { low: 4.0, optLow: 4.6, optHigh: 5.6, high: 6.5, unit: '%', category: 'Metabolic' },
   'HbA1c':             { low: 4.0, optLow: 4.6, optHigh: 5.6, high: 6.5, unit: '%', category: 'Metabolic' },
+  'Insulin':           { low: 0, optLow: 2,   optHigh: 19,  high: 25, unit: 'uIU/mL', category: 'Metabolic' },
+  'Uric Acid':         { low: 2.0, optLow: 3.0, optHigh: 7.0, high: 8.0, unit: 'mg/dL', category: 'Metabolic' },
+  'Homocysteine':      { male: { low: 4, optLow: 5, optHigh: 15, high: 20 }, female: { low: 4, optLow: 5, optHigh: 8, high: 15 }, unit: 'umol/L', category: 'Metabolic' },
+  // ── Lipid Panel ──
   'LDL Cholesterol':   { low: 0,  optLow: 0,   optHigh: 99,  high: 160, unit: 'mg/dL', category: 'Lipid Panel' },
   'HDL Cholesterol':   { low: 40, optLow: 60,  optHigh: 90,  high: 100, unit: 'mg/dL', category: 'Lipid Panel' },
   'Triglycerides':     { low: 0,  optLow: 0,   optHigh: 149, high: 200, unit: 'mg/dL', category: 'Lipid Panel' },
   'Total Cholesterol': { low: 0,  optLow: 0,   optHigh: 199, high: 240, unit: 'mg/dL', category: 'Lipid Panel' },
+  // ── Inflammation ──
   'hs-CRP':            { low: 0,  optLow: 0,   optHigh: 1.0, high: 3.0, unit: 'mg/L', category: 'Inflammation' },
   'CRP':               { low: 0,  optLow: 0,   optHigh: 1.0, high: 3.0, unit: 'mg/L', category: 'Inflammation' },
-  'Creatinine':        { low: 0.6, optLow: 0.7, optHigh: 1.2, high: 1.5, unit: 'mg/dL', category: 'Kidney' },
+  // ── Kidney ──
+  'Creatinine':        { male: { low: 0.6, optLow: 0.7, optHigh: 1.3, high: 1.5 }, female: { low: 0.4, optLow: 0.5, optHigh: 1.0, high: 1.3 }, unit: 'mg/dL', category: 'Kidney' },
   'BUN':               { low: 7,  optLow: 7,   optHigh: 20,  high: 25, unit: 'mg/dL', category: 'Kidney' },
   'eGFR':              { low: 60, optLow: 90,  optHigh: 999, high: 999, unit: 'mL/min', category: 'Kidney' },
+  // ── Liver ──
   'AST':               { low: 0,  optLow: 10,  optHigh: 34,  high: 50, unit: 'U/L', category: 'Liver' },
   'ALT':               { low: 0,  optLow: 7,   optHigh: 35,  high: 50, unit: 'U/L', category: 'Liver' },
+  // ── Thyroid ──
   'TSH':               { low: 0.4, optLow: 0.5, optHigh: 4.0, high: 5.0, unit: 'mIU/L', category: 'Thyroid' },
+  'Free T3':           { low: 2.0, optLow: 3.0, optHigh: 4.4, high: 4.8, unit: 'pg/mL', category: 'Thyroid' },
+  'Free T4':           { low: 0.8, optLow: 1.0, optHigh: 1.77, high: 2.0, unit: 'ng/dL', category: 'Thyroid' },
+  'TPO Antibodies':    { low: 0, optLow: 0, optHigh: 34, high: 100, unit: 'IU/mL', category: 'Thyroid' },
+  // ── Vitamins ──
   'Vitamin D':         { low: 20, optLow: 30,  optHigh: 80,  high: 100, unit: 'ng/mL', category: 'Vitamins' },
   'Vitamin B12':       { low: 200, optLow: 300, optHigh: 900, high: 1100, unit: 'pg/mL', category: 'Vitamins' },
-  'Iron':              { low: 40, optLow: 60,  optHigh: 170, high: 200, unit: 'mcg/dL', category: 'Blood' },
-  'Ferritin':          { low: 20, optLow: 30,  optHigh: 300, high: 400, unit: 'ng/mL', category: 'Blood' },
-  'Hemoglobin':        { low: 12, optLow: 13.5, optHigh: 17.5, high: 18.5, unit: 'g/dL', category: 'CBC' },
+  'Folate':            { low: 3, optLow: 10, optHigh: 20, high: 27, unit: 'ng/mL', category: 'Vitamins' },
+  // ── Blood / Iron ──
+  'Iron':              { male: { low: 40, optLow: 60, optHigh: 170, high: 200 }, female: { low: 40, optLow: 50, optHigh: 170, high: 200 }, unit: 'mcg/dL', category: 'Blood' },
+  'Ferritin':          { male: { low: 20, optLow: 30, optHigh: 300, high: 400 }, female: { low: 15, optLow: 50, optHigh: 150, high: 250 }, unit: 'ng/mL', category: 'Blood' },
+  'TIBC':              { low: 250, optLow: 250, optHigh: 370, high: 450, unit: 'mcg/dL', category: 'Blood' },
+  'Transferrin Saturation': { low: 15, optLow: 20, optHigh: 50, high: 60, unit: '%', category: 'Blood' },
+  // ── CBC ──
+  'Hemoglobin':        { male: { low: 12, optLow: 13.5, optHigh: 17.5, high: 18.5 }, female: { low: 10, optLow: 12.0, optHigh: 15.5, high: 17.0 }, unit: 'g/dL', category: 'CBC' },
   'WBC':               { low: 3.5, optLow: 4.5, optHigh: 10.5, high: 12.0, unit: 'K/uL', category: 'CBC' },
-  'RBC':               { low: 3.8, optLow: 4.2, optHigh: 5.8, high: 6.2, unit: 'M/uL', category: 'CBC' },
+  'RBC':               { male: { low: 3.8, optLow: 4.5, optHigh: 5.9, high: 6.2 }, female: { low: 3.5, optLow: 3.9, optHigh: 5.0, high: 5.5 }, unit: 'M/uL', category: 'CBC' },
   'Platelets':         { low: 140, optLow: 150, optHigh: 400, high: 450, unit: 'K/uL', category: 'CBC' },
-  'Testosterone':      { low: 250, optLow: 300, optHigh: 1000, high: 1200, unit: 'ng/dL', category: 'Hormones' },
-  'Insulin':           { low: 0, optLow: 2,   optHigh: 19,  high: 25, unit: 'uIU/mL', category: 'Metabolic' },
-  'Uric Acid':         { low: 2.0, optLow: 3.0, optHigh: 7.0, high: 8.0, unit: 'mg/dL', category: 'Metabolic' }
+  // ── Hormones ──
+  'Testosterone':      { male: { low: 250, optLow: 300, optHigh: 1000, high: 1200 }, female: { low: 10, optLow: 15, optHigh: 70, high: 100 }, unit: 'ng/dL', category: 'Hormones' },
+  'Free Testosterone': { male: { low: 3, optLow: 5, optHigh: 21, high: 30 }, female: { low: 0.2, optLow: 0.5, optHigh: 3.5, high: 6.5 }, unit: 'pg/mL', category: 'Hormones' },
+  'Estradiol':         { male: { low: 5, optLow: 10, optHigh: 40, high: 60 }, female: { low: 15, optLow: 20, optHigh: 350, high: 500 }, unit: 'pg/mL', category: 'Hormones' },
+  'Progesterone':      { male: { low: 0, optLow: 0.1, optHigh: 0.5, high: 1.0 }, female: { low: 0, optLow: 0.1, optHigh: 25, high: 35 }, unit: 'ng/mL', category: 'Hormones' },
+  'FSH':               { male: { low: 1, optLow: 1.5, optHigh: 12, high: 20 }, female: { low: 1, optLow: 1.5, optHigh: 12, high: 25 }, unit: 'mIU/mL', category: 'Hormones' },
+  'LH':                { male: { low: 1, optLow: 1.5, optHigh: 9, high: 15 }, female: { low: 1, optLow: 1, optHigh: 20, high: 40 }, unit: 'mIU/mL', category: 'Hormones' },
+  'DHEA-S':            { male: { low: 50, optLow: 80, optHigh: 560, high: 700 }, female: { low: 25, optLow: 35, optHigh: 430, high: 550 }, unit: 'mcg/dL', category: 'Hormones' },
+  'SHBG':              { male: { low: 8, optLow: 10, optHigh: 57, high: 80 }, female: { low: 15, optLow: 18, optHigh: 144, high: 180 }, unit: 'nmol/L', category: 'Hormones' }
 };
 
-function getRange(name) {
-  if (BIOMARKER_RANGES[name]) return BIOMARKER_RANGES[name];
-  // Case-insensitive exact match only — avoids false positives from substring matching
-  var lower = name.toLowerCase();
-  for (var key in BIOMARKER_RANGES) {
-    if (key.toLowerCase() === lower) return BIOMARKER_RANGES[key];
+function getRange(name, sex) {
+  var r = BIOMARKER_RANGES[name];
+  if (!r) {
+    // Case-insensitive exact match only — avoids false positives from substring matching
+    var lower = name.toLowerCase();
+    for (var key in BIOMARKER_RANGES) {
+      if (key.toLowerCase() === lower) { r = BIOMARKER_RANGES[key]; break; }
+    }
   }
-  return null;
+  if (!r) return null;
+  // Resolve sex-specific ranges
+  if (r.male && r.female) {
+    var resolved = (sex && sex.toLowerCase().indexOf('f') !== -1) ? r.female : r.male;
+    return { low: resolved.low, optLow: resolved.optLow, optHigh: resolved.optHigh, high: resolved.high, unit: r.unit, category: r.category };
+  }
+  return r;
 }
 
 async function loadBloodworkPage() {
@@ -3040,7 +3235,8 @@ function renderBloodworkDate(dateStr) {
       if (Math.abs(diff) < 0.01) return;
       var pctChange = prev.value !== 0 ? Math.round((diff / prev.value) * 100) : 0;
       var name = s.biomarker_name.toLowerCase();
-      var range = getRange(s.biomarker_name);
+      var userSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
+      var range = getRange(s.biomarker_name, userSex);
       var improved = false;
       if (name.indexOf('hdl') !== -1) improved = diff > 0;
       else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
@@ -3078,9 +3274,10 @@ function renderBloodworkDate(dateStr) {
   }
 
   // Group by category
+  var bwSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
   var byCategory = {};
   samples.forEach(function(s) {
-    var range = getRange(s.biomarker_name);
+    var range = getRange(s.biomarker_name, bwSex);
     var cat = (range && range.category) || s.category || 'Other';
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(s);
@@ -3118,7 +3315,8 @@ function renderBloodworkDate(dateStr) {
 }
 
 function renderBiomarkerCard(sample, prevSample) {
-  var range = getRange(sample.biomarker_name);
+  var cardSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
+  var range = getRange(sample.biomarker_name, cardSex);
   var val = sample.value;
   var unit = sample.unit || (range ? range.unit : '');
   var refRange = sample.reference_range || '';
@@ -3669,7 +3867,20 @@ async function saveProfile() {
   if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
   try {
+    // PATCH returns null/empty when zero rows matched — verify by re-fetching
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+    // Verify the save actually persisted
+    var verify = await supabaseRequest(
+      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
+      'GET', null, currentSession.access_token
+    );
+    if (!verify || !Array.isArray(verify) || verify.length === 0) {
+      // Row doesn't exist — PATCH silently matched nothing. Insert instead.
+      console.warn('[Healix] PATCH matched no rows — inserting profile');
+      data.auth_user_id = currentUser.id;
+      data.email = currentUser.email || '';
+      await supabaseRequest('/rest/v1/profiles', 'POST', data, currentSession.access_token, { 'Prefer': 'return=representation' });
+    }
     window.userProfileData = Object.assign(window.userProfileData || {}, data);
     if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
     // Update sidebar name
@@ -5354,99 +5565,268 @@ function renderPremiumGate(containerId, featureName) {
   );
 }
 
-// ── ONBOARDING ──
-function checkOnboarding() {
-  // Skip if user already dismissed onboarding
-  if (localStorage.getItem('healix_onboarding_done')) return;
-  // Check if user has meaningful data
-  var profile = window.userProfileData || {};
-  var hasBloodwork = allBloodworkSamples && allBloodworkSamples.length > 0;
-  var hasWeight = profile.current_weight_kg;
-  var hasDob = profile.birth_date || profile.dob;
-  var hasHeight = profile.height_cm;
-  // If user has most core data, skip onboarding
-  if (hasBloodwork && hasWeight && hasDob && hasHeight) {
-    localStorage.setItem('healix_onboarding_done', '1');
+// ── ONBOARDING CHECKLIST ──
+function renderOnboardingChecklist() {
+  var state = getDataConnectivityState();
+  var container = document.getElementById('onboarding-checklist');
+  if (!container) return;
+
+  if (state.allComplete) {
+    container.style.display = 'none';
     return;
   }
-  showOnboarding();
-}
 
-function showOnboarding() {
-  var overlay = document.createElement('div');
-  overlay.className = 'onboarding-overlay';
-  overlay.id = 'onboarding-overlay';
-  overlay.innerHTML = '<div class="onboarding-card">'
-    + '<div class="onboarding-title">Welcome to <em>Healix</em></div>'
-    + '<div class="onboarding-sub">Get the most out of your health dashboard. Start with any of these — each one makes your insights smarter.</div>'
-    + '<div class="onboarding-actions">'
-    + '<div class="onboarding-action" onclick="dismissOnboarding();showPage(\'documents\',null)">'
-    + '<div class="onboarding-action-icon">🧬</div>'
-    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Upload lab results</div><div class="onboarding-action-desc">Blood work is worth 40% of your Vitality Age. Upload a PDF — we extract everything automatically.</div></div>'
-    + '<div class="onboarding-action-badge">Fastest path</div>'
-    + '</div>'
-    + '<div class="onboarding-action" onclick="dismissOnboarding();showPage(\'profile\',null)">'
-    + '<div class="onboarding-action-icon">📋</div>'
-    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Complete your profile</div><div class="onboarding-action-desc">Add date of birth, height, and weight for an accurate Vitality Age calculation.</div></div>'
-    + '</div>'
-    + '<div class="onboarding-action" onclick="dismissOnboarding();setMealDateTimeDefault();openModal(\'meal-modal\')">'
-    + '<div class="onboarding-action-icon">🍽</div>'
-    + '<div class="onboarding-action-info"><div class="onboarding-action-title">Log your first meal</div><div class="onboarding-action-desc">Track nutrition and get AI-powered dietary insights.</div></div>'
-    + '</div>'
-    + '</div>'
-    + '<div class="onboarding-skip" onclick="dismissOnboarding()">I\'ll explore on my own</div>'
-    + '</div>';
-  document.body.appendChild(overlay);
-}
+  var prevCount = parseInt(localStorage.getItem('healix_checklist_count_' + currentUser.id) || '0');
+  var currentCount = state.totalConnected;
+  var newlyCompleted = currentCount > prevCount;
+  localStorage.setItem('healix_checklist_count_' + currentUser.id, currentCount.toString());
 
-function dismissOnboarding() {
-  localStorage.setItem('healix_onboarding_done', '1');
-  var overlay = document.getElementById('onboarding-overlay');
-  if (overlay) overlay.remove();
-}
-
-// ── PROFILE COMPLETENESS ──
-function renderProfileCompleteness() {
-  var profile = window.userProfileData || {};
-  var fields = [
-    { key: 'first_name', label: 'name', has: !!profile.first_name },
-    { key: 'birth_date', label: 'date of birth', has: !!(profile.birth_date || profile.dob) },
-    { key: 'height_cm', label: 'height', has: !!profile.height_cm },
-    { key: 'current_weight_kg', label: 'weight', has: !!profile.current_weight_kg },
-    { key: 'gender', label: 'biological sex', has: !!(profile.gender || profile.sex) }
+  var items = [
+    { key: 'profile', label: 'Complete profile', time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
+    { key: 'wearable', label: 'Connect wearable', time: '1 min', done: state.wearable.connected, action: 'window.open(\'https://apps.apple.com/app/healthbite/id6738970819\', \'_blank\')' },
+    { key: 'fitness', label: 'Log fitness test', time: '3 min', done: state.fitness.tested, action: 'showPage(\'strength\', null)' },
+    { key: 'bloodwork', label: 'Upload bloodwork', time: '2 min', done: state.bloodwork.uploaded, action: 'showPage(\'documents\', null)' }
   ];
-  var filled = fields.filter(function(f) { return f.has; }).length;
-  var pct = Math.round((filled / fields.length) * 100);
-  if (pct >= 100) return; // Don't show if complete
-  var missing = fields.filter(function(f) { return !f.has; }).map(function(f) { return f.label; });
-  var missingText = 'Add ' + missing.join(', ') + ' for accurate Vitality Age.';
-  // Insert before the vitality hero
+
+  var squaresHtml = '';
+  for (var i = 0; i < 4; i++) {
+    var filled = i < currentCount;
+    squaresHtml += '<div class="checklist-square' + (filled ? ' filled' : '') + (filled && newlyCompleted && i === currentCount - 1 ? ' flash' : '') + '"></div>';
+  }
+
+  var itemsHtml = '';
+  items.forEach(function(item) {
+    itemsHtml += '<div class="checklist-item' + (item.done ? ' done' : '') + '" onclick="' + item.action + '">'
+      + '<div class="checklist-check">' + (item.done ? '&#10003;' : '&#9675;') + '</div>'
+      + '<div class="checklist-label">' + escapeHtml(item.label) + '</div>'
+      + '<div class="checklist-time">' + escapeHtml(item.time) + '</div>'
+      + '</div>';
+  });
+
+  container.style.display = '';
+  container.innerHTML = '<div class="checklist-card">'
+    + '<div class="checklist-header">'
+    + '<div class="checklist-title">Your Healix Score</div>'
+    + '<div class="checklist-count">' + currentCount + ' of 4 connected</div>'
+    + '</div>'
+    + '<div class="checklist-squares">' + squaresHtml + '</div>'
+    + '<div class="checklist-items">' + itemsHtml + '</div>'
+    + '</div>';
+}
+
+// ── FIRST-RUN GUIDED EXPERIENCE ──
+function renderFirstRunExperience() {
   var container = document.querySelector('.vitality-page');
   if (!container) return;
-  var existing = document.getElementById('profile-completeness');
-  if (existing) existing.remove();
-  var el = document.createElement('div');
-  el.className = 'profile-completeness';
-  el.id = 'profile-completeness';
-  el.style.cursor = 'pointer';
-  el.onclick = function() { showPage('profile', null); };
-  el.innerHTML = '<div class="profile-pct">' + pct + '%</div>'
-    + '<div class="profile-pct-info">'
-    + '<div class="profile-pct-label">Profile completeness</div>'
-    + '<div class="profile-pct-hint">' + escapeHtml(missingText) + '</div>'
-    + '<div class="profile-pct-bar"><div class="profile-pct-fill" style="width:' + pct + '%"></div></div>'
+
+  var hiddenEls = container.querySelectorAll('.vitality-hero, .vitality-confidence, .vitality-insight-bar, .va-timeline, #va-drivers, #onboarding-checklist, #health-summary-section, #weekly-insights-section, .vitality-chat-card');
+  hiddenEls.forEach(function(el) { el.style.display = 'none'; });
+
+  var wizard = document.createElement('div');
+  wizard.className = 'firstrun-wizard';
+  wizard.id = 'firstrun-wizard';
+  container.insertBefore(wizard, container.firstChild);
+
+  renderFirstRunStep(1);
+}
+
+function renderFirstRunStep(step) {
+  var wizard = document.getElementById('firstrun-wizard');
+  if (!wizard) return;
+
+  var stepsIndicator = '<div class="firstrun-steps">'
+    + '<div class="firstrun-step-dot' + (step >= 1 ? ' active' : '') + '">1</div>'
+    + '<div class="firstrun-step-line' + (step >= 2 ? ' active' : '') + '"></div>'
+    + '<div class="firstrun-step-dot' + (step >= 2 ? ' active' : '') + '">2</div>'
+    + '<div class="firstrun-step-line' + (step >= 3 ? ' active' : '') + '"></div>'
+    + '<div class="firstrun-step-dot' + (step >= 3 ? ' active' : '') + '">3</div>'
     + '</div>';
-  container.insertBefore(el, container.firstChild);
+
+  var html = '';
+  if (step === 1) {
+    html = '<div class="firstrun-card">'
+      + stepsIndicator
+      + '<div class="firstrun-title">Welcome to <em>Healix</em></div>'
+      + '<div class="firstrun-sub">Let\'s set up your profile so we can calculate your Vitality Age.</div>'
+      + '<div class="firstrun-form">'
+      + '<div class="firstrun-form-row">'
+      + '<div class="firstrun-field"><label class="firstrun-label">Date of Birth</label>'
+      + '<input type="date" id="fr-dob" class="firstrun-input"></div>'
+      + '<div class="firstrun-field"><label class="firstrun-label">Biological Sex</label>'
+      + '<select id="fr-sex" class="firstrun-input"><option value="">Select...</option>'
+      + '<option value="male">Male</option><option value="female">Female</option></select></div>'
+      + '</div>'
+      + '<div class="firstrun-form-row">'
+      + '<div class="firstrun-field"><label class="firstrun-label">Height</label>'
+      + '<input type="text" id="fr-height" class="firstrun-input" placeholder="5\'10&quot; or 178cm"></div>'
+      + '<div class="firstrun-field"><label class="firstrun-label">Weight</label>'
+      + '<input type="text" id="fr-weight" class="firstrun-input" placeholder="165 lbs or 75 kg"></div>'
+      + '</div>'
+      + '</div>'
+      + '<button class="firstrun-btn" onclick="saveFirstRunProfile()">Continue</button>'
+      + '<div class="firstrun-skip" onclick="renderFirstRunStep(2)">Skip for now</div>'
+      + '</div>';
+  } else if (step === 2) {
+    html = '<div class="firstrun-card">'
+      + stepsIndicator
+      + '<div class="firstrun-title">Connect Your <em>Wearable</em></div>'
+      + '<div class="firstrun-sub">Heart rate data from your Apple Watch or iPhone is worth 30% of your Vitality Age score.</div>'
+      + '<div class="firstrun-wearable-cta">'
+      + '<div class="firstrun-wearable-icon">&#9201;</div>'
+      + '<div><div class="firstrun-wearable-title">Download HealthBite</div>'
+      + '<div class="firstrun-wearable-desc">Our companion app syncs Apple Health data to Healix automatically.</div></div>'
+      + '</div>'
+      + '<a href="https://apps.apple.com/app/healthbite/id6738970819" target="_blank" class="firstrun-btn" style="text-decoration:none;text-align:center;display:block">Open App Store</a>'
+      + '<div class="firstrun-skip" onclick="renderFirstRunStep(3)">I\'ll do this later</div>'
+      + '</div>';
+  } else if (step === 3) {
+    var state = getDataConnectivityState();
+    html = '<div class="firstrun-card">'
+      + stepsIndicator
+      + '<div class="firstrun-title">You\'re <em>Ready</em></div>'
+      + '<div class="firstrun-sub">Your dashboard is set up with ' + state.progressPct + '% data connectivity. Add more data sources to improve your Vitality Age accuracy.</div>'
+      + '<button class="firstrun-btn" onclick="dismissFirstRun()">Go to Dashboard</button>'
+      + '</div>';
+  }
+
+  wizard.innerHTML = html;
+}
+
+async function saveFirstRunProfile() {
+  var dob = document.getElementById('fr-dob').value;
+  var sex = document.getElementById('fr-sex').value;
+  var heightStr = document.getElementById('fr-height').value;
+  var weightStr = document.getElementById('fr-weight').value;
+
+  var heightCm = parseHeight(heightStr);
+  var weightKg = parseWeight(weightStr);
+
+  var data = {};
+  if (dob) data.birth_date = dob;
+  if (sex) data.gender = sex;
+  if (heightCm) data.height_cm = heightCm;
+  if (weightKg) data.current_weight_kg = weightKg;
+
+  if (Object.keys(data).length > 0 && currentUser && currentSession) {
+    try {
+      await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+      // Verify PATCH actually updated a row
+      var verify = await supabaseRequest(
+        '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
+        'GET', null, currentSession.access_token
+      );
+      if (!verify || !Array.isArray(verify) || verify.length === 0) {
+        // No row exists — insert instead
+        console.warn('[Healix] First-run PATCH matched no rows — inserting');
+        data.auth_user_id = currentUser.id;
+        data.email = currentUser.email || '';
+        await supabaseRequest('/rest/v1/profiles', 'POST', data, currentSession.access_token, { 'Prefer': 'return=representation' });
+      }
+      window.userProfileData = Object.assign(window.userProfileData || {}, data);
+    } catch(e) {
+      console.error('[Healix] First-run profile save error:', e);
+    }
+  }
+
+  renderFirstRunStep(2);
+}
+
+function dismissFirstRun() {
+  localStorage.setItem('healix_firstrun_done', '1');
+  var wizard = document.getElementById('firstrun-wizard');
+  if (wizard) wizard.remove();
+
+  var container = document.querySelector('.vitality-page');
+  if (container) {
+    var hidden = container.querySelectorAll('.vitality-hero, .vitality-confidence, .vitality-insight-bar, .va-timeline, #va-drivers, #onboarding-checklist, #health-summary-section, #weekly-insights-section, .vitality-chat-card');
+    hidden.forEach(function(el) { el.style.display = ''; });
+  }
+
+  renderVitalityUnlockState();
+  renderOnboardingChecklist();
+}
+
+// ── MEAL STREAK ──
+function calculateMealStreak(meals) {
+  if (!meals || meals.length === 0) return { streak: 0, todayLogged: false, atRisk: false };
+
+  var dates = {};
+  meals.forEach(function(m) {
+    var d = localDateStr(new Date(m.meal_time || m.created_at));
+    dates[d] = true;
+  });
+
+  var today = localDateStr(new Date());
+  var todayLogged = !!dates[today];
+  var streak = 0;
+  var checkDate = new Date();
+
+  if (todayLogged) {
+    while (dates[localDateStr(checkDate)]) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+  } else {
+    checkDate.setDate(checkDate.getDate() - 1);
+    while (dates[localDateStr(checkDate)]) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+  }
+
+  return { streak: streak, todayLogged: todayLogged, atRisk: !todayLogged && streak > 0 };
+}
+
+function renderMealStreak(meals) {
+  var container = document.getElementById('meal-streak');
+  if (!container) return;
+
+  var result = calculateMealStreak(meals);
+
+  if (result.streak === 0 && !result.todayLogged) {
+    container.style.display = '';
+    container.innerHTML = '<div class="meal-streak-card" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+      + '<div class="meal-streak-count-num">0</div>'
+      + '<div class="meal-streak-info">'
+      + '<div class="meal-streak-label">Meal Streak</div>'
+      + '<div class="meal-streak-msg">Log your first meal to start building consistency.</div>'
+      + '</div>'
+      + '<div class="meal-streak-action">Log meal →</div>'
+      + '</div>';
+    return;
+  }
+
+  var msg = '';
+  if (result.atRisk) {
+    msg = 'Log a meal today to keep your streak alive.';
+  } else if (result.streak >= 14) {
+    msg = 'Two weeks strong. Your data is building a clear picture.';
+  } else if (result.streak >= 7) {
+    msg = 'One week running. Consistency is compounding.';
+  } else if (result.streak >= 3) {
+    msg = 'Keep it going — momentum is building.';
+  } else {
+    msg = 'Great start. Tomorrow makes it stronger.';
+  }
+
+  container.style.display = '';
+  container.innerHTML = '<div class="meal-streak-card' + (result.atRisk ? ' at-risk' : '') + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+    + '<div class="meal-streak-count-num">' + result.streak + '</div>'
+    + '<div class="meal-streak-info">'
+    + '<div class="meal-streak-label">' + result.streak + '-day meal streak' + (result.atRisk ? ' — at risk' : '') + '</div>'
+    + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
+    + '</div>'
+    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal') + '</div>'
+    + '</div>';
 }
 
 // ── SMART EMPTY STATES ──
-function renderSmartEmptyStates() {
-  // Vitality Age — show guidance when it's showing "—"
-  var vaAge = document.getElementById('va-age');
-  if (vaAge && vaAge.textContent === '—') {
+function renderSmartEmptyStates(vitalityResult) {
+  // Vitality Age — show guidance only when no result was calculated
+  if (!vitalityResult) {
     var confidence = document.getElementById('va-confidence');
     if (confidence) {
-      confidence.innerHTML = 'Upload bloodwork (40% of your score) or add your height and weight to unlock your Vitality Age.';
+      confidence.innerHTML = 'Upload bloodwork (35% of your score) or add your height and weight to unlock your Vitality Age.';
       confidence.className = 'vitality-confidence amber';
     }
   }

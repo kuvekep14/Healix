@@ -195,7 +195,7 @@ body {
 
     <div class="field">
       <label class="field-label" for="password">Password</label>
-      <input class="field-input" type="password" id="password" placeholder="Min. 8 characters" autocomplete="new-password" oninput="checkStrength(this.value)">
+      <input class="field-input" type="password" id="password" placeholder="Min. 12 characters" autocomplete="new-password" oninput="checkStrength(this.value)">
       <div class="pwd-strength">
         <div class="pwd-bar-track"><div class="pwd-bar-fill" id="pwd-bar"></div></div>
         <div class="pwd-label" id="pwd-label">—</div>
@@ -251,8 +251,8 @@ function checkStrength(val) {
   var levels = [
     { w:'20%', color:'var(--error)', text:'Too short' },
     { w:'40%', color:'var(--warn)', text:'Weak' },
-    { w:'60%', color:'#e0c870', text:'Fair' },
-    { w:'80%', color:'#a8d870', text:'Good' },
+    { w:'60%', color:'var(--warn)', text:'Fair' },
+    { w:'80%', color:'var(--up)', text:'Good' },
     { w:'100%', color:'var(--up)', text:'Strong' }
   ];
   var l = levels[Math.min(score, 4)];
@@ -321,23 +321,34 @@ function handleSignup() {
 
   setLoading(true);
 
-  supabaseRequest('/auth/v1/signup', 'POST', {
+  var redirectTo = encodeURIComponent(window.location.origin + '/confirm.html');
+  supabaseRequest('/auth/v1/signup?redirect_to=' + redirectTo, 'POST', {
     email: email,
     password: password,
     data: { full_name: name }
   }).then(function(data) {
     setLoading(false);
-    if (data.error || data.error_description) {
-      showAlert(data.error_description || data.error || 'Something went wrong. Please try again.');
+    if (data.error || data.error_description || data.msg) {
+      showAlert(data.error_description || data.msg || data.error || 'Something went wrong. Please try again.');
     } else if (data.id || (data.user && data.user.id)) {
-      // Success — redirect to confirm page
+      // Supabase returns a fake success with empty identities when the email
+      // already exists (to prevent user enumeration). Detect this and show a
+      // helpful message instead of redirecting to the confirm page.
+      var user = data.user || data;
+      if (user.identities && user.identities.length === 0) {
+        showAlert('An account with this email may already exist. Try signing in instead, or reset your password.');
+        return;
+      }
+      // Real success — redirect to confirm page
       localStorage.setItem('healix_pending_email', email);
       window.location.href = 'confirm.html';
     } else {
+      console.error('[Signup] Unexpected response:', data);
       showAlert('Something went wrong. Please try again.');
     }
-  }).catch(function() {
+  }).catch(function(err) {
     setLoading(false);
+    console.error('[Signup] Network error:', err);
     showAlert('Unable to connect. Please check your connection and try again.');
   });
 }
