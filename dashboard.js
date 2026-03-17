@@ -101,29 +101,13 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
 }
 
 // ── PROFILE DEFAULTS ──
-// profiles table has NOT NULL constraints on many columns (set by HealthBite onboarding).
-// This helper builds a valid row for INSERT so new web signups don't hit constraint errors.
+// Minimal row for web signups — NOT NULL constraints have been relaxed via migration.
 function newProfileRow(userId, email, firstName, lastName) {
   return {
     auth_user_id: userId,
     email: email || '',
     first_name: firstName || '',
-    last_name: lastName || '',
-    birth_date: '1990-01-01',
-    gender: '',
-    height_cm: 170,
-    current_weight_kg: 70,
-    target_weight_kg: 70,
-    body_mass_index: 24.2,
-    primary_goal: 'Feel better overall',
-    fitness_level: 'beginner',
-    activity_level: 'moderately_active',
-    measurement_system: 'imperial',
-    has_apple_watch: false,
-    health_conditions: '',
-    dietary_restrictions: '',
-    profile_completion_stage: 0,
-    profile_image_url: ''
+    last_name: lastName || ''
   };
 }
 
