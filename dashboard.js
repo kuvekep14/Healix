@@ -442,9 +442,14 @@ function scoreWeight(weightKg, heightCm) {
 }
 
 function scoreStrength(strengthData) {
-  // Fitness test percentile average — percentile maps directly to 0-100 score
+  // Fitness test percentile average × diversity multiplier
+  // Diversity multiplier: 0.7 at 1 test type, scales linearly to 1.0 at 7+ types
+  // Incentivizes breadth of fitness testing, not just one lift
   if (!strengthData) return null;
-  return strengthData.avgPercentile || 50;
+  var avg = strengthData.avgPercentile || 50;
+  var types = strengthData.uniqueTestTypes || 1;
+  var diversityMult = Math.min(1.0, 0.7 + (types - 1) * 0.05);
+  return Math.round(avg * diversityMult);
 }
 
 function scoreVO2(vo2, profile) {
@@ -559,37 +564,41 @@ function calcVitalityAge(metrics) {
   var realAge = metrics.realAge || 35;
   var scores = [];
 
-  // Blood work — 40% when available, redistributed when not
+  // Blood work — 35% (longevity-weighted: reduced from 40% to make room for strength/VO2)
   var bwScore = scoreBloodwork(metrics.bloodwork);
   if (bwScore !== null) {
-    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.40 });
+    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.35 });
   }
 
-  // Resting HR — 25% (or 42% without bloodwork)
+  // Resting HR — 20% (reduced from 25%)
   if (metrics.hr !== null) {
-    scores.push({ name: 'hr', label: 'Heart Rate', score: scoreHR(metrics.hr), weight: 0.25 });
+    scores.push({ name: 'hr', label: 'Heart Rate', score: scoreHR(metrics.hr), weight: 0.20 });
   }
 
-  // Weight (BMI) — 20% (or 33% without bloodwork)
+  // Weight (BMI) — 15% (reduced from 20%)
   if (metrics.weightScore !== null) {
-    scores.push({ name: 'weight', label: 'Weight', score: metrics.weightScore, weight: 0.20 });
+    scores.push({ name: 'weight', label: 'Weight', score: metrics.weightScore, weight: 0.15 });
   }
 
-  // Strength — 10% (or 17% without bloodwork)
+  // Strength — 15% (increased from 10%; grip strength + muscle mass are top longevity predictors)
   var strScore = scoreStrength(metrics.strengthData);
   if (strScore !== null) {
-    scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.10 });
+    scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.15 });
   }
 
-  // Sleep — displayed on dashboard but NOT included in vitality age composite.
-  // Sleep is a lifestyle behavior that modulates HR, recovery, bloodwork, and strength
-  // rather than an independent biomarker. Kept as a driver card for visibility.
+  // Sleep — 5% (re-added; sleep quality independently predicts all-cause mortality)
+  if (metrics.sleepData) {
+    var slpScore = scoreSleep(metrics.sleepData);
+    if (slpScore !== null) {
+      scores.push({ name: 'sleep', label: 'Sleep', score: slpScore, weight: 0.05 });
+    }
+  }
 
-  // Aerobic — 5% (VO2 max from fitness test)
+  // Aerobic — 10% (increased from 5%; VO2 max is the single strongest predictor of longevity)
   if (metrics.vo2max !== null) {
     var vo2Score = scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge });
     if (vo2Score !== null) {
-      scores.push({ name: 'aerobic', label: 'Aerobic', score: vo2Score, weight: 0.05 });
+      scores.push({ name: 'aerobic', label: 'Aerobic', score: vo2Score, weight: 0.10 });
     }
   }
 
@@ -1453,16 +1462,26 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('Meal error:', e); }
 
-  // 3. Strength — fitness test percentile average
+  // 3. Strength — fitness test percentile average (all test types, not just big 5)
   try {
     var strengthTests = await supabaseRequest(
-      '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&test_key=in.(bench_1rm,squat_1rm,deadlift_1rm,pushup,pullup)&order=tested_at.desc&limit=20',
+      '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&order=tested_at.desc&limit=200',
       'GET', null, token
     );
     if (strengthTests && !strengthTests.error && strengthTests.length > 0) {
-      var percentiles = strengthTests.filter(function(t) { return t.percentile != null; }).map(function(t) { return parseFloat(t.percentile); });
+      // Deduplicate to latest per test_key, then compute percentiles
+      var latestByKey = {};
+      strengthTests.forEach(function(t) {
+        if (!latestByKey[t.test_key]) latestByKey[t.test_key] = t;
+      });
+      var percentiles = [];
+      Object.keys(latestByKey).forEach(function(k) {
+        var t = latestByKey[k];
+        if (t.percentile != null) percentiles.push(parseFloat(t.percentile));
+      });
       var avgPctl = percentiles.length > 0 ? Math.round(percentiles.reduce(function(s, p) { return s + p; }, 0) / percentiles.length) : 50;
-      metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, tests: strengthTests };
+      var uniqueTestTypes = Object.keys(latestByKey).length;
+      metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, uniqueTestTypes: uniqueTestTypes, tests: strengthTests };
       timestamps.strength = strengthTests[0].tested_at;
     } else {
       metrics.strengthData = null;
@@ -4111,7 +4130,6 @@ var FITNESS_NORMS = {
   pushup: {
     label: 'Push-up Test', unit: 'reps', higherBetter: true,
     hint: 'Max push-ups to failure with good form. No rest at the top.',
-    amrap: false,
     norms: {
       male: {
         '18-29': [[56,99],[47,90],[41,80],[36,70],[32,60],[29,50],[25,40],[21,30],[16,20],[10,10]],
@@ -4132,7 +4150,6 @@ var FITNESS_NORMS = {
   pullup: {
     label: 'Pull-up Test', unit: 'reps', higherBetter: true,
     hint: 'Dead hang, chin over bar. Max reps to failure. Use bodyweight only.',
-    amrap: false,
     norms: {
       male: {
         '18-29': [[22,99],[16,90],[13,80],[11,70],[9,60],[8,50],[6,40],[4,30],[2,20],[1,10]],
@@ -4328,7 +4345,16 @@ function getRecommendedTests(profile, byKey) {
     scored.push({ key: key, score: score });
   });
 
-  return scored.sort(function(a,b){ return b.score - a.score; }).slice(0,4).map(function(x){ return x.key; });
+  return scored.sort(function(a,b){ return b.score - a.score; }).slice(0,4).map(function(x){
+    // Determine primary reason for recommendation
+    var history = byKey[x.key] || [];
+    var latest = history[0];
+    var reason = 'Recommended';
+    if (!latest) reason = 'Not tested yet';
+    else if ((Date.now() - new Date(latest.tested_at)) / 86400000 > 90) reason = 'Last tested 90+ days ago';
+    else if (latest.percentile && latest.percentile < 30) reason = 'Low score — room to improve';
+    return { key: x.key, reason: reason };
+  });
 }
 
 function getUserProfile() {
@@ -4350,6 +4376,9 @@ function getAgeGroup(age) {
   return '60+';
 }
 
+// Raw values are stored and compared in the unit declared in FITNESS_NORMS[key].unit
+// (lbs, reps, min, sec, m, etc.). For relativeToWeight tests, the value is divided by
+// profile.weightLbs before lookup. No unit conversion happens at query time.
 function calcPercentile(testKey, rawValue, profile) {
   var norm = FITNESS_NORMS[testKey];
   if (!norm) return null;
@@ -4379,6 +4408,25 @@ function percentileLabel(p) {
 
 var AMRAP_TESTS = ['bench_1rm','squat_1rm','deadlift_1rm'];
 var REPS_ONLY_TESTS = ['pushup','pullup'];
+
+// Item 6 — evidence-based one-liner training tips per test
+var FITNESS_TIPS = {
+  bench_1rm: 'Progressive overload with 5-rep sets builds pressing strength fastest.',
+  squat_1rm: 'Front squats and pause squats at 70-80% 1RM improve sticking points.',
+  deadlift_1rm: 'Deficit pulls and heavy rack pulls address the most common weak ranges.',
+  pushup: 'Grease-the-groove — spread sub-max sets throughout the day to add reps quickly.',
+  pullup: 'Weighted pull-ups at 3-5 reps translate directly to more bodyweight reps.',
+  mile_time: '80/20 training: 80% easy runs, 20% intervals at threshold pace.',
+  vo2max: 'Norwegian 4×4 intervals (4 min hard / 3 min easy) reliably raise VO2 max.',
+  walk_6min: 'Daily 20-min brisk walks improve aerobic base within 4-6 weeks.',
+  grip_strength: 'Dead hangs and heavy farmers walks build grip faster than grippers.',
+  dead_hang: 'Add 5 sec per week — consistency beats intensity for hang time.',
+  farmers_walk: 'Heavy carries 2×/week with 60-70% BW per hand build full-body resilience.',
+  chair_stand: 'Box squats to a low target train the exact pattern — aim for speed.',
+  balance: 'Single-leg stance with eyes closed for 30 sec daily improves proprioception.',
+  sit_reach: 'Loaded progressive stretching (e.g., Jefferson curls) beats static holds.',
+  shoulder_mobility: 'Wall slides and band pull-aparts daily restore overhead range.'
+};
 
 function epley1RM(weight, reps) {
   // Epley formula: 1RM = weight × (1 + reps/30)
@@ -4693,6 +4741,38 @@ async function renderStrengthPage() {
     var html = '';
 
     var recommended = getRecommendedTests(profile, byKey);
+    // Build lookup for recommended items: key → reason
+    var recMap = {};
+    recommended.forEach(function(r) { recMap[r.key] = r.reason; });
+
+    // ── Item 5: Composite fitness score ──
+    var allPercentiles = [];
+    var testedKeys = Object.keys(byKey);
+    testedKeys.forEach(function(k) {
+      var h = byKey[k];
+      if (h && h.length > 0 && FITNESS_NORMS[k]) {
+        var p = h[0].percentile || calcPercentile(k, parseFloat(h[0].raw_value), profile);
+        if (p != null) allPercentiles.push(p);
+      }
+    });
+    var totalTestTypes = Object.keys(FITNESS_NORMS).length;
+    if (allPercentiles.length > 0) {
+      var avgPctl = Math.round(allPercentiles.reduce(function(s,v){ return s+v; }, 0) / allPercentiles.length);
+      var compLabel = percentileLabel(avgPctl);
+      html += '<div class="card" style="padding:24px;margin-bottom:24px;display:flex;align-items:center;gap:24px">'
+        + '<div style="text-align:center;min-width:80px">'
+        + '<div style="font-family:var(--F);font-size:48px;font-weight:300;line-height:1">' + avgPctl + '</div>'
+        + '<div class="pct-badge ' + compLabel.cls + '" style="margin-top:6px">' + compLabel.text + '</div>'
+        + '</div>'
+        + '<div>'
+        + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Composite Fitness Score</div>'
+        + '<div style="font-size:13px;color:var(--cream-dim);line-height:1.5">'
+        + 'Average percentile across your tested fitness assessments. '
+        + '<span style="color:var(--muted)">' + allPercentiles.length + ' of ' + totalTestTypes + ' tests logged.</span>'
+        + '</div>'
+        + '</div>'
+        + '</div>';
+    }
 
     FITNESS_CATEGORIES.forEach(function(cat) {
       var hasAny = cat.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
@@ -4709,6 +4789,7 @@ async function renderStrengthPage() {
         var percentileDisplay = '';
         var pctClass = '';
         var historyBars = '';
+        var deltaHtml = '';
 
         if (latest) {
           if (key === 'mile_time') {
@@ -4723,6 +4804,28 @@ async function renderStrengthPage() {
           var pl = percentileLabel(p);
           percentileDisplay = p + 'th percentile';
           pctClass = pl.cls;
+
+          // ── Item 4: Delta since previous test ──
+          if (history.length >= 2) {
+            var currVal = parseFloat(latest.raw_value);
+            var prevVal = parseFloat(history[1].raw_value);
+            var diff = currVal - prevVal;
+            if (diff !== 0) {
+              var improved = norm.higherBetter ? diff > 0 : diff < 0;
+              var deltaColor = improved ? 'var(--up)' : 'var(--down)';
+              var deltaText;
+              if (key === 'mile_time') {
+                var absDiff = Math.abs(diff);
+                var dm = Math.floor(absDiff);
+                var ds = Math.round((absDiff - dm) * 60);
+                deltaText = (improved ? '-' : '+') + (dm > 0 ? dm + ':' : '0:') + (ds < 10 ? '0' : '') + ds;
+              } else {
+                var sign = diff > 0 ? '+' : '';
+                deltaText = sign + (diff % 1 === 0 ? diff : diff.toFixed(1)) + ' ' + norm.unit;
+              }
+              deltaHtml = '<span style="font-size:12px;color:' + deltaColor + ';margin-left:8px">' + deltaText + '</span>';
+            }
+          }
 
           // Sparkline from history (last 6)
           var spark = history.slice(0,6).reverse();
@@ -4739,16 +4842,31 @@ async function renderStrengthPage() {
 
         var dateStr = latest ? new Date(latest.tested_at).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
 
-        var isRec = recommended.indexOf(key) !== -1;
+        // ── Item 3: Recommended badge with reason ──
+        var recReason = recMap[key];
+        var isRec = !!recReason;
         var latestId = latest ? latest.id : '';
+
+        // ── Item 6: Tip + Ask Healix CTA ──
+        var tip = FITNESS_TIPS[key] || '';
+        var tipHtml = '';
+        if (tip) {
+          var chatQ = encodeURIComponent('How can I improve my ' + norm.label.toLowerCase() + '?');
+          tipHtml = '<div style="font-size:11px;color:var(--cream-dim);line-height:1.5;border-top:1px solid var(--gold-border);padding-top:8px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:8px">'
+            + '<span>' + tip + '</span>'
+            + '<a href="chat.html?q=' + chatQ + '" style="color:var(--gold);white-space:nowrap;text-decoration:none;font-size:11px" onclick="event.stopPropagation()">Ask Healix →</a>'
+            + '</div>';
+        }
+
         html += '<div class="card fitness-test-card" data-key="' + key + '" data-test-id="' + latestId + '" style="padding:20px;position:relative;cursor:pointer' + (isRec ? ';border-color:rgba(184,151,90,.5)' : '') + '">'
-          + (isRec ? '<div style="position:absolute;top:12px;right:12px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);background:rgba(184,151,90,.12);border:1px solid var(--gold-border);padding:2px 8px">Recommended</div>' : '')
+          + (isRec ? '<div style="position:absolute;top:12px;right:12px;text-align:right"><div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);background:rgba(184,151,90,.12);border:1px solid var(--gold-border);padding:2px 8px;display:inline-block">Recommended</div><div style="font-size:9px;color:var(--muted);margin-top:2px">' + recReason + '</div></div>' : '')
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'
           + '<div>'
           + '<div style="font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">' + norm.label + '</div>'
           + '<div style="display:flex;align-items:baseline;gap:6px">'
           + '<div style="font-family:var(--F);font-size:36px;font-weight:300;line-height:1">' + valueDisplay + '</div>'
           + (latest ? '<div style="font-size:12px;color:var(--muted)">' + norm.unit + '</div>' : '')
+          + deltaHtml
           + '</div>'
           + (percentileDisplay ? '<div class="pct-badge ' + pctClass + '" style="margin-top:6px">' + percentileDisplay + '</div>' : '')
           + (dateStr ? '<div style="font-size:10px;color:var(--muted);margin-top:4px">' + dateStr + '</div>' : '')
@@ -4759,6 +4877,7 @@ async function renderStrengthPage() {
           + '<span>' + norm.hint + '</span>'
           + '<span class="log-test-btn" data-key="' + key + '" style="cursor:pointer;color:var(--gold);white-space:nowrap;margin-left:12px">+ Log</span>'
           + '</div>'
+          + tipHtml
           + '</div>';
       });
 

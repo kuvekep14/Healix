@@ -22,9 +22,9 @@ The Vitality Age is Healix's core feature — a single number representing the u
 - Uses session-based processing (`identifySleepSessions()`) — raw samples alone are incomplete
 
 ### Strength — `scoreStrength(strengthData)`
-- Direct percentile from fitness test results (0–100)
-- Looks up in `FITNESS_NORMS` by test key, age group, sex
-- Multiple test types: bench_1rm, squat_1rm, deadlift_1rm, pushup, pullup
+- Average percentile across all tested fitness assessments × diversity multiplier
+- Diversity multiplier: 0.7 at 1 test type, scales to 1.0 at 7+ types (incentivizes breadth)
+- Uses all 14 test types in `FITNESS_NORMS`, deduplicated to latest per key
 
 ### VO2 Max — `scoreVO2(vo2, profile)`
 - Age/sex-adjusted percentile from `FITNESS_NORMS` lookup table
@@ -45,12 +45,12 @@ Default weights when all metrics are present:
 
 | Metric | Weight |
 |--------|--------|
-| Blood Work | 40% |
-| Heart Rate | 25% |
-| Weight | 20% |
-| Sleep | 15% |
-| Strength | 10% |
-| VO2 Max | 5% |
+| Blood Work | 35% |
+| Heart Rate | 20% |
+| Weight | 15% |
+| Strength | 15% |
+| VO2 Max | 10% |
+| Sleep | 5% |
 
 **Auto-redistribution**: When metrics are missing, their weight is redistributed proportionally among available metrics. Example: if blood work is missing, HR becomes ~42%, weight ~33%, etc.
 
