@@ -177,9 +177,23 @@ async function init() {
             first_name: nameParts[0] || '',
             last_name: nameParts.slice(1).join(' ') || '',
             email: user.email || ''
-          }, session.access_token, { 'Prefer': 'return=representation' });
+          }, session.access_token, { 'Prefer': 'return=representation', 'on-conflict': 'auth_user_id' });
           console.log('[Healix] profile row created for new user');
-          // Re-fetch so userProfileData is populated
+        } catch(e) {
+          console.warn('[Healix] Profile INSERT failed, trying upsert:', e.message);
+          // Fallback: try upsert in case RLS blocks INSERT but allows PATCH
+          try {
+            await supabaseRequest('/rest/v1/profiles?on_conflict=auth_user_id', 'POST', {
+              auth_user_id: user.id,
+              first_name: nameParts[0] || '',
+              last_name: nameParts.slice(1).join(' ') || '',
+              email: user.email || ''
+            }, session.access_token, { 'Prefer': 'resolution=merge-duplicates,return=representation' });
+            console.log('[Healix] profile row upserted for new user');
+          } catch(e2) { console.error('[Healix] Profile upsert also failed:', e2.message); }
+        }
+        // Re-fetch so userProfileData is populated
+        try {
           var newProfile = await supabaseRequest(
             '/rest/v1/profiles?auth_user_id=eq.' + user.id + '&limit=1',
             'GET', null, session.access_token
@@ -188,7 +202,7 @@ async function init() {
             window.userProfileData = newProfile[0];
             populateProfileForm(newProfile[0]);
           }
-        } catch(e) { console.warn('Profile creation error:', e); }
+        } catch(e) { console.warn('[Healix] Profile re-fetch error:', e.message); }
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
@@ -3853,7 +3867,20 @@ async function saveProfile() {
   if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
   try {
+    // PATCH returns null/empty when zero rows matched — verify by re-fetching
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+    // Verify the save actually persisted
+    var verify = await supabaseRequest(
+      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
+      'GET', null, currentSession.access_token
+    );
+    if (!verify || !Array.isArray(verify) || verify.length === 0) {
+      // Row doesn't exist — PATCH silently matched nothing. Insert instead.
+      console.warn('[Healix] PATCH matched no rows — inserting profile');
+      data.auth_user_id = currentUser.id;
+      data.email = currentUser.email || '';
+      await supabaseRequest('/rest/v1/profiles', 'POST', data, currentSession.access_token, { 'Prefer': 'return=representation' });
+    }
     window.userProfileData = Object.assign(window.userProfileData || {}, data);
     if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
     // Update sidebar name
@@ -5683,6 +5710,18 @@ async function saveFirstRunProfile() {
   if (Object.keys(data).length > 0 && currentUser && currentSession) {
     try {
       await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+      // Verify PATCH actually updated a row
+      var verify = await supabaseRequest(
+        '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
+        'GET', null, currentSession.access_token
+      );
+      if (!verify || !Array.isArray(verify) || verify.length === 0) {
+        // No row exists — insert instead
+        console.warn('[Healix] First-run PATCH matched no rows — inserting');
+        data.auth_user_id = currentUser.id;
+        data.email = currentUser.email || '';
+        await supabaseRequest('/rest/v1/profiles', 'POST', data, currentSession.access_token, { 'Prefer': 'return=representation' });
+      }
       window.userProfileData = Object.assign(window.userProfileData || {}, data);
     } catch(e) {
       console.error('[Healix] First-run profile save error:', e);
