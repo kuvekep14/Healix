@@ -117,7 +117,7 @@ function newProfileRow(userId, email, firstName, lastName) {
     body_mass_index: 24.2,
     primary_goal: 'Feel better overall',
     fitness_level: 'beginner',
-    activity_level: 'moderate',
+    activity_level: 'moderately_active',
     measurement_system: 'imperial',
     has_apple_watch: false,
     health_conditions: '',
