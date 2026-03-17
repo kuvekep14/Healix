@@ -3054,43 +3054,76 @@ var bloodworkByDate = {};
 var selectedBloodworkDate = null;
 
 // Optimal ranges for biomarkers — extracted from scoreBloodwork logic + clinical refs
+// Sex-specific markers use { male: {...}, female: {...}, unit, category } format
 var BIOMARKER_RANGES = {
+  // ── Metabolic ──
   'Glucose':           { low: 70, optLow: 70, optHigh: 99,  high: 126, unit: 'mg/dL', category: 'Metabolic' },
   'Hemoglobin A1c':    { low: 4.0, optLow: 4.6, optHigh: 5.6, high: 6.5, unit: '%', category: 'Metabolic' },
   'HbA1c':             { low: 4.0, optLow: 4.6, optHigh: 5.6, high: 6.5, unit: '%', category: 'Metabolic' },
+  'Insulin':           { low: 0, optLow: 2,   optHigh: 19,  high: 25, unit: 'uIU/mL', category: 'Metabolic' },
+  'Uric Acid':         { low: 2.0, optLow: 3.0, optHigh: 7.0, high: 8.0, unit: 'mg/dL', category: 'Metabolic' },
+  'Homocysteine':      { male: { low: 4, optLow: 5, optHigh: 15, high: 20 }, female: { low: 4, optLow: 5, optHigh: 8, high: 15 }, unit: 'umol/L', category: 'Metabolic' },
+  // ── Lipid Panel ──
   'LDL Cholesterol':   { low: 0,  optLow: 0,   optHigh: 99,  high: 160, unit: 'mg/dL', category: 'Lipid Panel' },
   'HDL Cholesterol':   { low: 40, optLow: 60,  optHigh: 90,  high: 100, unit: 'mg/dL', category: 'Lipid Panel' },
   'Triglycerides':     { low: 0,  optLow: 0,   optHigh: 149, high: 200, unit: 'mg/dL', category: 'Lipid Panel' },
   'Total Cholesterol': { low: 0,  optLow: 0,   optHigh: 199, high: 240, unit: 'mg/dL', category: 'Lipid Panel' },
+  // ── Inflammation ──
   'hs-CRP':            { low: 0,  optLow: 0,   optHigh: 1.0, high: 3.0, unit: 'mg/L', category: 'Inflammation' },
   'CRP':               { low: 0,  optLow: 0,   optHigh: 1.0, high: 3.0, unit: 'mg/L', category: 'Inflammation' },
-  'Creatinine':        { low: 0.6, optLow: 0.7, optHigh: 1.2, high: 1.5, unit: 'mg/dL', category: 'Kidney' },
+  // ── Kidney ──
+  'Creatinine':        { male: { low: 0.6, optLow: 0.7, optHigh: 1.3, high: 1.5 }, female: { low: 0.4, optLow: 0.5, optHigh: 1.0, high: 1.3 }, unit: 'mg/dL', category: 'Kidney' },
   'BUN':               { low: 7,  optLow: 7,   optHigh: 20,  high: 25, unit: 'mg/dL', category: 'Kidney' },
   'eGFR':              { low: 60, optLow: 90,  optHigh: 999, high: 999, unit: 'mL/min', category: 'Kidney' },
+  // ── Liver ──
   'AST':               { low: 0,  optLow: 10,  optHigh: 34,  high: 50, unit: 'U/L', category: 'Liver' },
   'ALT':               { low: 0,  optLow: 7,   optHigh: 35,  high: 50, unit: 'U/L', category: 'Liver' },
+  // ── Thyroid ──
   'TSH':               { low: 0.4, optLow: 0.5, optHigh: 4.0, high: 5.0, unit: 'mIU/L', category: 'Thyroid' },
+  'Free T3':           { low: 2.0, optLow: 3.0, optHigh: 4.4, high: 4.8, unit: 'pg/mL', category: 'Thyroid' },
+  'Free T4':           { low: 0.8, optLow: 1.0, optHigh: 1.77, high: 2.0, unit: 'ng/dL', category: 'Thyroid' },
+  'TPO Antibodies':    { low: 0, optLow: 0, optHigh: 34, high: 100, unit: 'IU/mL', category: 'Thyroid' },
+  // ── Vitamins ──
   'Vitamin D':         { low: 20, optLow: 30,  optHigh: 80,  high: 100, unit: 'ng/mL', category: 'Vitamins' },
   'Vitamin B12':       { low: 200, optLow: 300, optHigh: 900, high: 1100, unit: 'pg/mL', category: 'Vitamins' },
-  'Iron':              { low: 40, optLow: 60,  optHigh: 170, high: 200, unit: 'mcg/dL', category: 'Blood' },
-  'Ferritin':          { low: 20, optLow: 30,  optHigh: 300, high: 400, unit: 'ng/mL', category: 'Blood' },
-  'Hemoglobin':        { low: 12, optLow: 13.5, optHigh: 17.5, high: 18.5, unit: 'g/dL', category: 'CBC' },
+  'Folate':            { low: 3, optLow: 10, optHigh: 20, high: 27, unit: 'ng/mL', category: 'Vitamins' },
+  // ── Blood / Iron ──
+  'Iron':              { male: { low: 40, optLow: 60, optHigh: 170, high: 200 }, female: { low: 40, optLow: 50, optHigh: 170, high: 200 }, unit: 'mcg/dL', category: 'Blood' },
+  'Ferritin':          { male: { low: 20, optLow: 30, optHigh: 300, high: 400 }, female: { low: 15, optLow: 50, optHigh: 150, high: 250 }, unit: 'ng/mL', category: 'Blood' },
+  'TIBC':              { low: 250, optLow: 250, optHigh: 370, high: 450, unit: 'mcg/dL', category: 'Blood' },
+  'Transferrin Saturation': { low: 15, optLow: 20, optHigh: 50, high: 60, unit: '%', category: 'Blood' },
+  // ── CBC ──
+  'Hemoglobin':        { male: { low: 12, optLow: 13.5, optHigh: 17.5, high: 18.5 }, female: { low: 10, optLow: 12.0, optHigh: 15.5, high: 17.0 }, unit: 'g/dL', category: 'CBC' },
   'WBC':               { low: 3.5, optLow: 4.5, optHigh: 10.5, high: 12.0, unit: 'K/uL', category: 'CBC' },
-  'RBC':               { low: 3.8, optLow: 4.2, optHigh: 5.8, high: 6.2, unit: 'M/uL', category: 'CBC' },
+  'RBC':               { male: { low: 3.8, optLow: 4.5, optHigh: 5.9, high: 6.2 }, female: { low: 3.5, optLow: 3.9, optHigh: 5.0, high: 5.5 }, unit: 'M/uL', category: 'CBC' },
   'Platelets':         { low: 140, optLow: 150, optHigh: 400, high: 450, unit: 'K/uL', category: 'CBC' },
-  'Testosterone':      { low: 250, optLow: 300, optHigh: 1000, high: 1200, unit: 'ng/dL', category: 'Hormones' },
-  'Insulin':           { low: 0, optLow: 2,   optHigh: 19,  high: 25, unit: 'uIU/mL', category: 'Metabolic' },
-  'Uric Acid':         { low: 2.0, optLow: 3.0, optHigh: 7.0, high: 8.0, unit: 'mg/dL', category: 'Metabolic' }
+  // ── Hormones ──
+  'Testosterone':      { male: { low: 250, optLow: 300, optHigh: 1000, high: 1200 }, female: { low: 10, optLow: 15, optHigh: 70, high: 100 }, unit: 'ng/dL', category: 'Hormones' },
+  'Free Testosterone': { male: { low: 3, optLow: 5, optHigh: 21, high: 30 }, female: { low: 0.2, optLow: 0.5, optHigh: 3.5, high: 6.5 }, unit: 'pg/mL', category: 'Hormones' },
+  'Estradiol':         { male: { low: 5, optLow: 10, optHigh: 40, high: 60 }, female: { low: 15, optLow: 20, optHigh: 350, high: 500 }, unit: 'pg/mL', category: 'Hormones' },
+  'Progesterone':      { male: { low: 0, optLow: 0.1, optHigh: 0.5, high: 1.0 }, female: { low: 0, optLow: 0.1, optHigh: 25, high: 35 }, unit: 'ng/mL', category: 'Hormones' },
+  'FSH':               { male: { low: 1, optLow: 1.5, optHigh: 12, high: 20 }, female: { low: 1, optLow: 1.5, optHigh: 12, high: 25 }, unit: 'mIU/mL', category: 'Hormones' },
+  'LH':                { male: { low: 1, optLow: 1.5, optHigh: 9, high: 15 }, female: { low: 1, optLow: 1, optHigh: 20, high: 40 }, unit: 'mIU/mL', category: 'Hormones' },
+  'DHEA-S':            { male: { low: 50, optLow: 80, optHigh: 560, high: 700 }, female: { low: 25, optLow: 35, optHigh: 430, high: 550 }, unit: 'mcg/dL', category: 'Hormones' },
+  'SHBG':              { male: { low: 8, optLow: 10, optHigh: 57, high: 80 }, female: { low: 15, optLow: 18, optHigh: 144, high: 180 }, unit: 'nmol/L', category: 'Hormones' }
 };
 
-function getRange(name) {
-  if (BIOMARKER_RANGES[name]) return BIOMARKER_RANGES[name];
-  // Case-insensitive exact match only — avoids false positives from substring matching
-  var lower = name.toLowerCase();
-  for (var key in BIOMARKER_RANGES) {
-    if (key.toLowerCase() === lower) return BIOMARKER_RANGES[key];
+function getRange(name, sex) {
+  var r = BIOMARKER_RANGES[name];
+  if (!r) {
+    // Case-insensitive exact match only — avoids false positives from substring matching
+    var lower = name.toLowerCase();
+    for (var key in BIOMARKER_RANGES) {
+      if (key.toLowerCase() === lower) { r = BIOMARKER_RANGES[key]; break; }
+    }
   }
-  return null;
+  if (!r) return null;
+  // Resolve sex-specific ranges
+  if (r.male && r.female) {
+    var resolved = (sex && sex.toLowerCase().indexOf('f') !== -1) ? r.female : r.male;
+    return { low: resolved.low, optLow: resolved.optLow, optHigh: resolved.optHigh, high: resolved.high, unit: r.unit, category: r.category };
+  }
+  return r;
 }
 
 async function loadBloodworkPage() {
@@ -3188,7 +3221,8 @@ function renderBloodworkDate(dateStr) {
       if (Math.abs(diff) < 0.01) return;
       var pctChange = prev.value !== 0 ? Math.round((diff / prev.value) * 100) : 0;
       var name = s.biomarker_name.toLowerCase();
-      var range = getRange(s.biomarker_name);
+      var userSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
+      var range = getRange(s.biomarker_name, userSex);
       var improved = false;
       if (name.indexOf('hdl') !== -1) improved = diff > 0;
       else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
@@ -3226,9 +3260,10 @@ function renderBloodworkDate(dateStr) {
   }
 
   // Group by category
+  var bwSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
   var byCategory = {};
   samples.forEach(function(s) {
-    var range = getRange(s.biomarker_name);
+    var range = getRange(s.biomarker_name, bwSex);
     var cat = (range && range.category) || s.category || 'Other';
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(s);
@@ -3266,7 +3301,8 @@ function renderBloodworkDate(dateStr) {
 }
 
 function renderBiomarkerCard(sample, prevSample) {
-  var range = getRange(sample.biomarker_name);
+  var cardSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
+  var range = getRange(sample.biomarker_name, cardSex);
   var val = sample.value;
   var unit = sample.unit || (range ? range.unit : '');
   var refRange = sample.reference_range || '';
