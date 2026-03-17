@@ -100,6 +100,24 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
   });
 }
 
+// ── PROFILE DEFAULTS ──
+// profiles table has NOT NULL constraints on fitness_level, activity_level, measurement_system, etc.
+// This helper builds a valid row for INSERT so new web signups don't hit constraint errors.
+function newProfileRow(userId, email, firstName, lastName) {
+  return {
+    auth_user_id: userId,
+    email: email || '',
+    first_name: firstName || '',
+    last_name: lastName || '',
+    fitness_level: 'beginner',
+    activity_level: 'moderate',
+    measurement_system: 'imperial',
+    has_apple_watch: false,
+    profile_completion_stage: 0,
+    profile_image_url: ''
+  };
+}
+
 // ── AUTH ──
 var _authRedirecting = false;
 function handleAuthFailure() {
@@ -172,25 +190,11 @@ async function init() {
         var fullName = (user.user_metadata && user.user_metadata.full_name) || '';
         var nameParts = fullName.split(' ');
         try {
-          await supabaseRequest('/rest/v1/profiles', 'POST', {
-            auth_user_id: user.id,
-            first_name: nameParts[0] || '',
-            last_name: nameParts.slice(1).join(' ') || '',
-            email: user.email || ''
-          }, session.access_token, { 'Prefer': 'return=representation', 'on-conflict': 'auth_user_id' });
+          await supabaseRequest('/rest/v1/profiles', 'POST', newProfileRow(user.id, user.email, nameParts[0] || '', nameParts.slice(1).join(' ') || ''),
+            session.access_token, { 'Prefer': 'return=representation' });
           console.log('[Healix] profile row created for new user');
         } catch(e) {
-          console.warn('[Healix] Profile INSERT failed, trying upsert:', e.message);
-          // Fallback: try upsert in case RLS blocks INSERT but allows PATCH
-          try {
-            await supabaseRequest('/rest/v1/profiles?on_conflict=auth_user_id', 'POST', {
-              auth_user_id: user.id,
-              first_name: nameParts[0] || '',
-              last_name: nameParts.slice(1).join(' ') || '',
-              email: user.email || ''
-            }, session.access_token, { 'Prefer': 'resolution=merge-duplicates,return=representation' });
-            console.log('[Healix] profile row upserted for new user');
-          } catch(e2) { console.error('[Healix] Profile upsert also failed:', e2.message); }
+          console.warn('[Healix] Profile INSERT failed:', e.message);
         }
         // Re-fetch so userProfileData is populated
         try {
@@ -3875,11 +3879,11 @@ async function saveProfile() {
       'GET', null, currentSession.access_token
     );
     if (!verify || !Array.isArray(verify) || verify.length === 0) {
-      // Row doesn't exist — PATCH silently matched nothing. Insert instead.
+      // Row doesn't exist — PATCH silently matched nothing. Insert with required defaults.
       console.warn('[Healix] PATCH matched no rows — inserting profile');
-      data.auth_user_id = currentUser.id;
-      data.email = currentUser.email || '';
-      await supabaseRequest('/rest/v1/profiles', 'POST', data, currentSession.access_token, { 'Prefer': 'return=representation' });
+      var insertData = newProfileRow(currentUser.id, currentUser.email, firstName, lastName);
+      Object.keys(data).forEach(function(k) { if (data[k] != null) insertData[k] = data[k]; });
+      await supabaseRequest('/rest/v1/profiles', 'POST', insertData, currentSession.access_token, { 'Prefer': 'return=representation' });
     }
     window.userProfileData = Object.assign(window.userProfileData || {}, data);
     if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
@@ -5716,11 +5720,11 @@ async function saveFirstRunProfile() {
         'GET', null, currentSession.access_token
       );
       if (!verify || !Array.isArray(verify) || verify.length === 0) {
-        // No row exists — insert instead
+        // No row exists — insert with required defaults
         console.warn('[Healix] First-run PATCH matched no rows — inserting');
-        data.auth_user_id = currentUser.id;
-        data.email = currentUser.email || '';
-        await supabaseRequest('/rest/v1/profiles', 'POST', data, currentSession.access_token, { 'Prefer': 'return=representation' });
+        var frInsert = newProfileRow(currentUser.id, currentUser.email, '', '');
+        Object.keys(data).forEach(function(k) { if (data[k] != null) frInsert[k] = data[k]; });
+        await supabaseRequest('/rest/v1/profiles', 'POST', frInsert, currentSession.access_token, { 'Prefer': 'return=representation' });
       }
       window.userProfileData = Object.assign(window.userProfileData || {}, data);
     } catch(e) {
