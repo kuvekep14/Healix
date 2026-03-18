@@ -269,8 +269,9 @@ function showForgot(e) {
     return;
   }
   setLoading(true);
-  var redirectTo = window.location.origin + '/reset-password.html';
-  supabaseRequest('/auth/v1/recover', 'POST', { email: email, redirect_to: redirectTo })
+  var basePath = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
+  var redirectTo = encodeURIComponent(window.location.origin + basePath + 'reset-password.html');
+  supabaseRequest('/auth/v1/recover?redirect_to=' + redirectTo, 'POST', { email: email })
     .then(function() {
       setLoading(false);
       showAlert('Password reset email sent. Check your inbox.', 'success');

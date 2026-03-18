@@ -321,7 +321,8 @@ function handleSignup() {
 
   setLoading(true);
 
-  var redirectTo = encodeURIComponent(window.location.origin + '/confirm.html');
+  var basePath = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
+  var redirectTo = encodeURIComponent(window.location.origin + basePath + 'confirm.html');
   supabaseRequest('/auth/v1/signup?redirect_to=' + redirectTo, 'POST', {
     email: email,
     password: password,
