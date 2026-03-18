@@ -122,9 +122,11 @@
               <div class="vitality-age-context">
                 <div class="vitality-real-age">Chronological age: <span id="va-real-age">—</span></div>
                 <div class="vitality-delta" id="va-delta"></div>
+                <div class="va-celebration-msg" id="va-celebration-msg" style="display:none"></div>
               </div>
             </div>
             <div class="vitality-date" id="va-date"></div>
+            <button class="va-share-btn" id="va-share-btn" onclick="generateShareCard()" title="Share your score" style="display:none"><span class="va-share-icon">&#8599;</span> Share</button>
           </div>
           <div class="vitality-arc-wrap">
             <svg class="vitality-arc" viewBox="0 0 200 110" fill="none">
@@ -168,6 +170,8 @@
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
               <div class="driver-status" id="drv-heart-status"></div>
               <div class="driver-freshness" id="drv-heart-freshness"></div>
+              <div class="driver-pct" id="drv-heart-pct" style="display:none"></div>
+              <a class="chat-ask driver-chat-ask" id="drv-heart-chat" style="display:none"><span class="chat-ask-arrow">→</span> Ask Healix</a>
             </div>
             <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
               <div class="driver-icon">◉</div>
@@ -176,6 +180,8 @@
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-weight-bar"></div></div>
               <div class="driver-status" id="drv-weight-status"></div>
               <div class="driver-freshness" id="drv-weight-freshness"></div>
+              <div class="driver-pct" id="drv-weight-pct" style="display:none"></div>
+              <a class="chat-ask driver-chat-ask" id="drv-weight-chat" style="display:none"><span class="chat-ask-arrow">→</span> Ask Healix</a>
             </div>
             <div class="driver-card" id="drv-strength" onclick="showPage('strength',null)">
               <div class="driver-icon">◈</div>
@@ -184,6 +190,8 @@
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
               <div class="driver-status" id="drv-strength-status"></div>
               <div class="driver-freshness" id="drv-strength-freshness"></div>
+              <div class="driver-pct" id="drv-strength-pct" style="display:none"></div>
+              <a class="chat-ask driver-chat-ask" id="drv-strength-chat" style="display:none"><span class="chat-ask-arrow">→</span> Ask Healix</a>
             </div>
             <div class="driver-card" id="drv-aerobic" onclick="showPage('strength','vo2max')">
               <div class="driver-icon">◎</div>
@@ -192,6 +200,8 @@
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
               <div class="driver-status" id="drv-aerobic-status"></div>
               <div class="driver-freshness" id="drv-aerobic-freshness"></div>
+              <div class="driver-pct" id="drv-aerobic-pct" style="display:none"></div>
+              <a class="chat-ask driver-chat-ask" id="drv-aerobic-chat" style="display:none"><span class="chat-ask-arrow">→</span> Ask Healix</a>
             </div>
             <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)">
               <div class="driver-icon">◐</div>
@@ -200,12 +210,17 @@
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
               <div class="driver-status" id="drv-bloodwork-status"></div>
               <div class="driver-freshness" id="drv-bloodwork-freshness"></div>
+              <div class="driver-pct" id="drv-bloodwork-pct" style="display:none"></div>
+              <a class="chat-ask driver-chat-ask" id="drv-bloodwork-chat" style="display:none"><span class="chat-ask-arrow">→</span> Ask Healix</a>
             </div>
           </div>
         </div>
 
         <!-- Onboarding checklist -->
         <div id="onboarding-checklist" style="display:none"></div>
+
+        <!-- Milestones timeline -->
+        <div id="milestones-section" style="display:none"></div>
 
         <!-- Meal streak -->
         <div id="meal-streak" style="display:none"></div>
@@ -536,6 +551,7 @@
         </div>
       </div>
       <div id="bw-summary" style="margin-bottom:20px"></div>
+      <div id="bw-collection-grid" style="display:none"></div>
       <div id="bw-biomarkers">
         <div class="empty-state" style="padding:60px">
           <div class="empty-state-icon">🧬</div>
