@@ -1751,7 +1751,8 @@ async function loadDashboardData() {
       streakMeals = streakData;
     }
   } catch(e) { console.error('[Healix] Streak query error:', e); }
-  renderMealStreak(streakMeals);
+  var suppConsistency = await fetchSupplementConsistency(currentUser.id, token, 30);
+  renderMealStreak(streakMeals, suppConsistency);
 
   // Load weekly insights and health summary (non-blocking)
   loadWeeklyInsights();
@@ -3226,6 +3227,10 @@ async function loadSupplements() {
     }
     renderSupplements();
 
+    // Render 30-day consistency grid
+    var suppConsistency = await fetchSupplementConsistency(currentUser.id, token, 30);
+    renderSupplementConsistencyDetail(suppConsistency);
+
     // Auto-detect from meal history if no supplements defined
     if (userSupplements.length === 0 && window._healixMeals && window._healixMeals.length > 0) {
       detectSupplementsFromHistory(window._healixMeals);
@@ -3284,6 +3289,9 @@ async function toggleSupplement(suppId) {
     if (window._healixMeals) {
       renderMicronutrientsWithSupplements(window._healixMeals);
     }
+    // Refresh consistency grid
+    var suppConsistency = await fetchSupplementConsistency(currentUser.id, currentSession.access_token, 30);
+    renderSupplementConsistencyDetail(suppConsistency);
   } catch(e) { console.error('[Healix] toggleSupplement error:', e); }
 }
 
@@ -3505,6 +3513,80 @@ function prefillSupplement(el) {
   var desc = el.getAttribute('data-desc');
   document.getElementById('supp-name').value = desc;
   openModal('supplement-modal');
+}
+
+// ── SUPPLEMENT CONSISTENCY ──
+async function fetchSupplementConsistency(userId, token, days) {
+  try {
+    var supps = await supabaseRequest(
+      '/rest/v1/user_supplements?user_id=eq.' + userId + '&is_active=eq.true&select=id',
+      'GET', null, token
+    );
+    if (!Array.isArray(supps) || supps.length === 0) {
+      return { totalSupplements: 0, daysTaken: 0, daysPartial: 0, last30: [], last7: {} };
+    }
+    var total = supps.length;
+    var since = new Date();
+    since.setDate(since.getDate() - days);
+    var logs = await supabaseRequest(
+      '/rest/v1/supplement_logs?user_id=eq.' + userId
+      + '&logged_date=gte.' + localDateStr(since)
+      + '&select=supplement_id,logged_date',
+      'GET', null, token
+    );
+    if (!Array.isArray(logs)) logs = [];
+
+    // Group logs by date
+    var byDate = {};
+    logs.forEach(function(l) {
+      if (!byDate[l.logged_date]) byDate[l.logged_date] = {};
+      byDate[l.logged_date][l.supplement_id] = true;
+    });
+
+    var last30 = [];
+    var last7 = {};
+    var daysTaken = 0;
+    var daysPartial = 0;
+    for (var i = days - 1; i >= 0; i--) {
+      var d = new Date();
+      d.setDate(d.getDate() - i);
+      var ds = localDateStr(d);
+      var count = byDate[ds] ? Object.keys(byDate[ds]).length : 0;
+      var complete = count >= total;
+      var partial = count > 0 && count < total;
+      if (complete) daysTaken++;
+      else if (partial) daysPartial++;
+      last30.push({ date: ds, complete: complete, partial: partial });
+      if (i < 7) last7[ds] = complete;
+    }
+    return { totalSupplements: total, daysTaken: daysTaken, daysPartial: daysPartial, last30: last30, last7: last7 };
+  } catch(e) {
+    console.error('[Healix] fetchSupplementConsistency error:', e);
+    return { totalSupplements: 0, daysTaken: 0, daysPartial: 0, last30: [], last7: {} };
+  }
+}
+
+function renderSupplementConsistencyDetail(suppConsistency) {
+  var el = document.getElementById('supp-consistency-detail');
+  if (!el) return;
+  if (!suppConsistency || suppConsistency.totalSupplements === 0) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = 'block';
+  var html = '<div class="supp-consistency-header">'
+    + '<div class="supp-consistency-label">Consistency</div>'
+    + '<div class="supp-consistency-stat">' + suppConsistency.daysTaken + ' <span style="font-size:11px;color:var(--muted);font-family:var(--B)">of ' + suppConsistency.last30.length + ' days</span></div>'
+    + '</div>';
+  html += '<div class="supp-30-grid">';
+  suppConsistency.last30.forEach(function(day) {
+    var cls = 'supp-30-dot';
+    if (day.complete) cls += ' complete';
+    else if (day.partial) cls += ' partial';
+    html += '<div class="' + cls + '" title="' + day.date + '"></div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
 }
 
 // ── BLOODWORK ──
@@ -6978,7 +7060,7 @@ function computeMealEngagement(meals, localDateStrFn, storedShields, storedBestS
   };
 }
 
-function renderMealStreak(meals) {
+function renderMealStreak(meals, suppConsistency) {
   var container = document.getElementById('meal-streak');
   if (!container) return;
 
@@ -7025,11 +7107,23 @@ function renderMealStreak(meals) {
     var cls = 'meal-streak-dot';
     if (day.shielded) cls += ' shielded';
     else if (day.logged) cls += ' logged';
+    if (day.logged && suppConsistency && suppConsistency.last7 && suppConsistency.last7[day.date]) cls += ' supp-complete';
     dotsHtml += '<div class="' + cls + '" title="' + escapeHtml(day.date) + '">'
       + '<div class="meal-streak-dot-label">' + day.dayLabel + '</div>'
       + '</div>';
   });
   dotsHtml += '</div>';
+
+  // Supplement summary line (only if user has supplements)
+  var suppLineHtml = '';
+  if (suppConsistency && suppConsistency.totalSupplements > 0) {
+    var suppPct = suppConsistency.last30.length > 0 ? Math.round(suppConsistency.daysTaken / suppConsistency.last30.length * 100) : 0;
+    suppLineHtml = '<div class="meal-streak-supp-line">'
+      + '<span>Supplements</span>'
+      + '<span style="color:var(--cream-dim)">' + suppConsistency.daysTaken + ' of ' + suppConsistency.last30.length + ' days</span>'
+      + '<div class="meal-streak-supp-bar"><div class="meal-streak-supp-bar-fill" style="width:' + suppPct + '%"></div></div>'
+      + '</div>';
+  }
 
   // Shield indicator
   var shieldHtml = '';
@@ -7052,6 +7146,7 @@ function renderMealStreak(meals) {
       + '<div class="meal-streak-label">Intake Streak</div>'
       + '<div class="meal-streak-msg">Log your first intake to start building consistency.</div>'
       + dotsHtml
+      + suppLineHtml
       + '</div>'
       + '<div class="meal-streak-action">Log intake →</div>'
       + '</div>';
@@ -7065,6 +7160,7 @@ function renderMealStreak(meals) {
     + '<div class="meal-streak-label">' + result.streak + '-day streak' + shieldHtml + (result.atRisk ? ' <span style="color:var(--warn)">— at risk</span>' : '') + '</div>'
     + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
     + dotsHtml
+    + suppLineHtml
     + '</div>'
     + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log intake →') + '</div>'
     + '</div>';
