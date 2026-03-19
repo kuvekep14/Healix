@@ -417,7 +417,8 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .modal-overlay.open { display: flex; }
 .modal {
   background: var(--dark-2); border: 1px solid var(--gold-border);
-  padding: 40px; width: 480px; max-width: 90vw;
+  padding: 40px; width: 480px; max-width: 90vw; max-height: 90vh;
+  overflow-y: auto; overflow-x: hidden;
   animation: modalIn .2s ease;
 }
 @keyframes modalIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
@@ -1290,6 +1291,147 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .firstrun-wearable-icon { font-size: 36px; flex-shrink: 0; }
 .firstrun-wearable-title { font-size: 14px; color: var(--cream); margin-bottom: 4px; }
 .firstrun-wearable-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+/* ── CONTEXTUAL CHAT LINKS ── */
+.chat-ask {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; color: var(--gold); opacity: 0.6;
+  cursor: pointer; transition: opacity .2s; text-decoration: none;
+  letter-spacing: .04em;
+}
+.chat-ask:hover { opacity: 1; }
+.chat-ask-arrow { font-size: 12px; }
+.driver-chat-ask {
+  margin-top: 4px; display: none;
+}
+.driver-card:hover .driver-chat-ask { display: flex; }
+.bw-card-chat {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--cream-faint);
+}
+.ghost-chat-ask { margin-top: 6px; }
+
+/* ── ENGAGEMENT: Score Celebration ── */
+@keyframes va-shimmer {
+  0% { text-shadow: 0 0 0 transparent; }
+  30% { text-shadow: 0 0 24px rgba(184,151,90,0.6), 0 0 48px rgba(184,151,90,0.3); }
+  100% { text-shadow: 0 0 0 transparent; }
+}
+.va-celebration { animation: va-shimmer 2s cubic-bezier(.4,0,.2,1) forwards; }
+.va-celebration-msg {
+  font-size: 13px; color: var(--gold-light);
+  font-family: var(--F); font-style: italic;
+  margin-top: 8px; animation: fadeUp .6s .3s both;
+}
+
+/* ── ENGAGEMENT: Share Button ── */
+.va-share-btn {
+  position: absolute; top: 20px; right: 20px;
+  background: none; border: 1px solid var(--gold-border);
+  color: var(--gold); font-family: var(--B); font-size: 10px;
+  letter-spacing: .12em; text-transform: uppercase;
+  padding: 7px 14px; cursor: pointer; transition: all .2s;
+  display: flex; align-items: center; gap: 6px; z-index: 2;
+}
+.va-share-btn:hover { background: var(--gold-faint); border-color: var(--gold); }
+
+/* ── ENGAGEMENT: Driver Percentile ── */
+.driver-pct { font-size: 10px; color: var(--cream-dim); opacity: 0.7; margin-top: 2px; }
+
+/* ── ENGAGEMENT: Bloodwork Retest Wins ── */
+.bw-retest-wins {
+  background: var(--dark-2); border: 1px solid rgba(111,207,138,0.25);
+  padding: 20px 24px; margin-bottom: 16px;
+}
+.bw-retest-wins-title {
+  font-size: 9px; letter-spacing: .25em; text-transform: uppercase;
+  color: var(--up); margin-bottom: 12px;
+}
+.bw-retest-win-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--cream-faint);
+}
+.bw-retest-win-item:last-child { border-bottom: none; }
+.bw-win-icon { color: var(--up); font-size: 16px; flex-shrink: 0; }
+.bw-win-name { font-size: 13px; color: var(--cream); flex: 1; }
+.bw-win-values { display: flex; align-items: baseline; gap: 8px; }
+.bw-win-old { font-size: 13px; color: var(--muted); text-decoration: line-through; }
+.bw-win-arrow { color: var(--up); font-size: 14px; }
+.bw-win-new { font-family: var(--F); font-size: 18px; color: var(--up); }
+.bw-win-label {
+  font-size: 10px; letter-spacing: .08em; color: var(--up);
+  background: rgba(111,207,138,0.08); padding: 3px 8px;
+  margin-left: 8px;
+}
+
+/* ── ENGAGEMENT: Biomarker Collection Grid ── */
+.bw-collection {
+  background: var(--dark-2); border: 1px solid var(--gold-border);
+  padding: 20px 24px; margin-bottom: 16px;
+}
+.bw-collection-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.bw-collection-title {
+  font-size: 9px; letter-spacing: .25em; text-transform: uppercase; color: var(--gold);
+}
+.bw-collection-count { font-size: 12px; color: var(--cream-dim); }
+.bw-collection-bar {
+  height: 3px; background: var(--cream-faint);
+  margin-bottom: 16px; overflow: hidden;
+}
+.bw-collection-bar-fill {
+  height: 100%; background: var(--gold);
+  transition: width .8s cubic-bezier(.4,0,.2,1);
+}
+.bw-collection-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.bw-collection-dot {
+  width: 18px; height: 18px; border: 1px solid var(--gold-border);
+  position: relative; transition: all .3s; cursor: default;
+}
+.bw-collection-dot.filled { background: var(--gold); border-color: var(--gold); }
+.bw-collection-dot:hover { transform: scale(1.15); }
+.bw-collection-tooltip {
+  display: none; position: absolute; bottom: calc(100% + 6px); left: 50%;
+  transform: translateX(-50%); white-space: nowrap;
+  font-size: 10px; color: var(--cream); background: var(--dark-3);
+  border: 1px solid var(--gold-border); padding: 4px 8px; z-index: 10;
+  pointer-events: none;
+}
+.bw-collection-dot:hover .bw-collection-tooltip { display: block; }
+.bw-collection-complete {
+  font-size: 11px; color: var(--up); margin-top: 12px;
+  letter-spacing: .08em;
+}
+
+/* ── ENGAGEMENT: Health Milestones Timeline ── */
+.milestones-card {
+  background: var(--dark-2); border: 1px solid var(--gold-border);
+  padding: 20px 24px; margin-top: 10px;
+}
+.milestones-header {
+  font-size: 9px; letter-spacing: .25em; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 16px;
+}
+.milestone-list { display: flex; flex-direction: column; }
+.milestone-item {
+  display: flex; align-items: flex-start; gap: 14px; padding: 10px 0;
+}
+.milestone-dot-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  flex-shrink: 0; width: 20px;
+}
+.milestone-dot {
+  width: 10px; height: 10px; border: 2px solid var(--gold);
+  background: var(--gold); flex-shrink: 0;
+}
+.milestone-dot.pending { background: transparent; border-color: var(--gold-border); }
+.milestone-line { width: 1px; flex: 1; background: var(--gold-border); min-height: 20px; }
+.milestone-content { flex: 1; padding-bottom: 4px; }
+.milestone-label { font-size: 13px; color: var(--cream); }
+.milestone-date { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.milestone-item.pending .milestone-label { color: var(--muted); }
+.milestone-item.pending .milestone-date { color: var(--gold); font-size: 10px; letter-spacing: .08em; }
 
 @media (max-width: 1100px) {
   .vitality-drivers { grid-template-columns: repeat(4, 1fr); }
