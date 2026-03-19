@@ -19,9 +19,8 @@
   z-index: 350;
   display: grid;
   place-items: center;
-  font-family: var(--F);
-  font-size: 22px;
-  font-weight: 400;
+  padding: 0;
+  line-height: 0;
   box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 0 var(--gold-glow);
   transition: transform .2s ease, box-shadow .2s ease;
 }
@@ -132,6 +131,11 @@
 
 .cw-btn:hover {
   color: var(--cream);
+}
+
+.cw-btn-expand {
+  text-decoration: none;
+  font-size: 16px;
 }
 
 
