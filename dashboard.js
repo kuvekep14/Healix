@@ -3256,7 +3256,7 @@ var POPULATION_NORMS = {
 };
 
 function getPopulationPercentile(driverKey, rawValue, profile) {
-  if (rawValue === null || rawValue === undefined) return null;
+  if ((rawValue === null || rawValue === undefined) && driverKey !== 'weight') return null;
   var age = (profile && profile.age) || 35;
   var sex = (profile && profile.sex) || 'male';
   var sexKey = sex.toLowerCase().indexOf('f') !== -1 ? 'female' : 'male';
@@ -5893,11 +5893,11 @@ function generateShareCard() {
 
     // Driver scores
     var drivers = [
-      { label: 'Heart Rate', id: 'drv-heart-val' },
-      { label: 'Weight', id: 'drv-weight-val' },
-      { label: 'Strength', id: 'drv-strength-val' },
-      { label: 'VO2 Max', id: 'drv-aerobic-val' },
-      { label: 'Blood Work', id: 'drv-bloodwork-val' }
+      { label: 'Heart Rate', name: 'hr', id: 'drv-heart-val' },
+      { label: 'Weight', name: 'weight', id: 'drv-weight-val' },
+      { label: 'Strength', name: 'strength', id: 'drv-strength-val' },
+      { label: 'VO2 Max', name: 'aerobic', id: 'drv-aerobic-val' },
+      { label: 'Blood Work', name: 'bloodwork', id: 'drv-bloodwork-val' }
     ];
     var drvY = 340;
     var drvX = 80;
@@ -5906,7 +5906,7 @@ function generateShareCard() {
     drivers.forEach(function(d, i) {
       var el = document.getElementById(d.id);
       var displayVal = el ? el.textContent.trim() : '—';
-      var scoreObj = scores.find(function(s) { return s.label && d.label.toLowerCase().indexOf(s.name) !== -1; });
+      var scoreObj = scores.find(function(s) { return s.name === d.name; });
       var score = scoreObj ? scoreObj.score : 0;
       var barColor = score >= 70 ? '#6fcf8a' : score >= 40 ? '#B8975A' : score > 0 ? '#e07070' : 'rgba(245,240,232,0.1)';
 
