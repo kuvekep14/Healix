@@ -2,6 +2,9 @@
 // SUPABASE_URL and SUPABASE_ANON_KEY are set by config.js (loaded before this file)
 
 var currentUser = null, currentSession = null, currentTimeframe = 7;
+var HEALTHBITE_APP_URL = 'https://apps.apple.com/app/healthbite/id6738970819';
+var _hbConnectPollInterval = null;
+var _hbConnected = false;
 
 function getSession() {
   try { var s = localStorage.getItem('healix_session'); return s ? JSON.parse(s) : null; } catch(e) { return null; }
@@ -897,7 +900,9 @@ function getDataConnectivityState() {
   var profileConnected = profilePct >= 75;
 
   var dashMetrics = window._lastDashboardMetrics || {};
-  var wearableConnected = dashMetrics.hr !== null && dashMetrics.hr !== undefined;
+  var wearableConnected = (dashMetrics.hr !== null && dashMetrics.hr !== undefined)
+    || !!window._healthSyncDetected
+    || !!window._healthSamplesExist;
   var fitnessTested = (dashMetrics.strengthData !== null && dashMetrics.strengthData !== undefined)
     || (dashMetrics.vo2max !== null && dashMetrics.vo2max !== undefined);
   // Check dashboard bloodwork data (always loaded), fall back to bloodwork page data or raw count
@@ -934,7 +939,7 @@ function getDataConnectivityState() {
 }
 
 var GHOST_CTAS = {
-  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Apple Watch →', action: function() { window.open('https://apps.apple.com/app/healthbite/id6738970819', '_blank'); }, chatQ: 'Why is resting heart rate important for longevity?' },
+  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect HealthBite →', action: function() { openConnectHealthBiteModal(); }, chatQ: 'Why is resting heart rate important for longevity?' },
   weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); }, chatQ: 'How does body weight affect my vitality age?' },
   strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); }, chatQ: 'Why does strength matter for healthy aging?' },
   aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); }, chatQ: 'What is VO2 max and why does it predict longevity?' },
@@ -981,17 +986,27 @@ function renderDriverCards(metrics, result) {
     // Ghost card for missing data
     if (val === null && score === 0 && GHOST_CTAS[key]) {
       var ghost = GHOST_CTAS[key];
+      // If HealthBite has synced but this metric is missing, show a "waiting" state
+      var wearableSynced = !!window._healthSyncDetected || !!window._healthSamplesExist;
+      var ghostText = ghost.text;
+      var ghostCta = ghost.cta;
+      var ghostAction = ghost.action;
+      if (key === 'heart' && wearableSynced) {
+        ghostText = 'HealthBite is connected. Heart rate data will appear here once your Apple Watch syncs resting HR.';
+        ghostCta = 'View connection status →';
+        ghostAction = function() { openConnectHealthBiteModal(); };
+      }
       if (card) {
         card.className = 'driver-card driver-card-ghost';
-        card.onclick = ghost.action;
+        card.onclick = ghostAction;
       }
       if (valEl) {
-        valEl.innerHTML = '<span class="ghost-cta-text">' + escapeHtml(ghost.text) + '</span>';
+        valEl.innerHTML = '<span class="ghost-cta-text">' + escapeHtml(ghostText) + '</span>';
         valEl.style.fontSize = '12px'; valEl.style.color = '';
       }
       if (barEl) { barEl.style.width = '0%'; barEl.className = 'driver-bar-fill'; }
       if (stEl) {
-        stEl.innerHTML = '<span class="ghost-cta-link">' + escapeHtml(ghost.cta) + '</span>';
+        stEl.innerHTML = '<span class="ghost-cta-link">' + escapeHtml(ghostCta) + '</span>';
         stEl.className = 'driver-status ghost';
       }
       if (pctEl) pctEl.style.display = 'none';
@@ -1440,6 +1455,7 @@ async function loadDashboardData() {
       'GET', null, token
     );
     console.log('[Healix] healthData rows:', healthData ? (healthData.error ? 'ERROR:'+JSON.stringify(healthData.error) : healthData.length) : 'null');
+    window._healthSamplesExist = healthData && !healthData.error && healthData.length > 0;
     if (healthData && !healthData.error) {
       var byType = {};
       healthData.forEach(function(r) {
@@ -1668,6 +1684,16 @@ async function loadDashboardData() {
       window._bloodworkRawCount = 0;
     }
   } catch(e) { console.error('Bloodwork fetch error:', e); metrics.bloodwork = null; window._bloodworkRawCount = 0; }
+
+  // 7. Check if HealthBite has ever synced (wearable connectivity signal)
+  try {
+    var syncLog = await supabaseRequest(
+      '/rest/v1/health_sync_log?user_id=eq.' + currentUser.id
+      + '&sync_status=eq.completed&order=sync_completed_at.desc&limit=1',
+      'GET', null, token
+    );
+    window._healthSyncDetected = syncLog && !syncLog.error && syncLog.length > 0;
+  } catch(e) { window._healthSyncDetected = false; }
 
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
@@ -4252,8 +4278,121 @@ function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 function closeModalOutside(e, id) { if (e.target === document.getElementById(id)) closeModal(id); }
 document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(function(m) { m.classList.remove('open'); });
+  if (e.key === 'Escape') {
+    stopHealthBitePolling();
+    document.querySelectorAll('.modal-overlay.open').forEach(function(m) { m.classList.remove('open'); });
+  }
 });
+
+// ── HEALTHBITE CONNECT MODAL ──
+function openConnectHealthBiteModal() {
+  _hbConnected = !!window._healthSyncDetected || !!window._healthSamplesExist;
+  renderConnectHealthBiteContent(_hbConnected ? 'connected' : 'not_detected');
+  openModal('healthbite-connect-modal');
+  if (!_hbConnected) startHealthBitePolling();
+}
+
+function closeConnectHealthBiteModal() {
+  stopHealthBitePolling();
+  closeModal('healthbite-connect-modal');
+  if (_hbConnected) {
+    loadDashboardData();
+  }
+}
+
+function renderConnectHealthBiteContent(state) {
+  var el = document.getElementById('hb-connect-content');
+  if (!el) return;
+
+  var step1Done = state === 'waiting' || state === 'connected';
+  var step2Done = state === 'connected';
+  var step3Done = state === 'connected';
+  var step1Active = state === 'not_detected';
+  var step3Active = state === 'waiting';
+
+  var checkmark = '&#10003;';
+
+  var html = '<div class="hb-connect-title">Connect <em>HealthBite</em></div>'
+    + '<div class="hb-connect-sub">HealthBite syncs Apple Health data from your iPhone and Apple Watch to Healix automatically.</div>'
+    + '<div class="hb-steps">';
+
+  // Step 1
+  html += '<div class="hb-step' + (step1Done ? ' done' : '') + (step1Active ? ' active' : '') + '">'
+    + '<div class="hb-step-indicator"><div class="hb-step-num">' + (step1Done ? checkmark : '1') + '</div><div class="hb-step-line"></div></div>'
+    + '<div class="hb-step-content">'
+    + '<div class="hb-step-label">Install HealthBite</div>'
+    + '<div class="hb-step-desc">Search &ldquo;HealthBite&rdquo; in the App Store on your iPhone.</div>';
+  if (step1Active) {
+    html += '<div class="hb-step-actions">'
+      + '<a href="' + HEALTHBITE_APP_URL + '" target="_blank" class="hb-btn-primary">Open App Store</a>'
+      + '<button class="hb-text-link" onclick="renderConnectHealthBiteContent(\'waiting\')">I already have it</button>'
+      + '</div>';
+  }
+  html += '</div></div>';
+
+  // Step 2
+  html += '<div class="hb-step' + (step2Done ? ' done' : '') + (step3Active ? ' active' : '') + '">'
+    + '<div class="hb-step-indicator"><div class="hb-step-num">' + (step2Done ? checkmark : '2') + '</div><div class="hb-step-line"></div></div>'
+    + '<div class="hb-step-content">'
+    + '<div class="hb-step-label">Sign in &amp; allow Apple Health</div>'
+    + '<div class="hb-step-desc">Use the same email and password you use for Healix. When prompted, grant HealthBite access to Apple Health.</div>'
+    + '</div></div>';
+
+  // Step 3
+  html += '<div class="hb-step' + (step3Done ? ' done' : '') + (step3Active ? ' active' : '') + '">'
+    + '<div class="hb-step-indicator"><div class="hb-step-num">' + (step3Done ? checkmark : '3') + '</div></div>'
+    + '<div class="hb-step-content">'
+    + '<div class="hb-step-label">Wait for sync</div>'
+    + '<div class="hb-step-desc">HealthBite syncs your data automatically in the background. This usually takes under a minute.</div>'
+    + '</div></div>';
+
+  html += '</div>';
+
+  // Status bar
+  if (state === 'connected') {
+    html += '<div class="hb-status connected">'
+      + '<div class="hb-status-dot"></div>'
+      + '<div class="hb-status-text">Connected — health data detected</div>'
+      + '</div>'
+      + '<button class="hb-btn-primary hb-done-btn" onclick="closeConnectHealthBiteModal()">DONE</button>';
+  } else {
+    html += '<div class="hb-status">'
+      + '<div class="hb-status-dot"></div>'
+      + '<div class="hb-status-text">Checking for HealthBite&hellip;</div>'
+      + '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function startHealthBitePolling() {
+  stopHealthBitePolling();
+  _hbConnectPollInterval = setInterval(async function() {
+    try {
+      var session = getSession();
+      if (!session || !session.access_token || !currentUser) { stopHealthBitePolling(); return; }
+      var token = session.access_token;
+      var syncLog = await supabaseRequest(
+        '/rest/v1/health_sync_log?user_id=eq.' + currentUser.id
+        + '&sync_status=eq.completed&order=sync_completed_at.desc&limit=1',
+        'GET', null, token
+      );
+      if (syncLog && !syncLog.error && syncLog.length > 0) {
+        _hbConnected = true;
+        window._healthSyncDetected = true;
+        stopHealthBitePolling();
+        renderConnectHealthBiteContent('connected');
+      }
+    } catch(e) { console.error('[HealthBite Connect] poll error:', e); }
+  }, 12000);
+}
+
+function stopHealthBitePolling() {
+  if (_hbConnectPollInterval) {
+    clearInterval(_hbConnectPollInterval);
+    _hbConnectPollInterval = null;
+  }
+}
 
 // ── MEDICAL PROFILE ──
 var medicalProfile = { allergies: [], conditions: [], medications: [] };
@@ -6178,7 +6317,7 @@ function renderOnboardingChecklist() {
 
   var items = [
     { key: 'profile', label: 'Complete profile', time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
-    { key: 'wearable', label: 'Connect wearable', time: '1 min', done: state.wearable.connected, action: 'window.open(\'https://apps.apple.com/app/healthbite/id6738970819\', \'_blank\')' },
+    { key: 'wearable', label: 'Connect wearable', time: '1 min', done: state.wearable.connected, action: 'openConnectHealthBiteModal()' },
     { key: 'fitness', label: 'Log fitness test', time: '3 min', done: state.fitness.tested, action: 'showPage(\'strength\', null)' },
     { key: 'bloodwork', label: 'Upload bloodwork', time: '2 min', done: state.bloodwork.uploaded, action: 'showPage(\'documents\', null)' }
   ];
@@ -6271,7 +6410,7 @@ function renderFirstRunStep(step) {
       + '<div><div class="firstrun-wearable-title">Download HealthBite</div>'
       + '<div class="firstrun-wearable-desc">Our companion app syncs Apple Health data to Healix automatically.</div></div>'
       + '</div>'
-      + '<a href="https://apps.apple.com/app/healthbite/id6738970819" target="_blank" class="firstrun-btn" style="text-decoration:none;text-align:center;display:block">Open App Store</a>'
+      + '<button class="firstrun-btn" onclick="openConnectHealthBiteModal()">Set Up Connection</button>'
       + '<div class="firstrun-skip" onclick="renderFirstRunStep(3)">I\'ll do this later</div>'
       + '</div>';
   } else if (step === 3) {
