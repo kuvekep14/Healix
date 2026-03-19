@@ -591,12 +591,12 @@
         <div class="card">
           <div class="profile-section-title">Personal <em>Info</em></div>
           <div class="modal-field">
-            <label class="modal-label">Full Name</label>
+            <label class="modal-label">Full Name <span class="required-star">*</span></label>
             <input class="modal-input" id="p-name" type="text" placeholder="Your name">
           </div>
           <div class="modal-row">
             <div class="modal-field">
-              <label class="modal-label">Height</label>
+              <label class="modal-label">Height <span class="required-star">*</span></label>
               <div style="display:flex;gap:6px;align-items:center">
                 <input class="modal-input" id="p-height" type="text" placeholder='e.g. 5&apos;11"' style="flex:1">
                 <div class="unit-toggle" id="height-unit-toggle" role="group">
@@ -606,7 +606,7 @@
               </div>
             </div>
             <div class="modal-field">
-              <label class="modal-label">Weight</label>
+              <label class="modal-label">Weight <span class="required-star">*</span></label>
               <div style="display:flex;gap:6px;align-items:center">
                 <input class="modal-input" id="p-weight" type="text" placeholder="lbs" style="flex:1">
                 <div class="unit-toggle" id="weight-unit-toggle" role="group">
@@ -618,16 +618,17 @@
           </div>
           <div class="modal-row">
             <div class="modal-field">
-              <label class="modal-label">Date of Birth</label>
+              <label class="modal-label">Date of Birth <span class="required-star">*</span></label>
               <input class="modal-input" id="p-dob" type="date">
             </div>
             <div class="modal-field">
-              <label class="modal-label">Biological Sex</label>
+              <label class="modal-label">Biological Sex <span class="required-star">*</span></label>
               <select class="modal-input" id="p-sex" style="cursor:pointer">
                 <option value="">Select</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
                 <option value="other">Other</option>
+                <option value="prefer-not-to-say">Prefer not to say</option>
               </select>
             </div>
           </div>
@@ -643,6 +644,7 @@
               <option value="healthier_diet">Healthier diet</option>
             </select>
           </div>
+          <div id="profile-errors" style="display:none;color:var(--down);font-family:var(--B);font-size:13px;padding:10px 14px;border:1px solid var(--error-border);background:var(--error-bg);border-radius:8px;margin-top:8px"></div>
           <button class="save-btn" onclick="saveProfile()">Save Changes</button>
         </div>
 

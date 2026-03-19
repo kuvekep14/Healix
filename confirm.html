@@ -274,7 +274,11 @@ function createProfileIfMissing(token, user) {
           auth_user_id: userData.id,
           first_name: parts[0] || '',
           last_name: parts.slice(1).join(' ') || '',
-          email: userData.email || ''
+          email: userData.email || '',
+          birth_date: '1990-01-01',
+          gender: 'prefer-not-to-say',
+          height_cm: 170,
+          current_weight_kg: 70
         })
       });
     });

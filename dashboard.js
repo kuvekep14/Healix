@@ -205,6 +205,9 @@ async function init() {
 
     loadMedicalProfileUI();
 
+    // Check onboarding before loading dashboard data — wizard blocks until completed
+    checkOnboarding();
+
     // Render from cache instantly, then refresh from server
     try {
       var cached = localStorage.getItem('healix_dashboard_cache');
@@ -3840,6 +3843,26 @@ async function saveProfile() {
   var nameParts = document.getElementById('p-name').value.trim().split(/\s+/);
   var firstName = nameParts[0] || '';
   var lastName = nameParts.slice(1).join(' ') || '';
+  var dob = document.getElementById('p-dob').value;
+  var sex = document.getElementById('p-sex').value;
+
+  // Validate required fields
+  var errors = [];
+  if (!firstName) errors.push('Full Name is required');
+  if (!dob) errors.push('Date of Birth is required');
+  if (!sex) errors.push('Biological Sex is required');
+  if (!heightCm || heightCm <= 0) errors.push('Height is required');
+  if (!weightKg || weightKg <= 0) errors.push('Weight is required');
+
+  var errEl = document.getElementById('profile-errors');
+  if (errors.length > 0) {
+    if (errEl) {
+      errEl.textContent = errors.join('. ') + '.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
 
   // Build data — only include fields that have values to avoid nullifying existing data
   var data = {
@@ -3847,13 +3870,11 @@ async function saveProfile() {
     last_name: lastName
   };
   var goal = document.getElementById('p-goal').value;
-  var dob = document.getElementById('p-dob').value;
-  var sex = document.getElementById('p-sex').value;
   data.primary_goal = goal || null;
-  data.birth_date = dob || null;
-  data.gender = sex || null;
-  data.height_cm = heightCm || null;
-  data.current_weight_kg = weightKg || null;
+  data.birth_date = dob;
+  data.gender = sex;
+  data.height_cm = heightCm;
+  data.current_weight_kg = weightKg;
 
   // Also save medical profile (clearable)
   data.health_conditions = medicalProfile.conditions.length > 0 ? medicalProfile.conditions.join(', ') : null;
@@ -3889,7 +3910,7 @@ async function saveProfile() {
   } catch(e) {
     console.error('[Healix] Profile save error:', e);
     if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
-    alert('Could not save profile: ' + e.message);
+    if (errEl) { errEl.textContent = 'Could not save profile. Please try again.'; errEl.style.display = 'block'; }
   }
 }
 
@@ -5827,6 +5848,433 @@ function renderSmartEmptyStates(vitalityResult) {
       confidence.className = 'vitality-confidence amber';
     }
   }
+}
+
+// ── ONBOARDING WIZARD ──
+var onboardingState = {
+  firstName: '', lastName: '',
+  birthYear: null, gender: 'prefer-not-to-say',
+  measurementSystem: 'imperial', height: '', weight: '',
+  primaryGoal: 'feel_better', targetWeight: '',
+  activityLevel: 'moderately_active', fitnessLevel: 'beginner',
+  healthConditions: [], dietaryRestrictions: [],
+  hasAppleWatch: true
+};
+var onboardingStep = 1;
+var ONBOARDING_TOTAL_STEPS = 7;
+
+function checkOnboarding() {
+  if (localStorage.getItem('healix_onboarding_done')) return;
+  showOnboardingWizard();
+}
+
+function showOnboardingWizard() {
+  // Pre-fill from profile / auth metadata
+  var profile = window.userProfileData || {};
+  var user = currentUser || {};
+  var meta = user.user_metadata || {};
+  var fullName = meta.full_name || '';
+  onboardingState.firstName = profile.first_name || (fullName ? fullName.split(' ')[0] : '');
+  onboardingState.lastName = profile.last_name || (fullName ? fullName.split(' ').slice(1).join(' ') : '');
+  onboardingStep = 1;
+
+  var overlay = document.createElement('div');
+  overlay.className = 'onboarding-overlay';
+  overlay.id = 'onboarding-overlay';
+  overlay.innerHTML = '<div class="onboarding-card" id="ob-card">' + renderOnboardingStep(1) + '</div>';
+  document.body.appendChild(overlay);
+}
+
+function renderOnboardingStep(step) {
+  var dots = '<div class="ob-dots">';
+  for (var i = 1; i <= ONBOARDING_TOTAL_STEPS; i++) {
+    var cls = i === step ? 'active' : (i < step ? 'done' : '');
+    dots += '<div class="ob-dot ' + cls + '"></div>';
+  }
+  dots += '</div>';
+
+  var backBtn = step > 1 ? '<button class="ob-btn ob-btn-back" onclick="onboardingBack()">Back</button>' : '<div class="ob-nav-spacer"></div>';
+
+  if (step === 1) {
+    return '<div class="ob-title">Hey there! I\'m <em>Healix</em></div>'
+      + '<div class="ob-subtitle">Your personal health intelligence dashboard. Let\'s get your profile set up so I can give you the most accurate insights.</div>'
+      + '<div class="ob-subtitle" style="color:var(--muted);font-size:12px;margin-bottom:0">This takes about 2 minutes. You can always update these later in your profile.</div>'
+      + '<div class="ob-nav">' + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Get Started</button></div>';
+  }
+
+  if (step === 2) {
+    return '<div class="ob-step-indicator">Step 1 of 6</div>'
+      + '<div class="ob-title">What\'s your name?</div>'
+      + '<div class="ob-subtitle">We\'ll use this to personalize your experience.</div>'
+      + '<div class="ob-row">'
+      + '<div class="ob-field"><div class="ob-label">First Name</div>'
+      + '<input class="ob-input" id="ob-first-name" type="text" placeholder="First name" value="' + escapeHtml(onboardingState.firstName) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + '<div class="ob-field"><div class="ob-label">Last Name</div>'
+      + '<input class="ob-input" id="ob-last-name" type="text" placeholder="Last name" value="' + escapeHtml(onboardingState.lastName) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + '</div>'
+      + '<div class="ob-error" id="ob-error">Please enter your first and last name.</div>'
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
+  }
+
+  if (step === 3) {
+    var currentYear = new Date().getFullYear();
+    var yearVal = onboardingState.birthYear || '';
+    var genderOptions = [
+      { val: 'male', label: 'Male' },
+      { val: 'female', label: 'Female' },
+      { val: 'non-binary', label: 'Non-Binary' },
+      { val: 'prefer-not-to-say', label: 'Prefer not to say' }
+    ];
+    var genderHtml = '<div class="ob-gender-row">';
+    genderOptions.forEach(function(g) {
+      var sel = onboardingState.gender === g.val ? ' selected' : '';
+      genderHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectGender(\'' + g.val + '\')">'
+        + '<div class="ob-card-label">' + g.label + '</div></div>';
+    });
+    genderHtml += '</div>';
+
+    return '<div class="ob-step-indicator">Step 2 of 6</div>'
+      + '<div class="ob-title">About You</div>'
+      + '<div class="ob-subtitle">This helps us calculate age-adjusted health scores.</div>'
+      + '<div class="ob-field"><div class="ob-label">Birth Year</div>'
+      + '<input class="ob-input" id="ob-birth-year" type="number" min="1920" max="' + currentYear + '" placeholder="e.g. 1990" value="' + yearVal + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + '<div class="ob-error" id="ob-error">Please enter a valid birth year.</div>'
+      + '<div class="ob-field"><div class="ob-label">Biological Sex</div>' + genderHtml + '</div>'
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
+  }
+
+  if (step === 4) {
+    var sys = onboardingState.measurementSystem;
+    var hPlaceholder = sys === 'imperial' ? 'e.g. 5\'10"' : 'e.g. 178';
+    var wPlaceholder = sys === 'imperial' ? 'e.g. 170' : 'e.g. 77';
+    var hLabel = sys === 'imperial' ? 'Height (ft\'in")' : 'Height (cm)';
+    var wLabel = sys === 'imperial' ? 'Weight (lbs)' : 'Weight (kg)';
+
+    return '<div class="ob-step-indicator">Step 3 of 6</div>'
+      + '<div class="ob-title">Body Metrics</div>'
+      + '<div class="ob-subtitle">Used for BMI and vitality age calculations.</div>'
+      + '<div class="ob-unit-toggle">'
+      + '<div class="ob-unit-btn' + (sys === 'imperial' ? ' active' : '') + '" onclick="onboardingToggleUnit(\'imperial\')">Imperial</div>'
+      + '<div class="ob-unit-btn' + (sys === 'metric' ? ' active' : '') + '" onclick="onboardingToggleUnit(\'metric\')">Metric</div>'
+      + '</div>'
+      + '<div class="ob-row">'
+      + '<div class="ob-field"><div class="ob-label">' + hLabel + '</div>'
+      + '<input class="ob-input" id="ob-height" type="text" placeholder="' + hPlaceholder + '" value="' + escapeHtml(onboardingState.height) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + '<div class="ob-field"><div class="ob-label">' + wLabel + '</div>'
+      + '<input class="ob-input" id="ob-weight" type="text" placeholder="' + wPlaceholder + '" value="' + escapeHtml(onboardingState.weight) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + '</div>'
+      + '<div class="ob-error" id="ob-error">Please enter your height and weight.</div>'
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
+  }
+
+  if (step === 5) {
+    var goals = [
+      { val: 'lose_weight', icon: '\u2696\uFE0F', label: 'Lose Weight' },
+      { val: 'gain_strength', icon: '\uD83D\uDCAA', label: 'Build Muscle' },
+      { val: 'improve_endurance', icon: '\uD83C\uDFC3', label: 'Improve Endurance' },
+      { val: 'feel_better', icon: '\u2728', label: 'Feel Better' },
+      { val: 'sleep_better', icon: '\uD83D\uDE34', label: 'Sleep Better' },
+      { val: 'longevity', icon: '\uD83C\uDF31', label: 'Longevity' }
+    ];
+    var goalsHtml = '<div class="ob-cards">';
+    goals.forEach(function(g) {
+      var sel = onboardingState.primaryGoal === g.val ? ' selected' : '';
+      goalsHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectGoal(\'' + g.val + '\')">'
+        + '<div class="ob-card-icon">' + g.icon + '</div>'
+        + '<div class="ob-card-label">' + g.label + '</div></div>';
+    });
+    goalsHtml += '</div>';
+
+    var showTarget = onboardingState.primaryGoal === 'lose_weight' || onboardingState.primaryGoal === 'gain_strength';
+    var twLabel = onboardingState.measurementSystem === 'imperial' ? 'Target Weight (lbs)' : 'Target Weight (kg)';
+
+    return '<div class="ob-step-indicator">Step 4 of 6</div>'
+      + '<div class="ob-title">What\'s your goal?</div>'
+      + '<div class="ob-subtitle">We\'ll tailor your dashboard and insights accordingly.</div>'
+      + goalsHtml
+      + '<div class="ob-target-weight' + (showTarget ? ' visible' : '') + '" id="ob-target-weight-wrap">'
+      + '<div class="ob-field" style="margin-top:12px"><div class="ob-label">' + twLabel + '</div>'
+      + '<input class="ob-input" id="ob-target-weight" type="number" placeholder="Optional" value="' + escapeHtml(onboardingState.targetWeight) + '"></div>'
+      + '</div>'
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
+  }
+
+  if (step === 6) {
+    var activities = [
+      { val: 'sedentary', icon: '\uD83D\uDCBB', label: 'Sedentary', desc: 'Mostly sitting' },
+      { val: 'lightly_active', icon: '\uD83D\uDEB6', label: 'Lightly Active', desc: '1\u20132 days/week' },
+      { val: 'moderately_active', icon: '\uD83C\uDFC3', label: 'Moderately Active', desc: '3\u20135 days/week' },
+      { val: 'very_active', icon: '\uD83D\uDD25', label: 'Very Active', desc: '6\u20137 days/week' }
+    ];
+    var fitnessLevels = [
+      { val: 'beginner', label: 'Beginner', desc: 'New to fitness' },
+      { val: 'intermediate', label: 'Intermediate', desc: 'Regular exerciser' },
+      { val: 'advanced', label: 'Advanced', desc: 'Experienced athlete' }
+    ];
+    var actHtml = '<div class="ob-cards">';
+    activities.forEach(function(a) {
+      var sel = onboardingState.activityLevel === a.val ? ' selected' : '';
+      actHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectActivity(\'' + a.val + '\')">'
+        + '<div class="ob-card-icon">' + a.icon + '</div>'
+        + '<div class="ob-card-label">' + a.label + '</div>'
+        + '<div class="ob-card-desc">' + a.desc + '</div></div>';
+    });
+    actHtml += '</div>';
+
+    var fitHtml = '<div class="ob-cards" style="grid-template-columns:1fr 1fr 1fr">';
+    fitnessLevels.forEach(function(f) {
+      var sel = onboardingState.fitnessLevel === f.val ? ' selected' : '';
+      fitHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectFitness(\'' + f.val + '\')">'
+        + '<div class="ob-card-label">' + f.label + '</div>'
+        + '<div class="ob-card-desc">' + f.desc + '</div></div>';
+    });
+    fitHtml += '</div>';
+
+    return '<div class="ob-step-indicator">Step 5 of 6</div>'
+      + '<div class="ob-title">Activity Level</div>'
+      + '<div class="ob-subtitle">Helps us set realistic baselines for your metrics.</div>'
+      + '<div class="ob-field"><div class="ob-label">How active are you?</div>' + actHtml + '</div>'
+      + '<div class="ob-field"><div class="ob-label">Fitness Level</div>' + fitHtml + '</div>'
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
+  }
+
+  if (step === 7) {
+    var conditions = ['Diabetes', 'Hypertension', 'Heart Disease', 'Asthma', 'Thyroid', 'High Cholesterol', 'Arthritis', 'Anxiety/Depression'];
+    var restrictions = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Keto', 'Paleo', 'Halal', 'Kosher'];
+
+    var condHtml = '<div class="ob-pills">';
+    condHtml += '<div class="ob-pill' + (onboardingState.healthConditions.length === 0 ? ' selected' : '') + '" onclick="onboardingToggleNone(\'conditions\')">None</div>';
+    conditions.forEach(function(c) {
+      var sel = onboardingState.healthConditions.indexOf(c) > -1 ? ' selected' : '';
+      condHtml += '<div class="ob-pill' + sel + '" onclick="onboardingTogglePill(this,\'conditions\',\'' + escapeHtml(c) + '\')">' + escapeHtml(c) + '</div>';
+    });
+    condHtml += '</div>';
+
+    var restHtml = '<div class="ob-pills">';
+    restHtml += '<div class="ob-pill' + (onboardingState.dietaryRestrictions.length === 0 ? ' selected' : '') + '" onclick="onboardingToggleNone(\'restrictions\')">None</div>';
+    restrictions.forEach(function(r) {
+      var sel = onboardingState.dietaryRestrictions.indexOf(r) > -1 ? ' selected' : '';
+      restHtml += '<div class="ob-pill' + sel + '" onclick="onboardingTogglePill(this,\'restrictions\',\'' + escapeHtml(r) + '\')">' + escapeHtml(r) + '</div>';
+    });
+    restHtml += '</div>';
+
+    var watchOn = onboardingState.hasAppleWatch;
+
+    return '<div class="ob-step-indicator">Step 6 of 6</div>'
+      + '<div class="ob-title">Health & Device</div>'
+      + '<div class="ob-subtitle">Optional info to refine your insights.</div>'
+      + '<div class="ob-field"><div class="ob-label">Health Conditions</div>' + condHtml + '</div>'
+      + '<div class="ob-field"><div class="ob-label">Dietary Restrictions</div>' + restHtml + '</div>'
+      + '<div class="ob-toggle-row">'
+      + '<div><div class="ob-toggle-label">Apple Watch</div><div class="ob-toggle-sub">Enables heart rate and activity tracking</div></div>'
+      + '<div class="ob-switch' + (watchOn ? ' on' : '') + '" id="ob-watch-toggle" onclick="onboardingToggleWatch()"></div>'
+      + '</div>'
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="completeOnboarding()">Complete Setup</button></div>';
+  }
+
+  return '';
+}
+
+function onboardingNext() {
+  var valid = validateOnboardingStep(onboardingStep);
+  if (!valid) return;
+  saveOnboardingStepData(onboardingStep);
+  onboardingStep++;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+  var firstInput = document.querySelector('#ob-card .ob-input');
+  if (firstInput) firstInput.focus();
+}
+
+function onboardingBack() {
+  saveOnboardingStepData(onboardingStep);
+  onboardingStep--;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function validateOnboardingStep(step) {
+  if (step === 2) {
+    var fn = (document.getElementById('ob-first-name') || {}).value || '';
+    var ln = (document.getElementById('ob-last-name') || {}).value || '';
+    if (!fn.trim() || !ln.trim()) {
+      var err = document.getElementById('ob-error');
+      if (err) err.classList.add('visible');
+      return false;
+    }
+  }
+  if (step === 3) {
+    var year = parseInt((document.getElementById('ob-birth-year') || {}).value);
+    var now = new Date().getFullYear();
+    if (!year || year < 1920 || year > now) {
+      var err = document.getElementById('ob-error');
+      if (err) err.classList.add('visible');
+      return false;
+    }
+  }
+  if (step === 4) {
+    var h = (document.getElementById('ob-height') || {}).value || '';
+    var w = (document.getElementById('ob-weight') || {}).value || '';
+    var unit = onboardingState.measurementSystem;
+    var hCm = parseHeight(h, unit === 'imperial' ? 'imperial' : 'metric');
+    var wKg = parseWeight(w, unit === 'imperial' ? 'lbs' : 'kg');
+    if (!hCm || !wKg) {
+      var err = document.getElementById('ob-error');
+      if (err) err.classList.add('visible');
+      return false;
+    }
+  }
+  return true;
+}
+
+function saveOnboardingStepData(step) {
+  if (step === 2) {
+    onboardingState.firstName = ((document.getElementById('ob-first-name') || {}).value || '').trim();
+    onboardingState.lastName = ((document.getElementById('ob-last-name') || {}).value || '').trim();
+  }
+  if (step === 3) {
+    onboardingState.birthYear = parseInt((document.getElementById('ob-birth-year') || {}).value) || null;
+  }
+  if (step === 4) {
+    onboardingState.height = ((document.getElementById('ob-height') || {}).value || '').trim();
+    onboardingState.weight = ((document.getElementById('ob-weight') || {}).value || '').trim();
+  }
+  if (step === 5) {
+    onboardingState.targetWeight = ((document.getElementById('ob-target-weight') || {}).value || '').trim();
+  }
+}
+
+function onboardingSelectGender(val) {
+  onboardingState.gender = val;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingSelectGoal(val) {
+  onboardingState.primaryGoal = val;
+  var tw = document.getElementById('ob-target-weight');
+  if (tw) onboardingState.targetWeight = tw.value.trim();
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingSelectActivity(val) {
+  onboardingState.activityLevel = val;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingSelectFitness(val) {
+  onboardingState.fitnessLevel = val;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingToggleUnit(sys) {
+  onboardingState.height = ((document.getElementById('ob-height') || {}).value || '').trim();
+  onboardingState.weight = ((document.getElementById('ob-weight') || {}).value || '').trim();
+  onboardingState.measurementSystem = sys;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingTogglePill(el, listKey, val) {
+  var arr = listKey === 'conditions' ? onboardingState.healthConditions : onboardingState.dietaryRestrictions;
+  var idx = arr.indexOf(val);
+  if (idx > -1) { arr.splice(idx, 1); } else { arr.push(val); }
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingToggleNone(listKey) {
+  if (listKey === 'conditions') { onboardingState.healthConditions = []; }
+  else { onboardingState.dietaryRestrictions = []; }
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingToggleWatch() {
+  onboardingState.hasAppleWatch = !onboardingState.hasAppleWatch;
+  var toggle = document.getElementById('ob-watch-toggle');
+  if (toggle) toggle.classList.toggle('on');
+}
+
+async function completeOnboarding() {
+  var session = getSession();
+  if (!session || !currentUser) return;
+
+  var unit = onboardingState.measurementSystem;
+  var heightCm = parseHeight(onboardingState.height, unit === 'imperial' ? 'imperial' : 'metric');
+  var weightKg = parseWeight(onboardingState.weight, unit === 'imperial' ? 'lbs' : 'kg');
+  var bmi = (heightCm && weightKg) ? weightKg / Math.pow(heightCm / 100, 2) : null;
+  var targetWeightKg = null;
+  if (onboardingState.targetWeight) {
+    targetWeightKg = unit === 'imperial' ? parseFloat(onboardingState.targetWeight) / 2.205 : parseFloat(onboardingState.targetWeight);
+    if (isNaN(targetWeightKg)) targetWeightKg = null;
+  }
+  var birthDate = onboardingState.birthYear ? onboardingState.birthYear + '-01-01' : null;
+
+  var profilePatch = {
+    first_name: onboardingState.firstName,
+    last_name: onboardingState.lastName,
+    gender: onboardingState.gender,
+    height_cm: heightCm ? Math.round(heightCm * 10) / 10 : null,
+    current_weight_kg: weightKg ? Math.round(weightKg * 10) / 10 : null,
+    body_mass_index: bmi ? Math.round(bmi * 10) / 10 : null,
+    primary_goal: onboardingState.primaryGoal,
+    activity_level: onboardingState.activityLevel,
+    fitness_level: onboardingState.fitnessLevel,
+    has_apple_watch: onboardingState.hasAppleWatch,
+    health_conditions: onboardingState.healthConditions.join(', ') || null,
+    dietary_restrictions: onboardingState.dietaryRestrictions.join(', ') || null
+  };
+  if (birthDate) profilePatch.birth_date = birthDate;
+  if (targetWeightKg) profilePatch.target_weight_kg = targetWeightKg;
+
+  var btn = document.querySelector('#ob-card .ob-btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+
+  try {
+    await supabaseRequest(
+      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id,
+      'PATCH', profilePatch, session.access_token
+    );
+
+    var newProfile = await supabaseRequest(
+      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&limit=1',
+      'GET', null, session.access_token
+    );
+    if (newProfile && newProfile.length > 0) {
+      window.userProfileData = newProfile[0];
+      populateProfileForm(newProfile[0]);
+      var name = [onboardingState.firstName, onboardingState.lastName].filter(Boolean).join(' ');
+      if (onboardingState.firstName) {
+        document.getElementById('sb-name').textContent = name;
+        document.getElementById('sb-avatar').textContent = onboardingState.firstName.charAt(0).toUpperCase();
+        document.getElementById('page-title').textContent = greet() + ', ' + onboardingState.firstName;
+      }
+    }
+
+    localStorage.setItem('healix_onboarding_done', '1');
+    var overlay = document.getElementById('onboarding-overlay');
+    if (overlay) overlay.remove();
+
+    // Reload dashboard data with real profile
+    loadDashboardData().then(function() {
+      renderVitalityUnlockState();
+      renderOnboardingChecklist();
+      renderSmartEmptyStates(window._lastVitalityResult);
+    });
+  } catch(e) {
+    console.error('[Healix] Onboarding save error:', e);
+    if (btn) { btn.disabled = false; btn.textContent = 'Complete Setup'; }
+  }
+}
+
+function dismissOnboarding() {
+  localStorage.setItem('healix_onboarding_done', '1');
+  var overlay = document.getElementById('onboarding-overlay');
+  if (overlay) overlay.remove();
 }
 
 // ── MEAL EDIT/DELETE ──
