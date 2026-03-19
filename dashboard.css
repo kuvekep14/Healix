@@ -434,7 +434,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   padding: 12px 16px; outline: none; transition: border-color .2s;
 }
 .modal-input:focus { border-color: var(--gold-focus); }
-.modal-input::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+.modal-input { color-scheme: dark; }
 .modal-row { display: flex; gap: 12px; }
 .modal-row .modal-field { flex: 1; }
 .modal-actions { display: flex; gap: 12px; margin-top: 24px; }
