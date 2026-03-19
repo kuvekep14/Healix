@@ -2738,29 +2738,21 @@ async function saveMeal() {
   type = type.charAt(0).toUpperCase() + type.slice(1);
   var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
 
-  var statusEl = document.getElementById('ml-status');
-  var saveBtn = document.getElementById('ml-save-btn');
   var hasManualMacros = cals || prot || carbs || fat;
 
   var mealData = null;
   var mealDescription = null;
-  var mealAnalysis = null;
-  var devFeedback = null;
-  var aiNutritionBreakdown = null;
 
   if (_intakePhotoMealData) {
-    // Photo-analyzed data — already structured from analyze-meal-from-image
     mealData = _intakePhotoMealData;
     mealDescription = mealData.meal_description || name || 'Photo intake';
   } else if (hasManualMacros) {
-    // Manual nutrition entry — build data in HealthBite-compatible NutrientResponse shape
     var manualMacros = [
       { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
       { name: 'Protein', value: parseFloat(prot) || 0, unit: 'g' },
       { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
       { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
     ];
-    // Merge manual micronutrients if any
     var manualMicros = collectManualMicros();
     var totalNutrition = { Macronutrients: manualMacros };
     if (manualMicros.Vitamins.length > 0) totalNutrition.Vitamins = manualMicros.Vitamins;
@@ -2776,9 +2768,9 @@ async function saveMeal() {
     mealDescription = name;
   }
 
-  try {
-    if (editingMealId) {
-      // Update existing meal — direct PATCH, no AI re-analysis
+  if (editingMealId) {
+    // Update existing meal — direct PATCH, no AI re-analysis
+    try {
       var patchPayload = {
         meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime
       };
@@ -2786,134 +2778,202 @@ async function saveMeal() {
       await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH',
         patchPayload, currentSession.access_token);
       editingMealId = null;
-    } else {
-      // New meal — call AI analysis if no manual macros and no photo data
-      if (!hasManualMacros && !_intakePhotoMealData) {
-        statusEl.style.display = 'block';
-        statusEl.style.color = 'var(--muted)';
-        statusEl.textContent = 'Analyzing...';
-        saveBtn.disabled = true;
-        try {
-          var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
-            body: JSON.stringify({ mealLog: name, meal_type: 'Cooked' })
-          });
-          if (aiRes.ok) {
-            var aiData = await aiRes.json();
-            if (aiData) {
-              mealData = aiData;
-              mealDescription = aiData.meal_description || null;
-              mealAnalysis = aiData.meal_analysis || null;
-              devFeedback = aiData.dev_feedback || null;
-              aiNutritionBreakdown = aiData.nutrition_breakdown || null;
-            }
-          } else {
-            console.warn('[Healix] analyze-meal-ai returned ' + aiRes.status);
+      resetMealModal();
+      loadMealsPage();
+      loadDashboardData();
+    } catch(e) {
+      var statusEl = document.getElementById('ml-status');
+      statusEl.style.display = 'block';
+      statusEl.style.color = 'var(--down)';
+      statusEl.textContent = 'Error: ' + e.message;
+    }
+    return;
+  }
+
+  // New meal — close modal immediately, process in background
+  var needsAI = !hasManualMacros && !_intakePhotoMealData;
+  resetMealModal();
+
+  // Show processing card in meals list
+  var processingId = 'intake-processing-' + Date.now();
+  showIntakeProcessing(processingId, name, type, needsAI);
+
+  // Run analysis + save in background
+  saveMealBackground(processingId, name, type, mealTime, mealData, mealDescription, needsAI);
+}
+
+function showIntakeProcessing(id, name, type, needsAI) {
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', beverage:'🥤', supplement:'💊', medication:'💊', other:'📦' };
+  var emoji = emojis[type.toLowerCase()] || '🥘';
+  var card = document.createElement('div');
+  card.id = id;
+  card.className = 'meal-card intake-processing';
+  card.innerHTML = '<div class="meal-card-emoji">' + emoji + '</div>'
+    + '<div class="meal-card-info">'
+    + '<div class="meal-card-name">' + escapeHtml(name) + '</div>'
+    + '<div class="meal-card-time" style="color:var(--gold)">'
+    + (needsAI ? 'Analyzing with AI...' : 'Saving...') + '</div>'
+    + '<div class="intake-progress-bar"><div class="intake-progress-fill"></div></div>'
+    + '</div>';
+  var list = document.getElementById('meals-list');
+  if (list) {
+    // Remove empty state if present
+    var empty = list.querySelector('.empty-state');
+    if (empty) empty.remove();
+    list.insertBefore(card, list.firstChild);
+  }
+}
+
+function updateIntakeProcessing(id, status, isError) {
+  var card = document.getElementById(id);
+  if (!card) return;
+  var timeEl = card.querySelector('.meal-card-time');
+  if (timeEl) {
+    timeEl.textContent = status;
+    timeEl.style.color = isError ? 'var(--down)' : 'var(--gold)';
+  }
+  if (isError) {
+    var bar = card.querySelector('.intake-progress-bar');
+    if (bar) bar.style.display = 'none';
+  }
+}
+
+function removeIntakeProcessing(id) {
+  var card = document.getElementById(id);
+  if (card) card.remove();
+}
+
+async function saveMealBackground(processingId, name, type, mealTime, mealData, mealDescription, needsAI) {
+  var mealAnalysis = null;
+  var devFeedback = null;
+  var aiNutritionBreakdown = null;
+
+  try {
+    // AI analysis if needed
+    if (needsAI) {
+      try {
+        var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+          body: JSON.stringify({ mealLog: name, meal_type: 'Cooked' })
+        });
+        if (aiRes.ok) {
+          var aiData = await aiRes.json();
+          if (aiData) {
+            mealData = aiData;
+            mealDescription = aiData.meal_description || null;
+            mealAnalysis = aiData.meal_analysis || null;
+            devFeedback = aiData.dev_feedback || null;
+            aiNutritionBreakdown = aiData.nutrition_breakdown || null;
           }
-        } catch(e) {
-          console.warn('[Healix] analyze-meal-ai failed:', e);
+        } else {
+          console.warn('[Healix] analyze-meal-ai returned ' + aiRes.status);
         }
-        statusEl.textContent = 'Saving...';
+      } catch(e) {
+        console.warn('[Healix] analyze-meal-ai failed:', e);
       }
+      updateIntakeProcessing(processingId, 'Saving...', false);
+    }
 
-      // Ensure mealData is always HealthBite-compatible NutrientResponse shape
-      if (!mealData || !mealData.total_nutrition) {
-        mealData = {
-          total_nutrition: { Macronutrients: [] },
-          nutrition_breakdown: { mealName: name, components: [] },
-          meal_description: name,
-          meal_analysis: '',
-          dev_feedback: '',
-          data_source: { source: 'manual', confidence: 'low' }
-        };
-        mealDescription = name;
-      }
-
-      // Insert meal_log with Prefer: return=representation to get the id back
-      var insertPayload = {
-        user_id: currentUser.id, meal_type: type,
-        raw_input: name, meal_time: mealTime,
-        data: mealData
+    // Ensure mealData is always HealthBite-compatible NutrientResponse shape
+    if (!mealData || !mealData.total_nutrition) {
+      mealData = {
+        total_nutrition: { Macronutrients: [] },
+        nutrition_breakdown: { mealName: name, components: [] },
+        meal_description: name,
+        meal_analysis: '',
+        dev_feedback: '',
+        data_source: { source: 'manual', confidence: 'low' }
       };
-      insertPayload.meal_description = mealDescription || name;
-      if (mealAnalysis) insertPayload.meal_analysis = mealAnalysis;
-      if (devFeedback) insertPayload.dev_feedback = devFeedback;
+      mealDescription = name;
+    }
 
-      var inserted = await supabaseRequest('/rest/v1/meal_log', 'POST', insertPayload,
-        currentSession.access_token, { 'Prefer': 'return=representation' });
+    // Insert meal_log
+    var insertPayload = {
+      user_id: currentUser.id, meal_type: type,
+      raw_input: name, meal_time: mealTime,
+      data: mealData
+    };
+    insertPayload.meal_description = mealDescription || name;
+    if (mealAnalysis) insertPayload.meal_analysis = mealAnalysis;
+    if (devFeedback) insertPayload.dev_feedback = devFeedback;
 
-      // Insert meal_nutrient rows if AI returned nutrition data
-      var mealLogId = inserted && inserted[0] && inserted[0].id;
-      if (mealLogId && mealData && mealData.total_nutrition) {
-        var nutrientRows = [];
-        // Total nutrition rows (component_name = null)
-        var totalCats = mealData.total_nutrition;
-        Object.keys(totalCats).forEach(function(category) {
-          var items = totalCats[category];
-          if (!Array.isArray(items)) return;
-          items.forEach(function(item) {
-            nutrientRows.push({
-              meal_log_id: mealLogId,
-              category: category,
-              component_name: null,
-              name: item.name,
-              unit: item.unit || null,
-              value: parseFloat(item.value) || 0
-            });
+    var inserted = await supabaseRequest('/rest/v1/meal_log', 'POST', insertPayload,
+      currentSession.access_token, { 'Prefer': 'return=representation' });
+
+    // Insert meal_nutrient rows
+    var mealLogId = inserted && inserted[0] && inserted[0].id;
+    if (mealLogId && mealData && mealData.total_nutrition) {
+      var nutrientRows = [];
+      var totalCats = mealData.total_nutrition;
+      Object.keys(totalCats).forEach(function(category) {
+        var items = totalCats[category];
+        if (!Array.isArray(items)) return;
+        items.forEach(function(item) {
+          nutrientRows.push({
+            meal_log_id: mealLogId, category: category, component_name: null,
+            name: item.name, unit: item.unit || null, value: parseFloat(item.value) || 0
           });
         });
-        // Per-component nutrition rows from nutrition_breakdown
-        if (aiNutritionBreakdown && Array.isArray(aiNutritionBreakdown.components)) {
-          aiNutritionBreakdown.components.forEach(function(comp) {
-            if (!comp.nutrition) return;
-            Object.keys(comp.nutrition).forEach(function(category) {
-              var items = comp.nutrition[category];
-              if (!Array.isArray(items)) return;
-              items.forEach(function(item) {
-                nutrientRows.push({
-                  meal_log_id: mealLogId,
-                  category: category,
-                  component_name: comp.name || null,
-                  name: item.name,
-                  unit: item.unit || null,
-                  value: parseFloat(item.value) || 0
-                });
+      });
+      if (aiNutritionBreakdown && Array.isArray(aiNutritionBreakdown.components)) {
+        aiNutritionBreakdown.components.forEach(function(comp) {
+          if (!comp.nutrition) return;
+          Object.keys(comp.nutrition).forEach(function(category) {
+            var items = comp.nutrition[category];
+            if (!Array.isArray(items)) return;
+            items.forEach(function(item) {
+              nutrientRows.push({
+                meal_log_id: mealLogId, category: category, component_name: comp.name || null,
+                name: item.name, unit: item.unit || null, value: parseFloat(item.value) || 0
               });
             });
           });
-        }
-        if (nutrientRows.length > 0) {
-          try {
-            await supabaseRequest('/rest/v1/meal_nutrient', 'POST', nutrientRows, currentSession.access_token);
-          } catch(e) {
-            console.warn('[Healix] Failed to insert meal_nutrient rows:', e);
-          }
+        });
+      }
+      if (nutrientRows.length > 0) {
+        try {
+          await supabaseRequest('/rest/v1/meal_nutrient', 'POST', nutrientRows, currentSession.access_token);
+        } catch(e) {
+          console.warn('[Healix] Failed to insert meal_nutrient rows:', e);
         }
       }
     }
 
-    // Reset and close
-    closeModal('meal-modal');
-    document.querySelector('#meal-modal .modal-title').innerHTML = 'Log an <em>Intake</em>';
-    document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Log Intake';
-    ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
-    var nf = document.getElementById('ml-nutrition-fields');
-    var na = document.getElementById('ml-nutrition-arrow');
-    if (nf) nf.style.display = 'none';
-    if (na) na.style.transform = '';
-    clearIntakePhoto();
-    clearIntakeMicros();
-    statusEl.style.display = 'none';
-    saveBtn.disabled = false;
+    // Success — refresh the list (replaces processing card with real data)
+    removeIntakeProcessing(processingId);
     loadMealsPage();
     loadDashboardData();
   } catch(e) {
-    statusEl.style.display = 'block';
-    statusEl.style.color = 'var(--down)';
-    statusEl.textContent = 'Error: ' + e.message;
-    saveBtn.disabled = false;
+    console.error('[Healix] Background meal save error:', e);
+    updateIntakeProcessing(processingId, 'Failed to save — tap to retry', true);
+    var card = document.getElementById(processingId);
+    if (card) {
+      card.style.cursor = 'pointer';
+      card.onclick = function() {
+        removeIntakeProcessing(processingId);
+        showIntakeProcessing(processingId, name, type, needsAI);
+        saveMealBackground(processingId, name, type, mealTime, mealData, mealDescription, needsAI);
+      };
+    }
   }
+}
+
+function resetMealModal() {
+  closeModal('meal-modal');
+  document.querySelector('#meal-modal .modal-title').innerHTML = 'Log an <em>Intake</em>';
+  document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Log Intake';
+  document.getElementById('ml-save-btn').disabled = false;
+  ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
+  var nf = document.getElementById('ml-nutrition-fields');
+  var na = document.getElementById('ml-nutrition-arrow');
+  if (nf) nf.style.display = 'none';
+  if (na) na.style.transform = '';
+  var statusEl = document.getElementById('ml-status');
+  if (statusEl) statusEl.style.display = 'none';
+  clearIntakePhoto();
+  clearIntakeMicros();
+  editingMealId = null;
 }
 
 // ── INTAKE PHOTO & MICRONUTRIENTS ──

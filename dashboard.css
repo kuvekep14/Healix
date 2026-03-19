@@ -1680,6 +1680,28 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 }
 .intake-micro-grid .modal-field { margin-bottom: 0; }
 
+/* ── INTAKE PROCESSING ── */
+.intake-processing {
+  opacity: 0.7;
+  animation: intake-pulse 2s ease-in-out infinite;
+}
+@keyframes intake-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+.intake-progress-bar {
+  margin-top: 6px; height: 3px; width: 100%;
+  background: var(--gold-faint); overflow: hidden;
+}
+.intake-progress-fill {
+  height: 100%; width: 30%; background: var(--gold);
+  animation: intake-progress 1.5s ease-in-out infinite;
+}
+@keyframes intake-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
 @media (max-width: 500px) {
   .vitality-drivers { grid-template-columns: 1fr; }
 }
