@@ -3750,7 +3750,7 @@ function renderBloodworkDate(dateStr) {
   });
 
   // Retest wins
-  var wins = detectRetestWins(samples, prevByName, bwSex);
+  var wins = detectRetestWins(samples, prevByName, getUserSex());
   var winsHtml = renderRetestWinsCard(wins);
 
   // Render biomarker cards
