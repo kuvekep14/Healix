@@ -238,6 +238,7 @@ async function init() {
       } else {
         renderOnboardingChecklist();
       }
+      renderMilestones();
       renderSmartEmptyStates(window._lastVitalityResult);
     });
     loadFamilyHistoryForm();
@@ -432,6 +433,7 @@ function renderVitalityConfidence(timestamps) {
 function scoreHR(hr) {
   // Mortality-calibrated Gaussian curve (Copenhagen Heart Study, UK Biobank, HUNT)
   // Optimal zone 50-62 bpm; σ ≈ 15 bpm outside optimal band
+  if (hr === null || hr === undefined || isNaN(hr)) return null;
   if (hr < 40) return 65; // extreme bradycardia — uncertainty flag
   if (hr >= 50 && hr <= 62) return 100; // optimal zone
   var center = hr < 50 ? 50 : 62;
@@ -573,15 +575,18 @@ function calcVitalityAge(metrics) {
   var realAge = metrics.realAge || 35;
   var scores = [];
 
-  // Blood work — 40% when available, redistributed when not
+  // Blood work — 35% when available, redistributed when not
   var bwScore = scoreBloodwork(metrics.bloodwork);
   if (bwScore !== null) {
-    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.40 });
+    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.35 });
   }
 
-  // Resting HR — 25% (or 42% without bloodwork)
-  if (metrics.hr !== null) {
-    scores.push({ name: 'hr', label: 'Heart Rate', score: scoreHR(metrics.hr), weight: 0.25 });
+  // Resting HR — 30% (or ~43% without bloodwork)
+  if (metrics.hr != null) {
+    var hrScore = scoreHR(metrics.hr);
+    if (hrScore !== null) {
+      scores.push({ name: 'hr', label: 'Heart Rate', score: hrScore, weight: 0.30 });
+    }
   }
 
   // Weight (BMI) — 20% (or 33% without bloodwork)
@@ -737,6 +742,37 @@ function renderVitalityAge(result, realAge) {
   }
 }
 
+// ── VITALITY CELEBRATION ──
+function checkVitalityCelebration(result) {
+  if (!result || !result.vAge || !currentUser) return;
+  var key = 'healix_va_prev_' + currentUser.id;
+  var prev = null;
+  try { prev = JSON.parse(localStorage.getItem(key)); } catch(e) {}
+
+  var ageEl = document.getElementById('va-age');
+  var msgEl = document.getElementById('va-celebration-msg');
+
+  if (prev && prev.vAge && prev.vAge - result.vAge >= 1) {
+    var improvement = Math.round(prev.vAge - result.vAge);
+    if (!prev.celebratedVAge || prev.celebratedVAge !== result.vAge) {
+      // Trigger celebration
+      if (ageEl) ageEl.classList.add('va-celebration');
+      if (msgEl) {
+        msgEl.textContent = 'Your Vitality Age improved ' + improvement + (improvement === 1 ? ' year' : ' years') + '!';
+        msgEl.style.display = '';
+      }
+      try { localStorage.setItem(key, JSON.stringify({ vAge: result.vAge, celebratedVAge: result.vAge })); } catch(e) {}
+      return;
+    }
+  }
+
+  // No celebration — just update cached vAge
+  var obj = prev ? { vAge: result.vAge, celebratedVAge: prev.celebratedVAge || null } : { vAge: result.vAge, celebratedVAge: null };
+  try { localStorage.setItem(key, JSON.stringify(obj)); } catch(e) {}
+  if (msgEl) msgEl.style.display = 'none';
+  if (ageEl) ageEl.classList.remove('va-celebration');
+}
+
 // ── VITALITY AGE TIMELINE ──
 function saveVitalityHistory(result, realAge) {
   if (!result || !result.vAge) return;
@@ -786,7 +822,7 @@ function renderVitalityTimeline() {
 
   // Build points
   var points = pts.map(function(p, i) {
-    var x = padX + (i / (pts.length - 1)) * (W - 2 * padX);
+    var x = pts.length === 1 ? W / 2 : padX + (i / (pts.length - 1)) * (W - 2 * padX);
     var y = padY + (1 - (p.vAge - minAge) / rangeAge) * (H - 2 * padY);
     return { x: x, y: y, vAge: p.vAge, date: p.date };
   });
@@ -864,9 +900,10 @@ function getDataConnectivityState() {
   var wearableConnected = dashMetrics.hr !== null && dashMetrics.hr !== undefined;
   var fitnessTested = (dashMetrics.strengthData !== null && dashMetrics.strengthData !== undefined)
     || (dashMetrics.vo2max !== null && dashMetrics.vo2max !== undefined);
-  // Check dashboard bloodwork data (always loaded), fall back to bloodwork page data
+  // Check dashboard bloodwork data (always loaded), fall back to bloodwork page data or raw count
   var bloodworkUploaded = (dashMetrics.bloodwork !== null && dashMetrics.bloodwork !== undefined)
-    || (allBloodworkSamples && allBloodworkSamples.length > 0);
+    || (allBloodworkSamples && allBloodworkSamples.length > 0)
+    || (window._bloodworkRawCount && window._bloodworkRawCount > 0);
 
   var totalConnected = 0;
   if (profileConnected) totalConnected++;
@@ -897,16 +934,25 @@ function getDataConnectivityState() {
 }
 
 var GHOST_CTAS = {
-  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Apple Watch →', action: function() { window.open('https://apps.apple.com/app/healthbite/id6738970819', '_blank'); } },
-  weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); } },
-  strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); } },
-  aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); } },
-  bloodwork: { text: 'Blood biomarkers are worth 35% of your score — the most impactful data you can add.', cta: 'Upload labs →', action: function() { showPage('documents', null); } }
+  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Apple Watch →', action: function() { window.open('https://apps.apple.com/app/healthbite/id6738970819', '_blank'); }, chatQ: 'Why is resting heart rate important for longevity?' },
+  weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); }, chatQ: 'How does body weight affect my vitality age?' },
+  strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); }, chatQ: 'Why does strength matter for healthy aging?' },
+  aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); }, chatQ: 'What is VO2 max and why does it predict longevity?' },
+  bloodwork: { text: 'Blood biomarkers are worth 35% of your score — the most impactful data you can add.', cta: 'Upload labs →', action: function() { showPage('documents', null); }, chatQ: 'What bloodwork should I get to track my health?' }
+};
+
+// Contextual chat prompts for driver cards with data
+var DRIVER_CHAT_PROMPTS = {
+  heart:     { low: 'How can I lower my resting heart rate?', fair: 'What can I do to improve my heart rate score?', good: 'How do I maintain a healthy resting heart rate?' },
+  weight:    { low: 'What\'s the best approach to reach a healthier weight?', fair: 'How can I improve my weight score?', good: 'How do I maintain a healthy body composition?' },
+  strength:  { low: 'What strength exercises should I start with?', fair: 'How can I improve my strength percentile?', good: 'How do I keep building strength as I age?' },
+  aerobic:   { low: 'How can I improve my VO2 max?', fair: 'What exercises will boost my VO2 max the most?', good: 'How do I maintain a high VO2 max?' },
+  bloodwork: { low: 'Which of my blood biomarkers should I focus on improving?', fair: 'How can I improve my bloodwork results?', good: 'What do my blood results say about my overall health?' }
 };
 
 function renderDriverCards(metrics, result) {
   // Compute actual weights (accounting for redistribution)
-  var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
+  var rawWeights = { bloodwork: 0.35, heart: 0.30, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
   var bwPresent = scoreBloodwork(metrics.bloodwork) !== null;
   var hrPresent = metrics.hr !== null;
   var wtPresent = metrics.weightScore !== null && metrics.weightScore > 0;
@@ -921,13 +967,16 @@ function renderDriverCards(metrics, result) {
     return present ? Math.round((rawWeights[key] / totalAvail) * 100) + '%' : Math.round(rawWeights[key] * 100) + '%';
   }
 
-  function setDriver(key, val, score, unit) {
+  function setDriver(key, val, score, unit, percentile) {
     var cls = score >= 70 ? 'good' : score >= 40 ? 'fair' : score > 0 ? 'low' : 'none';
     var label = score >= 70 ? 'Good' : score >= 40 ? 'Fair' : score > 0 ? 'Needs work' : 'No data';
     var card = document.getElementById('drv-' + key);
     var valEl = document.getElementById('drv-' + key + '-val');
     var barEl = document.getElementById('drv-' + key + '-bar');
     var stEl = document.getElementById('drv-' + key + '-status');
+    var pctEl = document.getElementById('drv-' + key + '-pct');
+
+    var chatEl = document.getElementById('drv-' + key + '-chat');
 
     // Ghost card for missing data
     if (val === null && score === 0 && GHOST_CTAS[key]) {
@@ -944,6 +993,16 @@ function renderDriverCards(metrics, result) {
       if (stEl) {
         stEl.innerHTML = '<span class="ghost-cta-link">' + escapeHtml(ghost.cta) + '</span>';
         stEl.className = 'driver-status ghost';
+      }
+      if (pctEl) pctEl.style.display = 'none';
+      // Show chat link on ghost cards too
+      if (chatEl && ghost.chatQ) {
+        chatEl.href = 'chat.html?q=' + encodeURIComponent(ghost.chatQ);
+        chatEl.onclick = function(e) { e.stopPropagation(); };
+        chatEl.textContent = '';
+        chatEl.innerHTML = '<span class="chat-ask-arrow">→</span> Learn why';
+        chatEl.className = 'chat-ask ghost-chat-ask';
+        chatEl.style.display = 'inline-flex';
       }
       return;
     }
@@ -962,6 +1021,25 @@ function renderDriverCards(metrics, result) {
       var extraCls = card.classList.contains('driver-hero') ? ' driver-hero' : '';
       card.className = 'driver-card' + extraCls + ' ' + (score >= 70 ? 'good' : score > 0 && score < 40 ? 'low' : '');
     }
+    if (pctEl) {
+      if (percentile && percentile > 0) {
+        pctEl.textContent = 'Better than ' + percentile + '% of your age group';
+        pctEl.style.display = '';
+      } else {
+        pctEl.style.display = 'none';
+      }
+    }
+    // Contextual chat link
+    if (chatEl && score > 0 && DRIVER_CHAT_PROMPTS[key]) {
+      var tier = score >= 70 ? 'good' : score >= 40 ? 'fair' : 'low';
+      var prompt = DRIVER_CHAT_PROMPTS[key][tier];
+      chatEl.href = 'chat.html?q=' + encodeURIComponent(prompt);
+      chatEl.onclick = function(e) { e.stopPropagation(); };
+      chatEl.className = 'chat-ask driver-chat-ask';
+      chatEl.style.display = '';
+    } else if (chatEl) {
+      chatEl.style.display = 'none';
+    }
   }
 
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
@@ -978,19 +1056,33 @@ function renderDriverCards(metrics, result) {
     ? metrics.vo2max + ' ml/kg/min'
     : null;
 
-  setDriver('heart',     hrVal,  hrScore,  ' bpm');
-  setDriver('weight',    wtVal,  wtScore,  '');
-  setDriver('strength',  strVal, strScore, '');
-  setDriver('aerobic',   aerVal, aerScore, '');
+  // Build profile object for percentile lookups
+  var pctProfile = {
+    age: metrics.realAge || 35,
+    sex: metrics.sex || 'male',
+    heightCm: window.userProfileData && window.userProfileData.height_cm,
+    weightKg: window.userProfileData && window.userProfileData.current_weight_kg
+  };
+
+  var hrPct = getPopulationPercentile('heart', metrics.hr, pctProfile);
+  var wtPct = getPopulationPercentile('weight', null, pctProfile);
+  var strPct = metrics.strengthData ? (metrics.strengthData.avgPercentile || null) : null;
+  var aerPct = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || null) : null;
+
+  setDriver('heart',     hrVal,  hrScore,  ' bpm', hrPct);
+  setDriver('weight',    wtVal,  wtScore,  '', wtPct);
+  setDriver('strength',  strVal, strScore, '', strPct);
+  setDriver('aerobic',   aerVal, aerScore, '', aerPct);
 
   // Sleep driver card removed — sleep data is still shown on the Sleep page
 
   // Blood work — show connected state or ghost card
   var bwScore = scoreBloodwork(metrics.bloodwork);
   if (bwScore !== null) {
-    setDriver('bloodwork', bwScore + '%', bwScore, '');
+    var bwPct = getPopulationPercentile('bloodwork', bwScore, pctProfile);
+    setDriver('bloodwork', bwScore + '%', bwScore, '', bwPct);
   } else {
-    setDriver('bloodwork', null, 0, '');
+    setDriver('bloodwork', null, 0, '', null);
   }
 }
 
@@ -1569,9 +1661,13 @@ async function loadDashboardData() {
       if (unmapped.length > 0) console.log('[Healix] unmapped biomarkers:', unmapped.join(', '));
       metrics.bloodwork = Object.keys(bw).length > 0 ? bw : null;
       if (metrics.bloodwork) timestamps.bloodwork = bwData[0].test_date;
+      // Store raw sample count so connectivity state can detect bloodwork even if mapping fails
+      window._bloodworkRawCount = bwData.length;
       console.log('[Healix] bloodwork mapped:', JSON.stringify(bw));
+    } else {
+      window._bloodworkRawCount = 0;
     }
-  } catch(e) { console.error('Bloodwork fetch error:', e); metrics.bloodwork = null; }
+  } catch(e) { console.error('Bloodwork fetch error:', e); metrics.bloodwork = null; window._bloodworkRawCount = 0; }
 
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
@@ -1580,6 +1676,9 @@ async function loadDashboardData() {
   window._lastVitalityResult = result;
   console.log('[Healix] vitalityResult:', result);
   renderVitalityAge(result, realAge);
+  checkVitalityCelebration(result);
+  var shareBtn = document.getElementById('va-share-btn');
+  if (shareBtn) shareBtn.style.display = result && result.vAge ? 'flex' : 'none';
   saveVitalityHistory(result, realAge);
   renderVitalityTimeline();
   renderDriverCards(metrics, result);
@@ -1602,8 +1701,21 @@ async function loadDashboardData() {
   renderSyncBanner(timestamps);
   renderVitalityConfidence(timestamps);
 
-  // Meal streak
+  // Meal streak — use lightweight 120-day query for accurate long streaks
   var streakMeals = (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) ? mealLogs : [];
+  try {
+    var streakSince = new Date();
+    streakSince.setDate(streakSince.getDate() - 120);
+    var streakData = await supabaseRequest(
+      '/rest/v1/meal_log?select=meal_time,created_at&user_id=eq.' + currentUser.id
+      + '&meal_time=gte.' + streakSince.toISOString()
+      + '&order=meal_time.desc',
+      'GET', null, token
+    );
+    if (streakData && !streakData.error && Array.isArray(streakData)) {
+      streakMeals = streakData;
+    }
+  } catch(e) { console.error('[Healix] Streak query error:', e); }
   renderMealStreak(streakMeals);
 
   // Load weekly insights and health summary (non-blocking)
@@ -1706,7 +1818,7 @@ function renderDashMeals(meals, today) {
   if (!el) return;
   var todayMeals = meals;
   var el = document.getElementById('d-meals');
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', 'ate out':'🍽' };
   if (todayMeals.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged today</div></div>';
     return;
@@ -2060,7 +2172,7 @@ function renderWeightHistory(entries) {
   var list = document.getElementById('weight-history-list');
   if (!list) return;
   list.innerHTML = entries.slice(0, 8).map(function(e, i) {
-    var diff = i < entries.length - 1 ? parseFloat(e.value) - parseFloat(entries[i+1].value) : 0;
+    var diff = i < entries.length - 1 && entries[i+1].value != null ? parseFloat(e.value) - parseFloat(entries[i+1].value) : 0;
     diff = Math.round(diff * 10) / 10;
     var dt = new Date(e.logged_at || e.created_at);
     return '<div class="weight-entry">'
@@ -2318,7 +2430,7 @@ function renderMealsDayView(meals, nutrients, today) {
   console.log("[Healix] dayMeals after filter:", dayMeals.length);
   if (meals.length > 0) { console.log("[Healix] sample:", meals.slice(0,3).map(function(m){ return (m.meal_time||m.created_at) + " -> " + localDateStr(new Date(m.meal_time||m.created_at)); })); }
 
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊', 'ate out':'🍽' };
   var list = document.getElementById('meals-list');
 
   if (dayMeals.length === 0) {
@@ -2610,30 +2722,33 @@ async function saveMeal() {
   var aiNutritionBreakdown = null;
 
   if (hasManualMacros) {
-    // Manual nutrition entry — build data object directly
+    // Manual nutrition entry — build data in HealthBite-compatible NutrientResponse shape
+    var manualMacros = [
+      { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
+      { name: 'Protein', value: parseFloat(prot) || 0, unit: 'g' },
+      { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
+      { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
+    ];
     mealData = {
-      calories: parseFloat(cals) || 0,
-      protein_g: parseFloat(prot) || 0,
-      carbs_g: parseFloat(carbs) || 0,
-      fat_g: parseFloat(fat) || 0,
-      total_nutrition: {
-        Macronutrients: [
-          { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
-          { name: 'Protein', value: parseFloat(prot) || 0, unit: 'g' },
-          { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
-          { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
-        ]
-      }
+      total_nutrition: { Macronutrients: manualMacros },
+      nutrition_breakdown: { mealName: name, components: [{ name: name, serving_size: '', Macronutrients: manualMacros }] },
+      meal_description: name,
+      meal_analysis: '',
+      dev_feedback: '',
+      data_source: { source: 'manual', confidence: 'low' }
     };
+    mealDescription = name;
   }
 
   try {
     if (editingMealId) {
       // Update existing meal — direct PATCH, no AI re-analysis
-      await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH', {
-        meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime,
-        data: mealData
-      }, currentSession.access_token);
+      var patchPayload = {
+        meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime
+      };
+      if (mealData) patchPayload.data = mealData;
+      await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH',
+        patchPayload, currentSession.access_token);
       editingMealId = null;
     } else {
       // New meal — call AI analysis if no manual macros
@@ -2666,14 +2781,26 @@ async function saveMeal() {
         statusEl.textContent = 'Saving meal...';
       }
 
+      // Ensure mealData is always HealthBite-compatible NutrientResponse shape
+      if (!mealData || !mealData.total_nutrition) {
+        mealData = {
+          total_nutrition: { Macronutrients: [] },
+          nutrition_breakdown: { mealName: name, components: [] },
+          meal_description: name,
+          meal_analysis: '',
+          dev_feedback: '',
+          data_source: { source: 'manual', confidence: 'low' }
+        };
+        mealDescription = name;
+      }
+
       // Insert meal_log with Prefer: return=representation to get the id back
       var insertPayload = {
         user_id: currentUser.id, meal_type: type,
         raw_input: name, meal_time: mealTime,
-        data: mealData || {}
+        data: mealData
       };
-      if (mealDescription) insertPayload.meal_description = mealDescription;
-      else insertPayload.meal_description = name;
+      insertPayload.meal_description = mealDescription || name;
       if (mealAnalysis) insertPayload.meal_analysis = mealAnalysis;
       if (devFeedback) insertPayload.dev_feedback = devFeedback;
 
@@ -2692,7 +2819,6 @@ async function saveMeal() {
           items.forEach(function(item) {
             nutrientRows.push({
               meal_log_id: mealLogId,
-              user_id: currentUser.id,
               category: category,
               component_name: null,
               name: item.name,
@@ -2711,7 +2837,6 @@ async function saveMeal() {
               items.forEach(function(item) {
                 nutrientRows.push({
                   meal_log_id: mealLogId,
-                  user_id: currentUser.id,
                   category: category,
                   component_name: comp.name || null,
                   name: item.name,
@@ -3122,6 +3247,91 @@ var BIOMARKER_RANGES = {
   'SHBG':              { male: { low: 8, optLow: 10, optHigh: 57, high: 80 }, female: { low: 15, optLow: 18, optHigh: 144, high: 180 }, unit: 'nmol/L', category: 'Hormones' }
 };
 
+// Population norms for percentile context on driver cards (NHANES / clinical sources)
+var POPULATION_NORMS = {
+  heart_rate: {
+    male: {
+      '18-29': [[52,95],[56,90],[60,80],[64,70],[68,60],[72,50],[76,40],[80,30],[86,20],[92,10]],
+      '30-39': [[54,95],[58,90],[62,80],[66,70],[70,60],[74,50],[78,40],[82,30],[88,20],[94,10]],
+      '40-49': [[56,95],[60,90],[64,80],[68,70],[72,60],[76,50],[80,40],[84,30],[90,20],[96,10]],
+      '50-59': [[58,95],[62,90],[66,80],[70,70],[74,60],[78,50],[82,40],[86,30],[92,20],[98,10]],
+      '60+':   [[60,95],[64,90],[68,80],[72,70],[76,60],[80,50],[84,40],[88,30],[94,20],[100,10]]
+    },
+    female: {
+      '18-29': [[56,95],[60,90],[64,80],[68,70],[72,60],[76,50],[80,40],[84,30],[90,20],[96,10]],
+      '30-39': [[58,95],[62,90],[66,80],[70,70],[74,60],[78,50],[82,40],[86,30],[92,20],[98,10]],
+      '40-49': [[60,95],[64,90],[68,80],[72,70],[76,60],[80,50],[84,40],[88,30],[94,20],[100,10]],
+      '50-59': [[62,95],[66,90],[70,80],[74,70],[78,60],[82,50],[86,40],[90,30],[96,20],[102,10]],
+      '60+':   [[64,95],[68,90],[72,80],[76,70],[80,60],[84,50],[88,40],[92,30],[98,20],[104,10]]
+    }
+  },
+  weight_bmi: {
+    male: {
+      '18-29': [[19.5,95],[20.5,90],[22.0,80],[23.5,70],[25.0,60],[27.0,50],[29.0,40],[31.5,30],[34.0,20],[38.0,10]],
+      '30-39': [[20.0,95],[21.0,90],[22.5,80],[24.0,70],[25.5,60],[27.5,50],[30.0,40],[32.5,30],[35.5,20],[40.0,10]],
+      '40-49': [[20.5,95],[21.5,90],[23.0,80],[24.5,70],[26.0,60],[28.0,50],[30.5,40],[33.0,30],[36.0,20],[41.0,10]],
+      '50-59': [[21.0,95],[22.0,90],[23.5,80],[25.0,70],[26.5,60],[28.5,50],[31.0,40],[33.5,30],[36.5,20],[41.0,10]],
+      '60+':   [[21.0,95],[22.0,90],[23.5,80],[25.0,70],[26.5,60],[28.5,50],[31.0,40],[33.0,30],[36.0,20],[40.0,10]]
+    },
+    female: {
+      '18-29': [[18.5,95],[19.5,90],[21.0,80],[22.5,70],[24.0,60],[26.5,50],[29.0,40],[32.0,30],[36.0,20],[41.0,10]],
+      '30-39': [[19.0,95],[20.0,90],[21.5,80],[23.0,70],[25.0,60],[27.5,50],[30.5,40],[33.5,30],[37.5,20],[43.0,10]],
+      '40-49': [[19.5,95],[20.5,90],[22.0,80],[24.0,70],[26.0,60],[28.5,50],[31.5,40],[34.5,30],[38.5,20],[44.0,10]],
+      '50-59': [[20.0,95],[21.0,90],[23.0,80],[25.0,70],[27.0,60],[29.5,50],[32.5,40],[35.5,30],[39.0,20],[44.0,10]],
+      '60+':   [[20.5,95],[21.5,90],[23.5,80],[25.5,70],[27.5,60],[30.0,50],[33.0,40],[36.0,30],[39.5,20],[44.0,10]]
+    }
+  },
+  bloodwork: [[90,95],[80,85],[70,70],[60,50],[50,35],[40,20],[30,10]]
+};
+
+function getPopulationPercentile(driverKey, rawValue, profile) {
+  if ((rawValue === null || rawValue === undefined) && driverKey !== 'weight') return null;
+  var age = (profile && profile.age) || 35;
+  var sex = (profile && profile.sex) || 'male';
+  var sexKey = sex.toLowerCase().indexOf('f') !== -1 ? 'female' : 'male';
+  var agKey = age < 30 ? '18-29' : age < 40 ? '30-39' : age < 50 ? '40-49' : age < 60 ? '50-59' : '60+';
+
+  if (driverKey === 'heart' && POPULATION_NORMS.heart_rate[sexKey]) {
+    var table = POPULATION_NORMS.heart_rate[sexKey][agKey];
+    if (!table) return null;
+    // Lower HR = higher percentile
+    for (var i = 0; i < table.length; i++) {
+      if (rawValue <= table[i][0]) return table[i][1];
+    }
+    return 5;
+  }
+
+  if (driverKey === 'weight') {
+    var p = profile || {};
+    var hCm = p.heightCm || (window.userProfileData && window.userProfileData.height_cm);
+    var wKg = p.weightKg || (window.userProfileData && window.userProfileData.current_weight_kg);
+    if (!hCm || !wKg) return null;
+    var bmi = wKg / Math.pow(hCm / 100, 2);
+    var table = POPULATION_NORMS.weight_bmi[sexKey] && POPULATION_NORMS.weight_bmi[sexKey][agKey];
+    if (!table) return null;
+    // Lower BMI = higher percentile (healthier than X%)
+    for (var i = 0; i < table.length; i++) {
+      if (bmi <= table[i][0]) return table[i][1];
+    }
+    return 5;
+  }
+
+  if (driverKey === 'bloodwork') {
+    var table = POPULATION_NORMS.bloodwork;
+    for (var i = 0; i < table.length; i++) {
+      if (rawValue >= table[i][0]) return table[i][1];
+    }
+    return 5;
+  }
+
+  return null;
+}
+
+function getUserSex() {
+  var p = window.userProfileData;
+  return (p && (p.gender || p.sex)) || 'male';
+}
+
 function getRange(name, sex) {
   var r = BIOMARKER_RANGES[name];
   if (!r) {
@@ -3164,6 +3374,7 @@ async function loadBloodworkPage() {
     var dates = Object.keys(bloodworkByDate).filter(function(d) { return d !== 'unknown'; }).sort().reverse();
     if (dates.length === 0) { renderBloodworkEmpty(); return; }
     var select = document.getElementById('bw-date-select');
+    if (!select) return;
     select.innerHTML = dates.map(function(d) {
       var dt = new Date(d + 'T12:00:00');
       var label = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -3235,8 +3446,7 @@ function renderBloodworkDate(dateStr) {
       if (Math.abs(diff) < 0.01) return;
       var pctChange = prev.value !== 0 ? Math.round((diff / prev.value) * 100) : 0;
       var name = s.biomarker_name.toLowerCase();
-      var userSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
-      var range = getRange(s.biomarker_name, userSex);
+      var range = getRange(s.biomarker_name, getUserSex());
       var improved = false;
       if (name.indexOf('hdl') !== -1) improved = diff > 0;
       else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
@@ -3274,17 +3484,20 @@ function renderBloodworkDate(dateStr) {
   }
 
   // Group by category
-  var bwSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
   var byCategory = {};
   samples.forEach(function(s) {
-    var range = getRange(s.biomarker_name, bwSex);
+    var range = getRange(s.biomarker_name, getUserSex());
     var cat = (range && range.category) || s.category || 'Other';
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(s);
   });
 
+  // Retest wins
+  var wins = detectRetestWins(samples, prevByName, bwSex);
+  var winsHtml = renderRetestWinsCard(wins);
+
   // Render biomarker cards
-  var html = compareHtml;
+  var html = winsHtml + compareHtml;
   var categoryOrder = ['Lipid Panel', 'Metabolic', 'CBC', 'Liver', 'Kidney', 'Thyroid', 'Hormones', 'Inflammation', 'Vitamins', 'Blood', 'Other'];
   categoryOrder.forEach(function(cat) {
     var catSamples = byCategory[cat];
@@ -3309,14 +3522,14 @@ function renderBloodworkDate(dateStr) {
   });
 
   document.getElementById('bw-biomarkers').innerHTML = html;
+  renderBiomarkerCollectionGrid(samples);
   document.getElementById('bw-chat-cta').style.display = 'block';
   var shareBtn = document.getElementById('bw-share-btn');
   if (shareBtn) shareBtn.style.display = 'flex';
 }
 
 function renderBiomarkerCard(sample, prevSample) {
-  var cardSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
-  var range = getRange(sample.biomarker_name, cardSex);
+  var range = getRange(sample.biomarker_name, getUserSex());
   var val = sample.value;
   var unit = sample.unit || (range ? range.unit : '');
   var refRange = sample.reference_range || '';
@@ -3372,6 +3585,17 @@ function renderBiomarkerCard(sample, prevSample) {
 
   var displayVal = val !== null ? (val % 1 === 0 ? val : Math.round(val * 10) / 10) : escapeHtml(sample.value_text || '—');
 
+  // Contextual chat link for flagged or out-of-range biomarkers
+  var chatHtml = '';
+  if (flag === 'H' || flag === 'L' || flag === 'A') {
+    var chatQ = flag === 'H'
+      ? 'My ' + sample.biomarker_name + ' is high at ' + displayVal + ' ' + unit + '. What does this mean and how can I improve it?'
+      : flag === 'L'
+      ? 'My ' + sample.biomarker_name + ' is low at ' + displayVal + ' ' + unit + '. What does this mean and how can I improve it?'
+      : 'My ' + sample.biomarker_name + ' is ' + displayVal + ' ' + unit + ' which is flagged as abnormal. What should I know?';
+    chatHtml = '<div class="bw-card-chat"><a class="chat-ask" href="chat.html?q=' + encodeURIComponent(chatQ) + '"><span class="chat-ask-arrow">→</span> Ask Healix about this</a></div>';
+  }
+
   return '<div class="bw-card">'
     + '<div class="bw-card-name">' + escapeHtml(sample.biomarker_name) + '</div>'
     + '<div class="bw-card-value-row">'
@@ -3382,7 +3606,114 @@ function renderBiomarkerCard(sample, prevSample) {
     + rangeHtml
     + (refRange ? '<div class="bw-card-ref">Ref: ' + escapeHtml(refRange) + '</div>' : '')
     + deltaHtml
+    + chatHtml
     + '</div>';
+}
+
+// ── RETEST WINS ──
+function detectRetestWins(samples, prevByName, bwSex) {
+  var wins = [];
+  samples.forEach(function(s) {
+    if (s.value === null) return;
+    var prev = prevByName[s.biomarker_name];
+    if (!prev || prev.value === null) return;
+    var range = getRange(s.biomarker_name, bwSex);
+    if (!range) return;
+    // Was previous outside optimal range?
+    var prevOutside = prev.value < range.optLow || prev.value > range.optHigh;
+    // Is current inside optimal range?
+    var nowInside = s.value >= range.optLow && s.value <= range.optHigh;
+    if (prevOutside && nowInside) {
+      wins.push({ name: s.biomarker_name, prevVal: prev.value, newVal: s.value, unit: s.unit || range.unit || '' });
+    }
+  });
+  return wins;
+}
+
+function renderRetestWinsCard(wins) {
+  if (!wins || wins.length === 0) return '';
+  var html = '<div class="bw-retest-wins">';
+  html += '<div class="bw-retest-wins-title">Biomarker Wins</div>';
+  wins.forEach(function(w) {
+    var round = function(v) { return v % 1 === 0 ? v : Math.round(v * 10) / 10; };
+    html += '<div class="bw-retest-win-item">';
+    html += '<span class="bw-win-icon">&#10003;</span>';
+    html += '<span class="bw-win-name">' + escapeHtml(w.name) + '</span>';
+    html += '<span class="bw-win-values">';
+    html += '<span class="bw-win-old">' + round(w.prevVal) + '</span>';
+    html += '<span class="bw-win-arrow">&rarr;</span>';
+    html += '<span class="bw-win-new">' + round(w.newVal) + '</span>';
+    html += '</span>';
+    html += '<span class="bw-win-label">Now optimal</span>';
+    html += '</div>';
+  });
+  var winNames = wins.map(function(w) { return w.name; }).join(', ');
+  var chatQ = 'My ' + winNames + ' improved to optimal range. What else can I do to keep improving my bloodwork?';
+  html += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(111,207,138,0.15)">';
+  html += '<a class="chat-ask" href="chat.html?q=' + encodeURIComponent(chatQ) + '"><span class="chat-ask-arrow">→</span> What else can I improve?</a>';
+  html += '</div>';
+  html += '</div>';
+  return html;
+}
+
+// ── BIOMARKER COLLECTION GRID ──
+function renderBiomarkerCollectionGrid(samples) {
+  var container = document.getElementById('bw-collection-grid');
+  if (!container) return;
+  if (!samples || samples.length === 0) { container.style.display = 'none'; return; }
+
+  // Build canonical list from BIOMARKER_RANGES (dedupe aliases)
+  var seen = {};
+  var canonicalList = [];
+  for (var key in BIOMARKER_RANGES) {
+    var r = BIOMARKER_RANGES[key];
+    var cat = r.category || 'Other';
+    var unit = r.unit || '';
+    // Build dedup key from category + unit + optLow/optHigh (handles sex-specific by using male defaults)
+    var optLow = r.optLow !== undefined ? r.optLow : (r.male ? r.male.optLow : 0);
+    var optHigh = r.optHigh !== undefined ? r.optHigh : (r.male ? r.male.optHigh : 0);
+    var dedupKey = cat + '|' + unit + '|' + optLow + '|' + optHigh;
+    if (!seen[dedupKey]) {
+      seen[dedupKey] = true;
+      canonicalList.push({ name: key, category: cat });
+    }
+  }
+
+  // Match user's tested biomarkers
+  var testedNames = {};
+  samples.forEach(function(s) {
+    var lower = s.biomarker_name.toLowerCase();
+    testedNames[lower] = true;
+  });
+
+  var testedCount = 0;
+  canonicalList.forEach(function(b) {
+    if (testedNames[b.name.toLowerCase()]) testedCount++;
+  });
+  var total = canonicalList.length;
+
+  // Build HTML
+  var html = '<div class="bw-collection">';
+  html += '<div class="bw-collection-header">';
+  html += '<div class="bw-collection-title">Biomarker Collection</div>';
+  html += '<div class="bw-collection-count">' + testedCount + ' of ' + total + ' collected</div>';
+  html += '</div>';
+  html += '<div class="bw-collection-bar"><div class="bw-collection-bar-fill" style="width:' + Math.round((testedCount / total) * 100) + '%"></div></div>';
+  html += '<div class="bw-collection-grid">';
+  canonicalList.forEach(function(b) {
+    var filled = testedNames[b.name.toLowerCase()] ? ' filled' : '';
+    html += '<div class="bw-collection-dot' + filled + '">';
+    html += '<div class="bw-collection-tooltip">' + escapeHtml(b.name) + '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  if (testedCount === total) {
+    html += '<div class="bw-collection-complete">All biomarkers collected!</div>';
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+  container.style.display = 'block';
 }
 
 // ── DOCUMENTS ──
@@ -3535,6 +3866,8 @@ async function handleDocUpload(input) {
                 tempCard.style.border = '1px solid var(--success-border)';
                 tempCard.querySelector('.doc-card-meta').innerHTML = '<span style="color:var(--up)">✓ Extracted ' + count + ' biomarkers</span>';
               }
+              // Invalidate dashboard cache so bloodwork shows on next dashboard visit
+              localStorage.removeItem('healix_dashboard_cache');
               // Navigate to bloodwork page with success message
               showPage('bloodwork', null);
               setTimeout(function() {
@@ -5557,6 +5890,141 @@ function shareBloodwork() {
   printWin.print();
 }
 
+// ── SHAREABLE SCORE CARD ──
+function generateShareCard() {
+  var result = window._lastVitalityResult;
+  if (!result || !result.vAge) { alert('Load your dashboard first to generate a card.'); return; }
+  var realAge = window.userProfileData ? (window.userProfileData.age || calcAge(window.userProfileData.birth_date)) : null;
+  var diff = realAge ? realAge - result.vAge : 0;
+
+  document.fonts.ready.then(function() {
+    var canvas = document.createElement('canvas');
+    canvas.width = 1200; canvas.height = 630;
+    var ctx = canvas.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#0B0B0B';
+    ctx.fillRect(0, 0, 1200, 630);
+
+    // Gold radial accent
+    var grad = ctx.createRadialGradient(900, -50, 0, 900, -50, 500);
+    grad.addColorStop(0, 'rgba(184,151,90,0.12)');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1200, 630);
+
+    // Eyebrow
+    ctx.font = '500 11px "DM Sans", sans-serif';
+    ctx.letterSpacing = '3px';
+    ctx.fillStyle = 'rgba(184,151,90,0.6)';
+    ctx.fillText('YOUR VITALITY AGE', 80, 80);
+
+    // Vitality age number
+    ctx.font = '300 120px "Cormorant Garamond", serif';
+    ctx.fillStyle = '#F5F0E8';
+    ctx.fillText(String(result.vAge), 80, 200);
+
+    // Delta
+    if (diff > 0) {
+      ctx.font = '500 22px "DM Sans", sans-serif';
+      ctx.fillStyle = '#6fcf8a';
+      ctx.fillText(diff + ' years younger', 80, 240);
+    } else if (diff < 0) {
+      ctx.font = '500 22px "DM Sans", sans-serif';
+      ctx.fillStyle = '#e07070';
+      ctx.fillText(Math.abs(diff) + ' years to improve', 80, 240);
+    }
+
+    // Composite score arc placeholder
+    ctx.font = '400 14px "DM Sans", sans-serif';
+    ctx.fillStyle = 'rgba(245,240,232,0.35)';
+    ctx.fillText('Composite Score: ' + result.composite + '/100', 80, 280);
+
+    // Driver scores
+    var drivers = [
+      { label: 'Heart Rate', name: 'hr', id: 'drv-heart-val' },
+      { label: 'Weight', name: 'weight', id: 'drv-weight-val' },
+      { label: 'Strength', name: 'strength', id: 'drv-strength-val' },
+      { label: 'VO2 Max', name: 'aerobic', id: 'drv-aerobic-val' },
+      { label: 'Blood Work', name: 'bloodwork', id: 'drv-bloodwork-val' }
+    ];
+    var drvY = 340;
+    var drvX = 80;
+    var scores = result.scores || [];
+
+    drivers.forEach(function(d, i) {
+      var el = document.getElementById(d.id);
+      var displayVal = el ? el.textContent.trim() : '—';
+      var scoreObj = scores.find(function(s) { return s.name === d.name; });
+      var score = scoreObj ? scoreObj.score : 0;
+      var barColor = score >= 70 ? '#6fcf8a' : score >= 40 ? '#B8975A' : score > 0 ? '#e07070' : 'rgba(245,240,232,0.1)';
+
+      // Label
+      ctx.font = '400 11px "DM Sans", sans-serif';
+      ctx.fillStyle = 'rgba(245,240,232,0.4)';
+      ctx.fillText(d.label.toUpperCase(), drvX, drvY + i * 50);
+
+      // Value
+      ctx.font = '300 22px "Cormorant Garamond", serif';
+      ctx.fillStyle = '#F5F0E8';
+      ctx.fillText(displayVal, drvX, drvY + i * 50 + 24);
+
+      // Bar background
+      ctx.fillStyle = 'rgba(245,240,232,0.08)';
+      ctx.fillRect(drvX + 240, drvY + i * 50 + 10, 300, 4);
+
+      // Bar fill
+      ctx.fillStyle = barColor;
+      ctx.fillRect(drvX + 240, drvY + i * 50 + 10, score * 3, 4);
+    });
+
+    // Branding
+    ctx.font = '400 24px "Cormorant Garamond", serif';
+    ctx.fillStyle = '#B8975A';
+    ctx.fillText('HEALIX', 1020, 580);
+    ctx.font = '400 11px "DM Sans", sans-serif';
+    ctx.fillStyle = 'rgba(184,151,90,0.5)';
+    ctx.fillText('usehealix.com', 1020, 600);
+
+    // Decorative border line
+    ctx.strokeStyle = 'rgba(184,151,90,0.2)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(20, 20, 1160, 590);
+
+    // Export
+    canvas.toBlob(function(blob) {
+      if (navigator.share && navigator.canShare) {
+        var file = new File([blob], 'healix-vitality-age.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: 'My Healix Vitality Age' }).catch(function() {
+            downloadShareBlob(blob);
+          });
+          return;
+        }
+      }
+      downloadShareBlob(blob);
+    }, 'image/png');
+  });
+}
+
+function downloadShareBlob(blob) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'healix-vitality-age.png';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function calcAge(birthDate) {
+  if (!birthDate) return 35;
+  var bd = new Date(birthDate);
+  var now = new Date();
+  var age = now.getFullYear() - bd.getFullYear();
+  if (now.getMonth() < bd.getMonth() || (now.getMonth() === bd.getMonth() && now.getDate() < bd.getDate())) age--;
+  return age;
+}
+
 // ── PREMIUM GATES ──
 // TODO: When beta ends, integrate Stripe and update getUserTier() to check subscription status.
 // The renderPremiumGate() CTA currently links to profile page, which has no upgrade flow yet.
@@ -5581,6 +6049,115 @@ function renderPremiumGate(containerId, featureName) {
     + '<button class="premium-cta-btn" onclick="showPage(\'profile\',null)">Upgrade</button>'
     + '</div>'
   );
+}
+
+// ── HEALTH MILESTONES TIMELINE ──
+var MILESTONE_DEFINITIONS = [
+  { id: 'first_bloodwork', label: 'First bloodwork uploaded', icon: '&#9733;',
+    detect: function(ctx) {
+      if (ctx.bloodworkDates && ctx.bloodworkDates.length > 0) {
+        return { date: ctx.bloodworkDates[ctx.bloodworkDates.length - 1] };
+      }
+      return null;
+    }
+  },
+  { id: 'hr_below_60', label: 'Resting HR dropped below 60 bpm', icon: '&#9829;',
+    detect: function(ctx) {
+      if (ctx.metrics && ctx.metrics.hr && ctx.metrics.hr < 60) return { date: null };
+      return null;
+    }
+  },
+  { id: 'all_drivers', label: 'All 5 data sources connected', icon: '&#9670;',
+    detect: function(ctx) {
+      if (ctx.result && ctx.result.scores) {
+        var connected = ctx.result.scores.filter(function(s) { return s.score > 0; }).length;
+        if (connected >= 5) return { date: null };
+      }
+      return null;
+    }
+  },
+  { id: 'va_improved_2', label: 'Vitality Age improved 2+ years', icon: '&#9650;',
+    detect: function(ctx) {
+      if (ctx.vaHistory && ctx.vaHistory.length >= 2) {
+        var first = ctx.vaHistory[0];
+        var last = ctx.vaHistory[ctx.vaHistory.length - 1];
+        if (first.vAge - last.vAge >= 2) return { date: last.date };
+      }
+      return null;
+    }
+  },
+  { id: 'first_strength', label: 'First strength test logged', icon: '&#9679;',
+    detect: function(ctx) {
+      if (ctx.metrics && ctx.metrics.strengthData && ctx.metrics.strengthData.testCount > 0) return { date: null };
+      return null;
+    }
+  },
+  { id: 'composite_80', label: 'Composite score reached 80+', icon: '&#9733;',
+    detect: function(ctx) {
+      if (ctx.result && ctx.result.composite >= 80) return { date: null };
+      return null;
+    }
+  }
+];
+
+function renderMilestones() {
+  var container = document.getElementById('milestones-section');
+  if (!container) return;
+
+  // Build context from existing globals
+  var vaHistory = [];
+  try { vaHistory = JSON.parse(localStorage.getItem('healix_va_history_' + currentUser.id) || '[]'); } catch(e) {}
+  var bwDates = Object.keys(bloodworkByDate || {}).filter(function(d) { return d !== 'unknown'; }).sort();
+  var ctx = {
+    metrics: window._lastDashboardMetrics || null,
+    result: window._lastVitalityResult || null,
+    vaHistory: vaHistory,
+    bloodworkDates: bwDates
+  };
+
+  var achieved = [];
+  var pending = [];
+  MILESTONE_DEFINITIONS.forEach(function(m) {
+    var result = m.detect(ctx);
+    if (result) {
+      achieved.push({ id: m.id, label: m.label, icon: m.icon, date: result.date });
+    } else {
+      pending.push({ id: m.id, label: m.label, icon: m.icon });
+    }
+  });
+
+  // Show section only if at least 1 achieved
+  if (achieved.length === 0) { container.style.display = 'none'; return; }
+
+  var html = '<div class="milestones-card">';
+  html += '<div class="milestones-header">Health Milestones</div>';
+  html += '<div class="milestone-list">';
+
+  // Achieved milestones
+  achieved.forEach(function(m, i) {
+    var dateText = m.date ? new Date(m.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Achieved';
+    html += '<div class="milestone-item">';
+    html += '<div class="milestone-dot-wrap"><div class="milestone-dot"></div>';
+    if (i < achieved.length - 1 || pending.length > 0) html += '<div class="milestone-line"></div>';
+    html += '</div>';
+    html += '<div class="milestone-content"><div class="milestone-label">' + m.icon + ' ' + escapeHtml(m.label) + '</div><div class="milestone-date">' + dateText + '</div></div>';
+    html += '</div>';
+  });
+
+  // Show up to 2 pending milestones as "up next"
+  var nextGoals = pending.slice(0, 2);
+  nextGoals.forEach(function(m, i) {
+    html += '<div class="milestone-item pending">';
+    html += '<div class="milestone-dot-wrap"><div class="milestone-dot pending"></div>';
+    if (i < nextGoals.length - 1) html += '<div class="milestone-line"></div>';
+    html += '</div>';
+    html += '<div class="milestone-content"><div class="milestone-label">' + m.icon + ' ' + escapeHtml(m.label) + '</div><div class="milestone-date">Up next</div></div>';
+    html += '</div>';
+  });
+
+  html += '</div></div>';
+  container.innerHTML = html;
+  container.style.display = 'block';
 }
 
 // ── ONBOARDING CHECKLIST ──
@@ -5716,8 +6293,8 @@ async function saveFirstRunProfile() {
   var heightStr = document.getElementById('fr-height').value;
   var weightStr = document.getElementById('fr-weight').value;
 
-  var heightCm = parseHeight(heightStr);
-  var weightKg = parseWeight(weightStr);
+  var heightCm = parseHeight(heightStr, 'imperial');
+  var weightKg = parseWeight(weightStr, 'lbs');
 
   var data = {};
   if (dob) data.birth_date = dob;
@@ -5762,79 +6339,247 @@ function dismissFirstRun() {
 
   renderVitalityUnlockState();
   renderOnboardingChecklist();
+  renderMilestones();
 }
 
-// ── MEAL STREAK ──
-function calculateMealStreak(meals) {
-  if (!meals || meals.length === 0) return { streak: 0, todayLogged: false, atRisk: false };
+// ── MEAL STREAK + ENGAGEMENT ──
+var STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
+var MILESTONE_MESSAGES = {
+  3: 'Three days of data. Patterns are starting to emerge.',
+  7: 'A full week logged. Streak shield earned.',
+  14: 'Two weeks. Enough data for meaningful nutrient trends.',
+  30: 'Thirty days. Your nutritional baseline is well established.',
+  60: 'Sixty days of continuous logging.',
+  90: 'A full quarter. Seasonal patterns are now visible.'
+};
 
+function loadStreakShields(userId) {
+  try {
+    var raw = localStorage.getItem('healix_streak_shields_' + userId);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { count: 0, usedDates: [] };
+}
+
+function saveStreakShields(userId, shields) {
+  try { localStorage.setItem('healix_streak_shields_' + userId, JSON.stringify(shields)); } catch(e) {}
+}
+
+function loadBestStreak(userId) {
+  return parseInt(localStorage.getItem('healix_best_streak_' + userId) || '0', 10);
+}
+
+function saveBestStreak(userId, val) {
+  try { localStorage.setItem('healix_best_streak_' + userId, String(val)); } catch(e) {}
+}
+
+function loadLastCelebratedMilestone(userId) {
+  return parseInt(localStorage.getItem('healix_last_celebrated_milestone_' + userId) || '0', 10);
+}
+
+function saveLastCelebratedMilestone(userId, val) {
+  try { localStorage.setItem('healix_last_celebrated_milestone_' + userId, String(val)); } catch(e) {}
+}
+
+function computeMealEngagement(meals, localDateStrFn, storedShields, storedBestStreak, lastCelebrated) {
   var dates = {};
-  meals.forEach(function(m) {
-    var d = localDateStr(new Date(m.meal_time || m.created_at));
-    dates[d] = true;
-  });
+  if (meals && meals.length > 0) {
+    meals.forEach(function(m) {
+      var d = localDateStrFn(new Date(m.meal_time || m.created_at));
+      dates[d] = true;
+    });
+  }
 
-  var today = localDateStr(new Date());
+  var today = localDateStrFn(new Date());
   var todayLogged = !!dates[today];
+  var shields = { count: storedShields.count || 0, usedDates: (storedShields.usedDates || []).slice() };
+
+  // Calculate streak walking backwards, consuming shield on gap
   var streak = 0;
+  var shieldActive = false;
   var checkDate = new Date();
+  var MAX_STREAK_DAYS = 120;
 
   if (todayLogged) {
-    while (dates[localDateStr(checkDate)]) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
+    streak = 1;
+    checkDate.setDate(checkDate.getDate() - 1);
   } else {
     checkDate.setDate(checkDate.getDate() - 1);
-    while (dates[localDateStr(checkDate)]) {
+  }
+
+  var shieldUsedThisWalk = false;
+  var iterations = 0;
+  while (iterations < MAX_STREAK_DAYS) {
+    iterations++;
+    var ds = localDateStrFn(checkDate);
+    if (dates[ds]) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
+    } else if (!shieldUsedThisWalk && shields.count > 0 && streak > 0 && shields.usedDates.indexOf(ds) === -1) {
+      // Auto-consume shield for this gap (only first gap adjacent to logged days)
+      shields.count = 0;
+      shields.usedDates.push(ds);
+      shieldActive = true;
+      shieldUsedThisWalk = true;
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+      // After shield, next day must be a real logged day or streak ends
+      var nextDs = localDateStrFn(checkDate);
+      if (!dates[nextDs]) break;
+    } else if (!shieldUsedThisWalk && shields.usedDates.indexOf(ds) !== -1) {
+      // Honor persisted shield only if it's adjacent (first gap)
+      shieldActive = true;
+      shieldUsedThisWalk = true;
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+      var nextDs2 = localDateStrFn(checkDate);
+      if (!dates[nextDs2]) break;
+    } else {
+      break;
     }
   }
 
-  return { streak: streak, todayLogged: todayLogged, atRisk: !todayLogged && streak > 0 };
+  // Earn shield every 7 consecutive days (max 1)
+  if (streak > 0 && streak % 7 === 0 && shields.count < 1) {
+    shields.count = 1;
+  }
+
+  var atRisk = !todayLogged && streak > 0;
+
+  // 7-day consistency
+  var last7 = [];
+  var dayCheck = new Date();
+  for (var i = 6; i >= 0; i--) {
+    var d7 = new Date();
+    d7.setDate(dayCheck.getDate() - i);
+    var ds7 = localDateStrFn(d7);
+    last7.push({
+      date: ds7,
+      logged: !!dates[ds7],
+      shielded: shields.usedDates.indexOf(ds7) !== -1,
+      dayLabel: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d7.getDay()]
+    });
+  }
+  var daysLogged = last7.filter(function(d) { return d.logged; }).length;
+  var consistencyPct = Math.round(daysLogged / 7 * 100);
+  var consistencyLevel = consistencyPct >= 85 ? 'excellent' : consistencyPct >= 57 ? 'good' : consistencyPct >= 28 ? 'fair' : 'low';
+
+  // Best streak
+  var bestStreak = storedBestStreak || 0;
+  if (streak > bestStreak) bestStreak = streak;
+
+  // Milestone
+  lastCelebrated = lastCelebrated || 0;
+  var milestone = null;
+  for (var mi = STREAK_MILESTONES.length - 1; mi >= 0; mi--) {
+    if (streak >= STREAK_MILESTONES[mi] && STREAK_MILESTONES[mi] > lastCelebrated) {
+      milestone = { days: STREAK_MILESTONES[mi], message: MILESTONE_MESSAGES[STREAK_MILESTONES[mi]] };
+      break;
+    }
+  }
+
+  return {
+    streak: streak,
+    todayLogged: todayLogged,
+    atRisk: atRisk,
+    shieldActive: shieldActive,
+    shieldsAvailable: shields.count,
+    shields: shields,
+    consistency: { days: last7, daysLogged: daysLogged, percent: consistencyPct, level: consistencyLevel },
+    bestStreak: bestStreak,
+    milestone: milestone
+  };
 }
 
 function renderMealStreak(meals) {
   var container = document.getElementById('meal-streak');
   if (!container) return;
 
-  var result = calculateMealStreak(meals);
+  var userId = currentUser && currentUser.id ? currentUser.id : 'anon';
+  var shields = loadStreakShields(userId);
+  var bestStreak = loadBestStreak(userId);
+  var lastCelebrated = loadLastCelebratedMilestone(userId);
+  var result = computeMealEngagement(meals, localDateStr, shields, bestStreak, lastCelebrated);
+
+  // Persist shields and best streak
+  saveStreakShields(userId, result.shields);
+  if (result.bestStreak > bestStreak) saveBestStreak(userId, result.bestStreak);
+
+  // Persist milestone celebration
+  if (result.milestone) saveLastCelebratedMilestone(userId, result.milestone.days);
+
+  // Build status message
+  var msg = '';
+  var isNewBest = result.streak > 0 && result.streak > bestStreak && result.todayLogged;
+
+  if (result.milestone) {
+    msg = result.milestone.message;
+  } else if (result.shieldActive && result.streak > 0 && !result.atRisk) {
+    msg = 'Streak shield used — ' + result.streak + '-day streak preserved.';
+  } else if (isNewBest && result.streak > 3) {
+    msg = 'New personal record — ' + result.streak + ' days.';
+  } else if (result.atRisk && result.shieldsAvailable > 0) {
+    msg = 'Log a meal to continue, or your shield will preserve your streak tomorrow.';
+  } else if (result.atRisk) {
+    msg = 'Your ' + result.streak + '-day streak ends at midnight.';
+  } else if (result.streak >= 14) {
+    msg = 'Enough data for meaningful nutrient trends.';
+  } else if (result.streak >= 7) {
+    msg = 'Consistency is compounding.';
+  } else if (result.streak >= 3) {
+    msg = 'Patterns are starting to emerge.';
+  } else if (result.streak >= 1) {
+    msg = 'Great start. Tomorrow makes it stronger.';
+  }
+
+  // 7-day dots HTML
+  var dotsHtml = '<div class="meal-streak-dots">';
+  result.consistency.days.forEach(function(day) {
+    var cls = 'meal-streak-dot';
+    if (day.shielded) cls += ' shielded';
+    else if (day.logged) cls += ' logged';
+    dotsHtml += '<div class="' + cls + '" title="' + escapeHtml(day.date) + '">'
+      + '<div class="meal-streak-dot-label">' + day.dayLabel + '</div>'
+      + '</div>';
+  });
+  dotsHtml += '</div>';
+
+  // Shield indicator
+  var shieldHtml = '';
+  if (result.shieldsAvailable > 0 || result.shieldActive) {
+    shieldHtml = '<div class="meal-streak-shields" title="Streak shield' + (result.shieldsAvailable > 0 ? ' available' : ' used') + '">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" style="fill:' + (result.shieldsAvailable > 0 ? 'var(--gold)' : 'var(--muted)') + ';opacity:' + (result.shieldsAvailable > 0 ? '0.9' : '0.4') + '"/></svg>'
+      + (result.shieldsAvailable > 0 ? '<span class="meal-streak-shield-count">x' + result.shieldsAvailable + '</span>' : '')
+      + '</div>';
+  }
+
+  var cardClass = 'meal-streak-card';
+  if (result.atRisk) cardClass += ' at-risk';
+  if (result.milestone) cardClass += ' milestone';
 
   if (result.streak === 0 && !result.todayLogged) {
     container.style.display = '';
-    container.innerHTML = '<div class="meal-streak-card" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+    container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
       + '<div class="meal-streak-count-num">0</div>'
       + '<div class="meal-streak-info">'
       + '<div class="meal-streak-label">Meal Streak</div>'
       + '<div class="meal-streak-msg">Log your first meal to start building consistency.</div>'
+      + dotsHtml
       + '</div>'
       + '<div class="meal-streak-action">Log meal →</div>'
       + '</div>';
     return;
   }
 
-  var msg = '';
-  if (result.atRisk) {
-    msg = 'Log a meal today to keep your streak alive.';
-  } else if (result.streak >= 14) {
-    msg = 'Two weeks strong. Your data is building a clear picture.';
-  } else if (result.streak >= 7) {
-    msg = 'One week running. Consistency is compounding.';
-  } else if (result.streak >= 3) {
-    msg = 'Keep it going — momentum is building.';
-  } else {
-    msg = 'Great start. Tomorrow makes it stronger.';
-  }
-
   container.style.display = '';
-  container.innerHTML = '<div class="meal-streak-card' + (result.atRisk ? ' at-risk' : '') + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+  container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
     + '<div class="meal-streak-count-num">' + result.streak + '</div>'
     + '<div class="meal-streak-info">'
-    + '<div class="meal-streak-label">' + result.streak + '-day meal streak' + (result.atRisk ? ' — at risk' : '') + '</div>'
+    + '<div class="meal-streak-label">' + result.streak + '-day streak' + shieldHtml + (result.atRisk ? ' <span style="color:var(--warn)">— at risk</span>' : '') + '</div>'
     + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
+    + dotsHtml
     + '</div>'
-    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal') + '</div>'
+    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal →') + '</div>'
     + '</div>';
 }
 
