@@ -3620,12 +3620,17 @@ async function loadBloodworkPage() {
       if (!bloodworkByDate[d]) bloodworkByDate[d] = [];
       bloodworkByDate[d].push(s);
     });
-    // Populate date selector
-    var dates = Object.keys(bloodworkByDate).filter(function(d) { return d !== 'unknown'; }).sort().reverse();
+    // Populate date selector — include unknown-dated samples at the end
+    var knownDates = Object.keys(bloodworkByDate).filter(function(d) { return d !== 'unknown'; }).sort().reverse();
+    var dates = knownDates.slice();
+    if (bloodworkByDate['unknown'] && bloodworkByDate['unknown'].length > 0) {
+      dates.push('unknown');
+    }
     if (dates.length === 0) { renderBloodworkEmpty(); return; }
     var select = document.getElementById('bw-date-select');
     if (!select) return;
     select.innerHTML = dates.map(function(d) {
+      if (d === 'unknown') return '<option value="unknown">Date not specified (' + bloodworkByDate['unknown'].length + ' biomarkers)</option>';
       var dt = new Date(d + 'T12:00:00');
       var label = dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       return '<option value="' + d + '">' + label + '</option>';
