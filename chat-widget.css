@@ -1,0 +1,734 @@
+/* ── CHAT WIDGET STYLES ──
+   Floating AI chat widget for the Healix dashboard.
+   Uses design tokens from theme.css — never hardcode colors. */
+
+
+/* ── FAB Button ── */
+
+.cw-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--dark);
+  border: none;
+  cursor: pointer;
+  z-index: 350;
+  display: grid;
+  place-items: center;
+  font-family: var(--F);
+  font-size: 22px;
+  font-weight: 400;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 0 var(--gold-glow);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.cw-fab:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 20px var(--gold-glow);
+}
+
+.cw-fab.hidden {
+  display: none;
+}
+
+
+/* ── Widget Window ── */
+
+.cw-window {
+  position: fixed;
+  width: 420px;
+  height: 560px;
+  z-index: 400;
+  background: var(--dark-2);
+  border: 1px solid var(--gold-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--B);
+  animation: cwOpen .25s ease;
+}
+
+.cw-window.hidden {
+  display: none;
+}
+
+.cw-window.minimized {
+  width: auto;
+  height: auto;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.cw-window.minimized .cw-titlebar,
+.cw-window.minimized .cw-messages,
+.cw-window.minimized .cw-input-area,
+.cw-window.minimized .cw-conv-dropdown,
+.cw-window.minimized .cw-resize-handle {
+  display: none;
+}
+
+.cw-window.minimized .cw-minimized-pill {
+  display: flex;
+}
+
+.cw-window.maximized {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  left: 220px;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+}
+
+
+/* ── Titlebar ── */
+
+.cw-titlebar {
+  height: 44px;
+  flex-shrink: 0;
+  background: var(--dark-3);
+  border-bottom: 1px solid var(--gold-border);
+  display: flex;
+  align-items: center;
+  cursor: move;
+  padding: 0 12px;
+  position: relative;
+}
+
+.cw-title {
+  flex: 1;
+  font-size: 12px;
+  letter-spacing: .08em;
+  color: var(--cream-dim);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+}
+
+.cw-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+  display: grid;
+  place-items: center;
+  transition: color .15s ease;
+}
+
+.cw-btn:hover {
+  color: var(--cream);
+}
+
+
+/* ── Conversation Dropdown ── */
+
+.cw-conv-dropdown {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  right: 0;
+  background: var(--dark-3);
+  border: 1px solid var(--gold-border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  display: none;
+}
+
+.cw-conv-dropdown.open {
+  display: block;
+}
+
+.cw-conv-new {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--B);
+  font-size: 11px;
+  color: var(--gold);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--gold-border);
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s ease;
+}
+
+.cw-conv-new:hover {
+  background: var(--gold-faint);
+}
+
+.cw-conv-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gold-faint);
+  cursor: pointer;
+  position: relative;
+  transition: background .15s ease;
+}
+
+.cw-conv-item:hover {
+  background: var(--dark-4);
+}
+
+.cw-conv-item.active {
+  background: var(--gold-faint);
+  border-left: 2px solid var(--gold);
+}
+
+.cw-conv-item-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.cw-conv-item-title {
+  font-size: 12px;
+  color: var(--cream-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cw-conv-item-time {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.cw-conv-empty {
+  padding: 16px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
+}
+
+.cw-conv-delete {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s ease, color .15s ease;
+  font-size: 13px;
+  padding: 4px;
+}
+
+.cw-conv-item:hover .cw-conv-delete {
+  opacity: 1;
+}
+
+.cw-conv-delete:hover {
+  color: var(--error);
+}
+
+
+/* ── Messages Area ── */
+
+.cw-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cw-messages::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cw-messages::-webkit-scrollbar-thumb {
+  background: var(--gold-border);
+  border-radius: 2px;
+}
+
+.cw-conv-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.cw-conv-dropdown::-webkit-scrollbar-thumb {
+  background: var(--gold-border);
+  border-radius: 2px;
+}
+
+
+/* ── Message Bubbles ── */
+
+.cw-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  border-radius: 8px;
+  animation: cwMsgIn .2s ease;
+}
+
+.cw-msg.user {
+  align-self: flex-end;
+  background: var(--dark-3);
+  border: 1px solid var(--gold-border);
+  color: var(--cream);
+}
+
+.cw-msg.ai {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--cream-faint);
+  color: var(--cream-dim);
+}
+
+.cw-msg strong {
+  color: var(--cream);
+  font-weight: 500;
+}
+
+.cw-msg p {
+  margin-bottom: 8px;
+}
+
+.cw-msg p:last-child {
+  margin-bottom: 0;
+}
+
+
+/* ── Input Area ── */
+
+.cw-input-area {
+  flex-shrink: 0;
+  border-top: 1px solid var(--gold-border);
+  padding: 10px 12px;
+  background: var(--dark-2);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.cw-textarea {
+  flex: 1;
+  background: var(--dark-3);
+  border: 1px solid var(--gold-border);
+  color: var(--cream);
+  font-family: var(--B);
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: none;
+  min-height: 40px;
+  max-height: 120px;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color .15s ease;
+}
+
+.cw-textarea:focus {
+  border-color: var(--gold-focus);
+}
+
+.cw-textarea::placeholder {
+  color: var(--muted);
+}
+
+.cw-send {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  background: var(--gold);
+  border: none;
+  border-radius: 6px;
+  color: var(--dark);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background .15s ease;
+}
+
+.cw-send:hover {
+  background: var(--gold-light);
+}
+
+.cw-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+
+/* ── Resize Handles ── */
+
+.cw-resize-handle {
+  position: absolute;
+  z-index: 2;
+  background: transparent;
+}
+
+.cw-rh-n {
+  top: -3px;
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: n-resize;
+}
+
+.cw-rh-s {
+  bottom: -3px;
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  cursor: s-resize;
+}
+
+.cw-rh-e {
+  top: 12px;
+  bottom: 12px;
+  right: -3px;
+  width: 6px;
+  cursor: e-resize;
+}
+
+.cw-rh-w {
+  top: 12px;
+  bottom: 12px;
+  left: -3px;
+  width: 6px;
+  cursor: w-resize;
+}
+
+.cw-rh-ne {
+  top: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: ne-resize;
+}
+
+.cw-rh-nw {
+  top: -3px;
+  left: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: nw-resize;
+}
+
+.cw-rh-se {
+  bottom: -3px;
+  right: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: se-resize;
+}
+
+.cw-rh-sw {
+  bottom: -3px;
+  left: -3px;
+  width: 12px;
+  height: 12px;
+  cursor: sw-resize;
+}
+
+
+/* ── Welcome State ── */
+
+.cw-welcome {
+  text-align: center;
+  padding: 32px 20px;
+  margin: auto;
+}
+
+.cw-welcome-title {
+  font-family: var(--F);
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--cream);
+  margin-bottom: 8px;
+}
+
+.cw-welcome-title em {
+  font-style: italic;
+  color: var(--gold);
+}
+
+.cw-welcome-sub {
+  font-size: 12px;
+  color: var(--cream-dim);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+
+/* ── Suggestion Pills ── */
+
+.cw-suggestion {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--gold-border);
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--cream-dim);
+  cursor: pointer;
+  margin: 3px;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.cw-suggestion:hover {
+  border-color: var(--gold-hover);
+  color: var(--cream);
+  background: var(--gold-faint);
+}
+
+
+/* ── Typing Indicator ── */
+
+.cw-typing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.cw-typing span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0.4;
+  animation: cwTyping 1.2s infinite;
+}
+
+.cw-typing span:nth-child(2) {
+  animation-delay: .2s;
+}
+
+.cw-typing span:nth-child(3) {
+  animation-delay: .4s;
+}
+
+
+/* ── Tool Call Status ── */
+
+.cw-tool-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  color: var(--gold);
+  font-size: 11px;
+  letter-spacing: .05em;
+  animation: cwMsgIn .3s ease;
+}
+
+.cw-tool-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: cwToolPulse 1.5s infinite;
+}
+
+
+/* ── Minimized Pill ── */
+
+.cw-minimized-pill {
+  display: none;
+  height: 44px;
+  width: 240px;
+  background: var(--dark-3);
+  border: 1px solid var(--gold-border);
+  border-radius: 22px;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color .15s ease;
+}
+
+.cw-minimized-pill:hover {
+  border-color: var(--gold-hover);
+}
+
+.cw-min-title {
+  font-size: 12px;
+  color: var(--cream-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* ── Nutrient Chart (scoped to widget) ── */
+
+.cw-window .nutrient-chart {
+  padding: 14px;
+  border: 1px solid var(--gold-border);
+  margin-bottom: 8px;
+}
+
+.cw-window .nutrient-chart-title {
+  font-size: 9px;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+
+.cw-window .nutrient-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.cw-window .nutrient-label {
+  width: 80px;
+  font-size: 10px;
+  color: var(--cream-dim);
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-window .nutrient-bar-track {
+  flex: 1;
+  height: 12px;
+  background: var(--cream-faint);
+  position: relative;
+  overflow: hidden;
+}
+
+.cw-window .nutrient-bar-fill {
+  height: 100%;
+  transition: width .6s ease;
+  min-width: 2px;
+}
+
+.cw-window .nutrient-bar-fill.low {
+  background: var(--down);
+}
+
+.cw-window .nutrient-bar-fill.adequate {
+  background: var(--gold);
+}
+
+.cw-window .nutrient-bar-fill.high {
+  background: var(--info);
+}
+
+.cw-window .nutrient-bar-fill.excess {
+  background: var(--warn);
+}
+
+.cw-window .nutrient-pct {
+  width: 36px;
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.cw-window .nutrient-rda-line {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--muted);
+}
+
+.cw-window .nutrient-legend {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.cw-window .nutrient-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.cw-window .nutrient-legend-swatch {
+  width: 8px;
+  height: 8px;
+}
+
+
+/* ── Animations ── */
+
+@keyframes cwOpen {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cwMsgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cwTyping {
+  0%, 100% { opacity: 0.4; transform: translateY(0); }
+  50%      { opacity: 1; transform: translateY(-2px); }
+}
+
+@keyframes cwToolPulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+
+/* ── Responsive (below 900px) ── */
+
+@media (max-width: 900px) {
+  .cw-fab {
+    bottom: 16px;
+    right: 16px;
+  }
+
+  .cw-window {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+  }
+
+  .cw-window.maximized {
+    left: 0;
+  }
+
+  .cw-resize-handle {
+    display: none;
+  }
+
+  .cw-minimized-pill {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+  }
+}

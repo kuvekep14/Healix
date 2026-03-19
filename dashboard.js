@@ -1012,8 +1012,8 @@ function renderDriverCards(metrics, result) {
       if (pctEl) pctEl.style.display = 'none';
       // Show chat link on ghost cards too
       if (chatEl && ghost.chatQ) {
-        chatEl.href = 'chat.html?q=' + encodeURIComponent(ghost.chatQ);
-        chatEl.onclick = function(e) { e.stopPropagation(); };
+        chatEl.href = '#';
+        chatEl.onclick = function(e) { e.preventDefault(); e.stopPropagation(); HealixChat.openWithQuestion(ghost.chatQ); };
         chatEl.textContent = '';
         chatEl.innerHTML = '<span class="chat-ask-arrow">→</span> Learn why';
         chatEl.className = 'chat-ask ghost-chat-ask';
@@ -1048,8 +1048,8 @@ function renderDriverCards(metrics, result) {
     if (chatEl && score > 0 && DRIVER_CHAT_PROMPTS[key]) {
       var tier = score >= 70 ? 'good' : score >= 40 ? 'fair' : 'low';
       var prompt = DRIVER_CHAT_PROMPTS[key][tier];
-      chatEl.href = 'chat.html?q=' + encodeURIComponent(prompt);
-      chatEl.onclick = function(e) { e.stopPropagation(); };
+      chatEl.href = '#';
+      chatEl.onclick = function(e) { e.preventDefault(); e.stopPropagation(); HealixChat.openWithQuestion(prompt); };
       chatEl.className = 'chat-ask driver-chat-ask';
       chatEl.style.display = '';
     } else if (chatEl) {
@@ -3910,7 +3910,7 @@ function renderBiomarkerCard(sample, prevSample) {
       : flag === 'L'
       ? 'My ' + sample.biomarker_name + ' is low at ' + displayVal + ' ' + unit + '. What does this mean and how can I improve it?'
       : 'My ' + sample.biomarker_name + ' is ' + displayVal + ' ' + unit + ' which is flagged as abnormal. What should I know?';
-    chatHtml = '<div class="bw-card-chat"><a class="chat-ask" href="chat.html?q=' + encodeURIComponent(chatQ) + '"><span class="chat-ask-arrow">→</span> Ask Healix about this</a></div>';
+    chatHtml = '<div class="bw-card-chat"><a class="chat-ask" href="#" onclick="event.preventDefault();event.stopPropagation();HealixChat.openWithQuestion(decodeURIComponent(\'' + encodeURIComponent(chatQ) + '\'))"><span class="chat-ask-arrow">→</span> Ask Healix about this</a></div>';
   }
 
   return '<div class="bw-card">'
@@ -3967,7 +3967,7 @@ function renderRetestWinsCard(wins) {
   var winNames = wins.map(function(w) { return w.name; }).join(', ');
   var chatQ = 'My ' + winNames + ' improved to optimal range. What else can I do to keep improving my bloodwork?';
   html += '<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(111,207,138,0.15)">';
-  html += '<a class="chat-ask" href="chat.html?q=' + encodeURIComponent(chatQ) + '"><span class="chat-ask-arrow">→</span> What else can I improve?</a>';
+  html += '<a class="chat-ask" href="#" onclick="event.preventDefault();event.stopPropagation();HealixChat.openWithQuestion(decodeURIComponent(\'' + encodeURIComponent(chatQ) + '\'))"><span class="chat-ask-arrow">→</span> What else can I improve?</a>';
   html += '</div>';
   html += '</div>';
   return html;
@@ -4576,6 +4576,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 function closeModalOutside(e, id) { if (e.target === document.getElementById(id)) closeModal(id); }
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
+    if (window.HealixChat && HealixChat.isOpen()) return;
     stopHealthBitePolling();
     document.querySelectorAll('.modal-overlay.open').forEach(function(m) { m.classList.remove('open'); });
   }
@@ -6249,7 +6250,7 @@ function renderWeeklyInsights(insights) {
       + '<div class="insight-card-risk ' + riskCls + '">' + escapeHtml(ins.risk_level || 'low') + '</div>'
       + '<div class="insight-card-content">'
       + '<div class="insight-card-text">' + escapeHtml(ins.insight_text) + '</div>'
-      + '<a href="chat.html?q=' + encoded + '" class="insight-card-discuss">Discuss with Healix →</a>'
+      + '<a href="#" onclick="event.preventDefault();HealixChat.openWithQuestion(decodeURIComponent(\'' + encoded + '\'))" class="insight-card-discuss">Discuss with Healix →</a>'
       + '</div></div>';
   }).join('');
 }

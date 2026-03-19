@@ -36,6 +36,7 @@
   --down: #e07070;
   --error: #e07070;
   --warn: #e0a070;
+  --info: #3498db;
 
   /* ── Alert semantic tokens ── */
   --error-border: rgba(224,112,112,0.4);

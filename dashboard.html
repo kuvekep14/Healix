@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="dashboard.css">
+<link rel="stylesheet" href="chat-widget.css">
 </head>
 <body>
 
@@ -45,9 +46,9 @@
     </div>
     <div class="nav-section">
       <span class="nav-section-label">Tools</span>
-      <a href="chat.html" class="nav-item">
+      <button class="nav-item" onclick="HealixChat.toggle()">
         <span class="nav-icon">◎</span> AI Chat
-      </a>
+      </button>
     </div>
     <div class="nav-section">
       <span class="nav-section-label">Account</span>
@@ -82,7 +83,7 @@
     </div>
     <div class="topbar-right">
 
-      <a href="chat.html" class="topbar-chat-btn">◎ &nbsp;Open Chat</a>
+      <button class="topbar-chat-btn" onclick="HealixChat.toggle()">◎ &nbsp;Open Chat</button>
     </div>
   </div>
 
@@ -240,14 +241,14 @@
         </div>
 
         <!-- Chat prompt -->
-        <div class="vitality-chat-card" onclick="window.location.href='chat.html?q=' + encodeURIComponent('What\'s driving my vitality age today?')">
+        <div class="vitality-chat-card" onclick="HealixChat.openWithQuestion('What\'s driving my vitality age today?')">
           <div class="vitality-chat-left">
             <div class="vitality-chat-label">ASK HEALIX</div>
             <div class="vitality-chat-title">What's <em>driving</em> my vitality age today?</div>
             <div class="vitality-chat-suggestions">
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('Why has my sleep been off?')">Why has my sleep been off?</span>
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('How close am I to my protein goal?')">How close am I to my protein goal?</span>
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('What should I focus on this week?')">What should I focus on this week?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('Why has my sleep been off?')">Why has my sleep been off?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('How close am I to my protein goal?')">How close am I to my protein goal?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('What should I focus on this week?')">What should I focus on this week?</span>
             </div>
           </div>
           <div class="vitality-chat-arrow">→</div>
@@ -515,13 +516,13 @@
 
       <!-- Chat CTA -->
       <div id="sleep-chat-cta" style="display:none;margin-top:20px">
-        <div class="vitality-chat-card" onclick="window.location.href='chat.html?q=' + encodeURIComponent('How can I improve my sleep?')">
+        <div class="vitality-chat-card" onclick="HealixChat.openWithQuestion('How can I improve my sleep?')">
           <div class="vitality-chat-left">
             <div class="vitality-chat-label">ASK HEALIX</div>
             <div class="vitality-chat-title">How can I <em>improve my sleep</em>?</div>
             <div class="vitality-chat-suggestions">
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('Why is my deep sleep low?')">Why is my deep sleep low?</span>
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('What\'s causing my sleep debt?')">What's causing my sleep debt?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('Why is my deep sleep low?')">Why is my deep sleep low?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('What\'s causing my sleep debt?')">What's causing my sleep debt?</span>
             </div>
           </div>
           <div class="vitality-chat-arrow">→</div>
@@ -560,13 +561,13 @@
         </div>
       </div>
       <div id="bw-chat-cta" style="display:none;margin-top:24px">
-        <div class="vitality-chat-card" onclick="window.location.href='chat.html?q=' + encodeURIComponent('What do my lab results mean?')">
+        <div class="vitality-chat-card" onclick="HealixChat.openWithQuestion('What do my lab results mean?')">
           <div class="vitality-chat-left">
             <div class="vitality-chat-label">ASK HEALIX</div>
             <div class="vitality-chat-title">What do my <em>lab results</em> mean?</div>
             <div class="vitality-chat-suggestions">
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('Are any of my biomarkers concerning?')">Are any of my biomarkers concerning?</span>
-              <span class="vcs" onclick="event.stopPropagation();window.location.href='chat.html?q=' + encodeURIComponent('How can I improve my cholesterol?')">How can I improve my cholesterol?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('Are any of my biomarkers concerning?')">Are any of my biomarkers concerning?</span>
+              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('How can I improve my cholesterol?')">How can I improve my cholesterol?</span>
             </div>
           </div>
           <div class="vitality-chat-arrow">→</div>
@@ -1060,16 +1061,48 @@
     <div class="benchmark-bar-label">Tiers for your peer group</div>
     <div class="benchmark-tiers" id="bench-tiers"></div>
     <div class="benchmark-context" id="bench-context"></div>
-    <a href="chat.html" class="benchmark-chat-nudge">
+    <a href="#" class="benchmark-chat-nudge" onclick="event.preventDefault();HealixChat.toggle()">
       <div class="benchmark-chat-nudge-text"><strong>Want to dig deeper?</strong> Ask Healix about this metric in chat.</div>
       <div class="benchmark-chat-arrow">→</div>
     </a>
   </div>
 </div>
 
+<!-- ── CHAT WIDGET ── -->
+<button class="cw-fab" id="cw-fab" onclick="HealixChat.toggle()" title="Chat with Healix">H</button>
+<div class="cw-window hidden" id="cw-window">
+  <div class="cw-titlebar" id="cw-titlebar">
+    <div class="cw-title" id="cw-title">Healix Chat</div>
+    <button class="cw-btn" id="cw-conv-toggle" title="Conversations">&#9776;</button>
+    <button class="cw-btn" id="cw-btn-min" title="Minimize">&#8211;</button>
+    <button class="cw-btn" id="cw-btn-max" title="Maximize">&#9633;</button>
+    <button class="cw-btn" id="cw-btn-close" title="Close">&#10005;</button>
+  </div>
+  <div class="cw-conv-dropdown" id="cw-conv-dropdown"></div>
+  <div class="cw-messages" id="cw-messages"></div>
+  <div class="cw-input-area" id="cw-input-area">
+    <textarea class="cw-textarea" id="cw-textarea" placeholder="Ask anything about your health..." rows="1"></textarea>
+    <button class="cw-send" id="cw-send" title="Send">&#10148;</button>
+  </div>
+  <div class="cw-minimized-pill" id="cw-min-pill">
+    <span style="color:var(--gold);font-size:14px">H</span>
+    <span class="cw-min-title" id="cw-min-title">Healix Chat</span>
+    <button class="cw-btn" onclick="event.stopPropagation();HealixChat.close()" title="Close" style="margin-left:auto">&#10005;</button>
+  </div>
+  <div class="cw-resize-handle cw-rh-n" data-handle="n"></div>
+  <div class="cw-resize-handle cw-rh-s" data-handle="s"></div>
+  <div class="cw-resize-handle cw-rh-e" data-handle="e"></div>
+  <div class="cw-resize-handle cw-rh-w" data-handle="w"></div>
+  <div class="cw-resize-handle cw-rh-ne" data-handle="ne"></div>
+  <div class="cw-resize-handle cw-rh-nw" data-handle="nw"></div>
+  <div class="cw-resize-handle cw-rh-se" data-handle="se"></div>
+  <div class="cw-resize-handle cw-rh-sw" data-handle="sw"></div>
+</div>
+
 <script src="config.js"></script>
 <script src="components/confirm-modal.js"></script>
 <script src="dashboard.js"></script>
+<script src="chat-widget.js"></script>
 
 <datalist id="ex-presets"><option value="Bench Press"><option value="Overhead Press"><option value="Incline Press"><option value="Dumbbell Fly"><option value="Pull-ups"><option value="Chin-ups"><option value="Barbell Row"><option value="Cable Row"><option value="Lat Pulldown"><option value="Dumbbell Curl"><option value="Hammer Curl"><option value="Tricep Dip"><option value="Tricep Pushdown"><option value="Skull Crushers"><option value="Squat"><option value="Front Squat"><option value="Leg Press"><option value="Romanian Deadlift"><option value="Deadlift"><option value="Hip Thrust"><option value="Lunges"><option value="Leg Curl"><option value="Leg Extension"><option value="Plank"><option value="Cable Crunch"><option value="Ab Wheel"><option value="Face Pull"><option value="Running"><option value="Cycling"><option value="Row Machine"><option value="Jump Rope"></datalist>
 </body>
