@@ -572,17 +572,17 @@ function calcVitalityAge(metrics) {
   var realAge = metrics.realAge || 35;
   var scores = [];
 
-  // Blood work — 40% when available, redistributed when not
+  // Blood work — 35% when available, redistributed when not
   var bwScore = scoreBloodwork(metrics.bloodwork);
   if (bwScore !== null) {
-    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.40 });
+    scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.35 });
   }
 
-  // Resting HR — 25% (or 42% without bloodwork)
+  // Resting HR — 30% (or ~43% without bloodwork)
   if (metrics.hr != null) {
     var hrScore = scoreHR(metrics.hr);
     if (hrScore !== null) {
-      scores.push({ name: 'hr', label: 'Heart Rate', score: hrScore, weight: 0.25 });
+      scores.push({ name: 'hr', label: 'Heart Rate', score: hrScore, weight: 0.30 });
     }
   }
 
@@ -949,7 +949,7 @@ var DRIVER_CHAT_PROMPTS = {
 
 function renderDriverCards(metrics, result) {
   // Compute actual weights (accounting for redistribution)
-  var rawWeights = { bloodwork: 0.40, heart: 0.25, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
+  var rawWeights = { bloodwork: 0.35, heart: 0.30, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
   var bwPresent = scoreBloodwork(metrics.bloodwork) !== null;
   var hrPresent = metrics.hr !== null;
   var wtPresent = metrics.weightScore !== null && metrics.weightScore > 0;
@@ -1698,8 +1698,21 @@ async function loadDashboardData() {
   renderSyncBanner(timestamps);
   renderVitalityConfidence(timestamps);
 
-  // Meal streak
+  // Meal streak — use lightweight 120-day query for accurate long streaks
   var streakMeals = (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) ? mealLogs : [];
+  try {
+    var streakSince = new Date();
+    streakSince.setDate(streakSince.getDate() - 120);
+    var streakData = await supabaseRequest(
+      '/rest/v1/meal_log?select=meal_time,created_at&user_id=eq.' + currentUser.id
+      + '&meal_time=gte.' + streakSince.toISOString()
+      + '&order=meal_time.desc',
+      'GET', null, token
+    );
+    if (streakData && !streakData.error && Array.isArray(streakData)) {
+      streakMeals = streakData;
+    }
+  } catch(e) { console.error('[Healix] Streak query error:', e); }
   renderMealStreak(streakMeals);
 
   // Load weekly insights and health summary (non-blocking)
@@ -2706,30 +2719,33 @@ async function saveMeal() {
   var aiNutritionBreakdown = null;
 
   if (hasManualMacros) {
-    // Manual nutrition entry — build data object directly
+    // Manual nutrition entry — build data in HealthBite-compatible NutrientResponse shape
+    var manualMacros = [
+      { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
+      { name: 'Protein', value: parseFloat(prot) || 0, unit: 'g' },
+      { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
+      { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
+    ];
     mealData = {
-      calories: parseFloat(cals) || 0,
-      protein_g: parseFloat(prot) || 0,
-      carbs_g: parseFloat(carbs) || 0,
-      fat_g: parseFloat(fat) || 0,
-      total_nutrition: {
-        Macronutrients: [
-          { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
-          { name: 'Protein', value: parseFloat(prot) || 0, unit: 'g' },
-          { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
-          { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
-        ]
-      }
+      total_nutrition: { Macronutrients: manualMacros },
+      nutrition_breakdown: { mealName: name, components: [{ name: name, serving_size: '', Macronutrients: manualMacros }] },
+      meal_description: name,
+      meal_analysis: '',
+      dev_feedback: '',
+      data_source: { source: 'manual', confidence: 'low' }
     };
+    mealDescription = name;
   }
 
   try {
     if (editingMealId) {
       // Update existing meal — direct PATCH, no AI re-analysis
-      await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH', {
-        meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime,
-        data: mealData
-      }, currentSession.access_token);
+      var patchPayload = {
+        meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime
+      };
+      if (mealData) patchPayload.data = mealData;
+      await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH',
+        patchPayload, currentSession.access_token);
       editingMealId = null;
     } else {
       // New meal — call AI analysis if no manual macros
@@ -2762,14 +2778,26 @@ async function saveMeal() {
         statusEl.textContent = 'Saving meal...';
       }
 
+      // Ensure mealData is always HealthBite-compatible NutrientResponse shape
+      if (!mealData || !mealData.total_nutrition) {
+        mealData = {
+          total_nutrition: { Macronutrients: [] },
+          nutrition_breakdown: { mealName: name, components: [] },
+          meal_description: name,
+          meal_analysis: '',
+          dev_feedback: '',
+          data_source: { source: 'manual', confidence: 'low' }
+        };
+        mealDescription = name;
+      }
+
       // Insert meal_log with Prefer: return=representation to get the id back
       var insertPayload = {
         user_id: currentUser.id, meal_type: type,
         raw_input: name, meal_time: mealTime,
-        data: mealData || {}
+        data: mealData
       };
-      if (mealDescription) insertPayload.meal_description = mealDescription;
-      else insertPayload.meal_description = name;
+      insertPayload.meal_description = mealDescription || name;
       if (mealAnalysis) insertPayload.meal_analysis = mealAnalysis;
       if (devFeedback) insertPayload.dev_feedback = devFeedback;
 
@@ -2788,7 +2816,6 @@ async function saveMeal() {
           items.forEach(function(item) {
             nutrientRows.push({
               meal_log_id: mealLogId,
-              user_id: currentUser.id,
               category: category,
               component_name: null,
               name: item.name,
@@ -2807,7 +2834,6 @@ async function saveMeal() {
               items.forEach(function(item) {
                 nutrientRows.push({
                   meal_log_id: mealLogId,
-                  user_id: currentUser.id,
                   category: category,
                   component_name: comp.name || null,
                   name: item.name,
@@ -3298,6 +3324,11 @@ function getPopulationPercentile(driverKey, rawValue, profile) {
   return null;
 }
 
+function getUserSex() {
+  var p = window.userProfileData;
+  return (p && (p.gender || p.sex)) || 'male';
+}
+
 function getRange(name, sex) {
   var r = BIOMARKER_RANGES[name];
   if (!r) {
@@ -3412,8 +3443,7 @@ function renderBloodworkDate(dateStr) {
       if (Math.abs(diff) < 0.01) return;
       var pctChange = prev.value !== 0 ? Math.round((diff / prev.value) * 100) : 0;
       var name = s.biomarker_name.toLowerCase();
-      var userSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
-      var range = getRange(s.biomarker_name, userSex);
+      var range = getRange(s.biomarker_name, getUserSex());
       var improved = false;
       if (name.indexOf('hdl') !== -1) improved = diff > 0;
       else if (s.flag === 'H' || (!s.flag && range && s.value > range.optHigh)) improved = diff < 0;
@@ -3451,10 +3481,9 @@ function renderBloodworkDate(dateStr) {
   }
 
   // Group by category
-  var bwSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
   var byCategory = {};
   samples.forEach(function(s) {
-    var range = getRange(s.biomarker_name, bwSex);
+    var range = getRange(s.biomarker_name, getUserSex());
     var cat = (range && range.category) || s.category || 'Other';
     if (!byCategory[cat]) byCategory[cat] = [];
     byCategory[cat].push(s);
@@ -3497,8 +3526,7 @@ function renderBloodworkDate(dateStr) {
 }
 
 function renderBiomarkerCard(sample, prevSample) {
-  var cardSex = (window.userProfileData && (window.userProfileData.gender || window.userProfileData.sex)) || 'male';
-  var range = getRange(sample.biomarker_name, cardSex);
+  var range = getRange(sample.biomarker_name, getUserSex());
   var val = sample.value;
   var unit = sample.unit || (range ? range.unit : '');
   var refRange = sample.reference_range || '';
@@ -6244,8 +6272,8 @@ async function saveFirstRunProfile() {
   var heightStr = document.getElementById('fr-height').value;
   var weightStr = document.getElementById('fr-weight').value;
 
-  var heightCm = parseHeight(heightStr);
-  var weightKg = parseWeight(weightStr);
+  var heightCm = parseHeight(heightStr, 'imperial');
+  var weightKg = parseWeight(weightStr, 'lbs');
 
   var data = {};
   if (dob) data.birth_date = dob;
@@ -6293,77 +6321,244 @@ function dismissFirstRun() {
   renderMilestones();
 }
 
-// ── MEAL STREAK ──
-function calculateMealStreak(meals) {
-  if (!meals || meals.length === 0) return { streak: 0, todayLogged: false, atRisk: false };
+// ── MEAL STREAK + ENGAGEMENT ──
+var STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
+var MILESTONE_MESSAGES = {
+  3: 'Three days of data. Patterns are starting to emerge.',
+  7: 'A full week logged. Streak shield earned.',
+  14: 'Two weeks. Enough data for meaningful nutrient trends.',
+  30: 'Thirty days. Your nutritional baseline is well established.',
+  60: 'Sixty days of continuous logging.',
+  90: 'A full quarter. Seasonal patterns are now visible.'
+};
 
+function loadStreakShields(userId) {
+  try {
+    var raw = localStorage.getItem('healix_streak_shields_' + userId);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return { count: 0, usedDates: [] };
+}
+
+function saveStreakShields(userId, shields) {
+  try { localStorage.setItem('healix_streak_shields_' + userId, JSON.stringify(shields)); } catch(e) {}
+}
+
+function loadBestStreak(userId) {
+  return parseInt(localStorage.getItem('healix_best_streak_' + userId) || '0', 10);
+}
+
+function saveBestStreak(userId, val) {
+  try { localStorage.setItem('healix_best_streak_' + userId, String(val)); } catch(e) {}
+}
+
+function loadLastCelebratedMilestone(userId) {
+  return parseInt(localStorage.getItem('healix_last_celebrated_milestone_' + userId) || '0', 10);
+}
+
+function saveLastCelebratedMilestone(userId, val) {
+  try { localStorage.setItem('healix_last_celebrated_milestone_' + userId, String(val)); } catch(e) {}
+}
+
+function computeMealEngagement(meals, localDateStrFn, storedShields, storedBestStreak, lastCelebrated) {
   var dates = {};
-  meals.forEach(function(m) {
-    var d = localDateStr(new Date(m.meal_time || m.created_at));
-    dates[d] = true;
-  });
+  if (meals && meals.length > 0) {
+    meals.forEach(function(m) {
+      var d = localDateStrFn(new Date(m.meal_time || m.created_at));
+      dates[d] = true;
+    });
+  }
 
-  var today = localDateStr(new Date());
+  var today = localDateStrFn(new Date());
   var todayLogged = !!dates[today];
+  var shields = { count: storedShields.count || 0, usedDates: (storedShields.usedDates || []).slice() };
+
+  // Calculate streak walking backwards, consuming shield on gap
   var streak = 0;
+  var shieldActive = false;
   var checkDate = new Date();
+  var MAX_STREAK_DAYS = 120;
 
   if (todayLogged) {
-    while (dates[localDateStr(checkDate)]) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
+    streak = 1;
+    checkDate.setDate(checkDate.getDate() - 1);
   } else {
     checkDate.setDate(checkDate.getDate() - 1);
-    while (dates[localDateStr(checkDate)]) {
+  }
+
+  var shieldUsedThisWalk = false;
+  var iterations = 0;
+  while (iterations < MAX_STREAK_DAYS) {
+    iterations++;
+    var ds = localDateStrFn(checkDate);
+    if (dates[ds]) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
+    } else if (!shieldUsedThisWalk && shields.count > 0 && streak > 0 && shields.usedDates.indexOf(ds) === -1) {
+      // Auto-consume shield for this gap (only first gap adjacent to logged days)
+      shields.count = 0;
+      shields.usedDates.push(ds);
+      shieldActive = true;
+      shieldUsedThisWalk = true;
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+      // After shield, next day must be a real logged day or streak ends
+      var nextDs = localDateStrFn(checkDate);
+      if (!dates[nextDs]) break;
+    } else if (!shieldUsedThisWalk && shields.usedDates.indexOf(ds) !== -1) {
+      // Honor persisted shield only if it's adjacent (first gap)
+      shieldActive = true;
+      shieldUsedThisWalk = true;
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+      var nextDs2 = localDateStrFn(checkDate);
+      if (!dates[nextDs2]) break;
+    } else {
+      break;
     }
   }
 
-  return { streak: streak, todayLogged: todayLogged, atRisk: !todayLogged && streak > 0 };
+  // Earn shield every 7 consecutive days (max 1)
+  if (streak > 0 && streak % 7 === 0 && shields.count < 1) {
+    shields.count = 1;
+  }
+
+  var atRisk = !todayLogged && streak > 0;
+
+  // 7-day consistency
+  var last7 = [];
+  var dayCheck = new Date();
+  for (var i = 6; i >= 0; i--) {
+    var d7 = new Date();
+    d7.setDate(dayCheck.getDate() - i);
+    var ds7 = localDateStrFn(d7);
+    last7.push({
+      date: ds7,
+      logged: !!dates[ds7],
+      shielded: shields.usedDates.indexOf(ds7) !== -1,
+      dayLabel: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d7.getDay()]
+    });
+  }
+  var daysLogged = last7.filter(function(d) { return d.logged; }).length;
+  var consistencyPct = Math.round(daysLogged / 7 * 100);
+  var consistencyLevel = consistencyPct >= 85 ? 'excellent' : consistencyPct >= 57 ? 'good' : consistencyPct >= 28 ? 'fair' : 'low';
+
+  // Best streak
+  var bestStreak = storedBestStreak || 0;
+  if (streak > bestStreak) bestStreak = streak;
+
+  // Milestone
+  lastCelebrated = lastCelebrated || 0;
+  var milestone = null;
+  for (var mi = STREAK_MILESTONES.length - 1; mi >= 0; mi--) {
+    if (streak >= STREAK_MILESTONES[mi] && STREAK_MILESTONES[mi] > lastCelebrated) {
+      milestone = { days: STREAK_MILESTONES[mi], message: MILESTONE_MESSAGES[STREAK_MILESTONES[mi]] };
+      break;
+    }
+  }
+
+  return {
+    streak: streak,
+    todayLogged: todayLogged,
+    atRisk: atRisk,
+    shieldActive: shieldActive,
+    shieldsAvailable: shields.count,
+    shields: shields,
+    consistency: { days: last7, daysLogged: daysLogged, percent: consistencyPct, level: consistencyLevel },
+    bestStreak: bestStreak,
+    milestone: milestone
+  };
 }
 
 function renderMealStreak(meals) {
   var container = document.getElementById('meal-streak');
   if (!container) return;
 
-  var result = calculateMealStreak(meals);
+  var userId = currentUser && currentUser.id ? currentUser.id : 'anon';
+  var shields = loadStreakShields(userId);
+  var bestStreak = loadBestStreak(userId);
+  var lastCelebrated = loadLastCelebratedMilestone(userId);
+  var result = computeMealEngagement(meals, localDateStr, shields, bestStreak, lastCelebrated);
+
+  // Persist shields and best streak
+  saveStreakShields(userId, result.shields);
+  if (result.bestStreak > bestStreak) saveBestStreak(userId, result.bestStreak);
+
+  // Persist milestone celebration
+  if (result.milestone) saveLastCelebratedMilestone(userId, result.milestone.days);
+
+  // Build status message
+  var msg = '';
+  var isNewBest = result.streak > 0 && result.streak > bestStreak && result.todayLogged;
+
+  if (result.milestone) {
+    msg = result.milestone.message;
+  } else if (result.shieldActive && result.streak > 0 && !result.atRisk) {
+    msg = 'Streak shield used — ' + result.streak + '-day streak preserved.';
+  } else if (isNewBest && result.streak > 3) {
+    msg = 'New personal record — ' + result.streak + ' days.';
+  } else if (result.atRisk && result.shieldsAvailable > 0) {
+    msg = 'Log a meal to continue, or your shield will preserve your streak tomorrow.';
+  } else if (result.atRisk) {
+    msg = 'Your ' + result.streak + '-day streak ends at midnight.';
+  } else if (result.streak >= 14) {
+    msg = 'Enough data for meaningful nutrient trends.';
+  } else if (result.streak >= 7) {
+    msg = 'Consistency is compounding.';
+  } else if (result.streak >= 3) {
+    msg = 'Patterns are starting to emerge.';
+  } else if (result.streak >= 1) {
+    msg = 'Great start. Tomorrow makes it stronger.';
+  }
+
+  // 7-day dots HTML
+  var dotsHtml = '<div class="meal-streak-dots">';
+  result.consistency.days.forEach(function(day) {
+    var cls = 'meal-streak-dot';
+    if (day.shielded) cls += ' shielded';
+    else if (day.logged) cls += ' logged';
+    dotsHtml += '<div class="' + cls + '" title="' + escapeHtml(day.date) + '">'
+      + '<div class="meal-streak-dot-label">' + day.dayLabel + '</div>'
+      + '</div>';
+  });
+  dotsHtml += '</div>';
+
+  // Shield indicator
+  var shieldHtml = '';
+  if (result.shieldsAvailable > 0 || result.shieldActive) {
+    shieldHtml = '<div class="meal-streak-shields" title="Streak shield' + (result.shieldsAvailable > 0 ? ' available' : ' used') + '">'
+      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" style="fill:' + (result.shieldsAvailable > 0 ? 'var(--gold)' : 'var(--muted)') + ';opacity:' + (result.shieldsAvailable > 0 ? '0.9' : '0.4') + '"/></svg>'
+      + (result.shieldsAvailable > 0 ? '<span class="meal-streak-shield-count">x' + result.shieldsAvailable + '</span>' : '')
+      + '</div>';
+  }
+
+  var cardClass = 'meal-streak-card';
+  if (result.atRisk) cardClass += ' at-risk';
+  if (result.milestone) cardClass += ' milestone';
 
   if (result.streak === 0 && !result.todayLogged) {
     container.style.display = '';
-    container.innerHTML = '<div class="meal-streak-card" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+    container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
       + '<div class="meal-streak-count-num">0</div>'
       + '<div class="meal-streak-info">'
       + '<div class="meal-streak-label">Meal Streak</div>'
       + '<div class="meal-streak-msg">Log your first meal to start building consistency.</div>'
+      + dotsHtml
       + '</div>'
       + '<div class="meal-streak-action">Log meal →</div>'
       + '</div>';
     return;
   }
 
-  var msg = '';
-  if (result.atRisk) {
-    msg = 'Log a meal today to keep your streak alive.';
-  } else if (result.streak >= 14) {
-    msg = 'Two weeks strong. Your data is building a clear picture.';
-  } else if (result.streak >= 7) {
-    msg = 'One week running. Consistency is compounding.';
-  } else if (result.streak >= 3) {
-    msg = 'Keep it going — momentum is building.';
-  } else {
-    msg = 'Great start. Tomorrow makes it stronger.';
-  }
-
   container.style.display = '';
-  container.innerHTML = '<div class="meal-streak-card' + (result.atRisk ? ' at-risk' : '') + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
+  container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
     + '<div class="meal-streak-count-num">' + result.streak + '</div>'
     + '<div class="meal-streak-info">'
-    + '<div class="meal-streak-label">' + result.streak + '-day meal streak' + (result.atRisk ? ' — at risk' : '') + '</div>'
+    + '<div class="meal-streak-label">' + result.streak + '-day streak' + shieldHtml + (result.atRisk ? ' <span style="color:var(--warn)">— at risk</span>' : '') + '</div>'
     + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
+    + dotsHtml
     + '</div>'
-    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal') + '</div>'
+    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal →') + '</div>'
     + '</div>';
 }
 
