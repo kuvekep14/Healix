@@ -45,8 +45,8 @@ Default weights when all metrics are present:
 
 | Metric | Weight |
 |--------|--------|
-| Blood Work | 40% |
-| Heart Rate | 25% |
+| Blood Work | 35% |
+| Heart Rate | 30% |
 | Weight | 20% |
 | Sleep | 15% |
 | Strength | 10% |
