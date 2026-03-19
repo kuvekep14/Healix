@@ -3095,7 +3095,7 @@ function renderDetectedItems(items) {
   container.innerHTML = items.map(function(item, i) {
     return '<div class="intake-detected-item">'
       + '<span class="detected-name">' + escapeHtml(item.name || 'Item ' + (i + 1)) + '</span>'
-      + '<input class="detected-serving" type="text" value="' + escapeHtml(item.serving_size || '') + '" placeholder="serving" data-idx="' + i + '">'
+      + '<input class="detected-serving" type="text" value="' + escapeHtml(item.serving_size || '').replace(/"/g, '&quot;') + '" placeholder="serving" data-idx="' + i + '">'
       + '<button class="detected-remove" onclick="removeDetectedItem(' + i + ')" title="Remove">✕</button>'
       + '</div>';
   }).join('');
