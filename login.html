@@ -270,13 +270,20 @@ function showForgot(e) {
   }
   setLoading(true);
   var basePath = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
-  var redirectTo = encodeURIComponent(window.location.origin + basePath + 'reset-password.html');
-  supabaseRequest('/auth/v1/recover?redirect_to=' + redirectTo, 'POST', { email: email })
-    .then(function() {
+  var redirectUrl = window.location.origin + basePath + 'reset-password.html';
+  var redirectParam = encodeURIComponent(redirectUrl);
+  supabaseRequest('/auth/v1/recover?redirect_to=' + redirectParam, 'POST', { email: email, redirect_to: redirectUrl })
+    .then(function(data) {
       setLoading(false);
-      showAlert('Password reset email sent. Check your inbox.', 'success');
-    }).catch(function() {
+      if (data && (data.error || data.error_code || data.msg)) {
+        console.error('[Recover] Error:', data);
+        showAlert(data.error_description || data.msg || data.error || 'Could not send reset email. Please try again.');
+      } else {
+        showAlert('Password reset email sent. Check your inbox (and spam folder).', 'success');
+      }
+    }).catch(function(err) {
       setLoading(false);
+      console.error('[Recover] Network error:', err);
       showAlert('Could not send reset email. Please try again.');
     });
 }
