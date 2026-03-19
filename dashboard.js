@@ -3608,6 +3608,8 @@ async function loadBloodworkPage() {
       '/rest/v1/blood_work_samples?user_id=eq.' + currentUser.id + '&order=test_date.desc,created_at.desc&limit=500',
       'GET', null, token
     );
+    console.log('[Healix] loadBloodworkPage result:', bw ? (bw.error ? 'ERROR:' + JSON.stringify(bw.error) : (Array.isArray(bw) ? bw.length + ' rows' : typeof bw)) : 'null');
+    if (bw && Array.isArray(bw) && bw.length > 0) { console.log('[Healix] bloodwork sample[0]:', JSON.stringify(bw[0])); }
     if (!bw || bw.error || !Array.isArray(bw) || bw.length === 0) {
       renderBloodworkEmpty();
       return;
