@@ -28,7 +28,7 @@
     <div class="nav-section">
       <span class="nav-section-label">Health</span>
       <button class="nav-item" onclick="showPage('meals', this)">
-        <span class="nav-icon">⊕</span> Meals
+        <span class="nav-icon">⊕</span> Intake
       </button>
       <button class="nav-item" onclick="showPage('sleep', this)">
         <span class="nav-icon">◑</span> Sleep
@@ -331,9 +331,9 @@
       <!-- Macro progress bars (day view only) -->
       <div id="meals-day-view">
         <div class="meals-log" id="meals-list">
-          <div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>
+          <div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No intake logged yet.</div></div>
         </div>
-        <button class="add-meal-btn" onclick="setMealDateTimeDefault(); openModal('meal-modal')" style="margin-top:12px">+ Log a Meal</button>
+        <button class="add-meal-btn" onclick="setMealDateTimeDefault(); openModal('meal-modal')" style="margin-top:12px">+ Log Intake</button>
 
         <!-- Supplements section -->
         <div id="supplements-section" style="margin-top:20px">
@@ -346,7 +346,7 @@
               <div style="font-size:12px;color:var(--muted)">No supplements added yet.</div>
             </div>
             <div id="supplements-suggestions" style="display:none;margin-top:12px;border-top:1px solid var(--gold-border);padding-top:12px">
-              <div style="font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Detected from your meals</div>
+              <div style="font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Detected from your intake</div>
               <div id="supp-suggestions-list"></div>
             </div>
           </div>
@@ -905,20 +905,44 @@
 <div class="modal-overlay" id="meal-modal" onclick="closeModalOutside(event, 'meal-modal')">
   <div class="modal" style="position:relative">
     <button class="modal-close" onclick="closeModal('meal-modal')">✕</button>
-    <div class="modal-title">Log a <em>Meal</em></div>
-    <div class="modal-sub">Add a meal manually. You can also log meals with a photo in the mobile app.</div>
+    <div class="modal-title">Log an <em>Intake</em></div>
+    <div class="modal-sub">Describe what you consumed — or snap a photo and let AI handle the rest.</div>
+
+    <!-- Photo section -->
+    <div id="ml-photo-section" style="margin-bottom:16px">
+      <input type="file" id="ml-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleIntakePhoto(this)">
+      <button onclick="document.getElementById('ml-photo-input').click()" id="ml-photo-zone" class="intake-photo-zone">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Take or Upload Photo
+      </button>
+      <div id="ml-photo-preview" class="intake-photo-preview" style="display:none">
+        <img id="ml-photo-img" style="width:100%;max-height:160px;object-fit:cover;border:1px solid var(--gold-border)">
+        <button onclick="clearIntakePhoto()" style="position:absolute;top:6px;right:6px;background:var(--dark);border:1px solid var(--gold-border);color:var(--cream);width:24px;height:24px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <div id="ml-photo-status" style="font-size:12px;color:var(--muted);margin-top:6px;display:none"></div>
+      <div id="ml-detected-panel" class="intake-detected-panel" style="display:none">
+        <div style="font-size:10px;color:var(--gold);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px">Detected Items</div>
+        <div id="ml-detected-items"></div>
+        <button type="button" onclick="confirmDetectedItems()" class="modal-btn-primary" style="margin-top:10px;width:100%;font-size:12px;padding:8px">Use These Results</button>
+      </div>
+    </div>
+
     <div class="modal-field">
-      <label class="modal-label">Meal Description</label>
-      <input class="modal-input" id="ml-name" type="text" placeholder="e.g. Grilled chicken salad">
+      <label class="modal-label">Description</label>
+      <input class="modal-input" id="ml-name" type="text" placeholder="e.g. Two eggs and coffee, vitamin D 2000 IU, protein shake...">
     </div>
     <div class="modal-row">
       <div class="modal-field">
-        <label class="modal-label">Meal Type</label>
+        <label class="modal-label">Type</label>
         <select class="modal-input" id="ml-type" style="cursor:pointer">
           <option value="breakfast">Breakfast</option>
           <option value="lunch">Lunch</option>
           <option value="dinner">Dinner</option>
           <option value="snack">Snack</option>
+          <option value="beverage">Beverage</option>
+          <option value="supplement">Supplement</option>
+          <option value="medication">Medication</option>
+          <option value="other">Other</option>
         </select>
       </div>
       <div class="modal-field">
@@ -950,11 +974,21 @@
           <input class="modal-input" id="ml-fat" type="number" placeholder="g">
         </div>
       </div>
+      <!-- Vitamins sub-toggle -->
+      <button type="button" class="intake-micro-toggle" onclick="toggleIntakeVitamins()">
+        <span id="ml-vitamins-arrow" style="font-size:10px;transition:transform .2s;display:inline-block">▶</span> Vitamins
+      </button>
+      <div id="ml-vitamins-grid" class="intake-micro-grid" style="display:none"></div>
+      <!-- Minerals sub-toggle -->
+      <button type="button" class="intake-micro-toggle" onclick="toggleIntakeMinerals()">
+        <span id="ml-minerals-arrow" style="font-size:10px;transition:transform .2s;display:inline-block">▶</span> Minerals
+      </button>
+      <div id="ml-minerals-grid" class="intake-micro-grid" style="display:none"></div>
     </div>
     <div id="ml-status" style="font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
     <div class="modal-actions">
       <button class="modal-btn-secondary" onclick="closeModal('meal-modal')">Cancel</button>
-      <button class="modal-btn-primary" id="ml-save-btn" onclick="saveMeal()">Log Meal</button>
+      <button class="modal-btn-primary" id="ml-save-btn" onclick="saveMeal()">Log Intake</button>
     </div>
   </div>
 </div>

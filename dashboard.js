@@ -257,7 +257,7 @@ function greet() {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Meals', sleep: 'Sleep', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
@@ -1698,6 +1698,7 @@ async function loadDashboardData() {
   // Render everything
   console.log('[Healix] metrics:', JSON.stringify(metrics));
   window._lastDashboardMetrics = metrics;
+  window._lastDashboardTimestamps = timestamps;
   var result = calcVitalityAge(metrics);
   window._lastVitalityResult = result;
   console.log('[Healix] vitalityResult:', result);
@@ -1844,9 +1845,9 @@ function renderDashMeals(meals, today) {
   if (!el) return;
   var todayMeals = meals;
   var el = document.getElementById('d-meals');
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', 'ate out':'🍽' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', 'ate out':'🍽', beverage:'🥤', supplement:'💊', medication:'💊', other:'📦' };
   if (todayMeals.length === 0) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged today</div></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No intake logged today</div></div>';
     return;
   }
   el.innerHTML = todayMeals.slice(0, 4).map(function(m) {
@@ -1854,7 +1855,7 @@ function renderDashMeals(meals, today) {
     var mealType = (m.meal_type || '').toLowerCase();
     return '<div class="meal-row">'
       + '<div class="meal-emoji">' + (emojis[mealType] || '🥘') + '</div>'
-      + '<div class="meal-info"><div class="meal-name">' + (m.meal_description || 'Meal') + '</div>'
+      + '<div class="meal-info"><div class="meal-name">' + (m.meal_description || 'Intake') + '</div>'
       + '<div class="meal-meta">' + (m.meal_type || '') + ' · ' + t.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}) + '</div></div>'
       + '<div class="meal-cals">—</div>'
       + '</div>';
@@ -2336,7 +2337,7 @@ async function loadMealsPage() {
     );
     if (!meals || meals.error || !Array.isArray(meals)) {
       console.log('[Healix] meals fetch failed or empty:', meals);
-      document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No meals logged yet.</div></div>';
+      document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No intake logged yet.</div></div>';
       return;
     }
     console.log('[Healix] meals fetched:', meals.length, 'mealsDate=', localDateStr(mealsDate));
@@ -2456,15 +2457,15 @@ function renderMealsDayView(meals, nutrients, today) {
   console.log("[Healix] dayMeals after filter:", dayMeals.length);
   if (meals.length > 0) { console.log("[Healix] sample:", meals.slice(0,3).map(function(m){ return (m.meal_time||m.created_at) + " -> " + localDateStr(new Date(m.meal_time||m.created_at)); })); }
 
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊', 'ate out':'🍽' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊', 'ate out':'🍽', beverage:'🥤', medication:'💊', other:'📦' };
   var list = document.getElementById('meals-list');
 
   if (dayMeals.length === 0) {
     list.innerHTML = '<div class="empty-state" style="padding:40px">'
       + '<div class="empty-state-icon">🍽</div>'
-      + '<div class="empty-state-text">No meals logged on this day.</div>'
-      + '<div style="font-size:12px;color:var(--cream-dim);margin-top:8px;line-height:1.6">Meal tracking powers your nutrition insights and helps Healix give personalized advice.</div>'
-      + '<button class="upload-btn" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')" style="margin:16px auto 0;display:flex">+ Log a Meal</button>'
+      + '<div class="empty-state-text">No intake logged on this day.</div>'
+      + '<div style="font-size:12px;color:var(--cream-dim);margin-top:8px;line-height:1.6">Tracking what you consume powers your nutrition insights and helps Healix give personalized advice.</div>'
+      + '<button class="upload-btn" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')" style="margin:16px auto 0;display:flex">+ Log Intake</button>'
       + '</div>';
   } else {
     // Group nutrients by meal
@@ -2487,7 +2488,7 @@ function renderMealsDayView(meals, nutrients, today) {
       return '<div class="meal-card" style="position:relative">'
         + '<div class="meal-card-emoji">' + (emojis[mealType] || '🥘') + '</div>'
         + '<div class="meal-card-info">'
-        + '<div class="meal-card-name">' + escapeHtml(m.meal_description || 'Meal') + '</div>'
+        + '<div class="meal-card-name">' + escapeHtml(m.meal_description || 'Intake') + '</div>'
         + '<div class="meal-card-time">' + (m.meal_type ? escapeHtml(m.meal_type.charAt(0).toUpperCase()+m.meal_type.slice(1)) : '') + ' · ' + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + '</div>'
         + '<div class="meal-card-macros">'
         + (prot !== null ? '<div class="meal-card-macro">P <span>' + prot + 'g</span></div>' : '')
@@ -2613,7 +2614,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var breakdown = document.getElementById('agg-daily-breakdown');
   if (!breakdown) return;
   if (days.length === 0) {
-    breakdown.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No meals logged in this period.</div>';
+    breakdown.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">No intake logged in this period.</div>';
     return;
   }
   breakdown.innerHTML = '<table style="width:100%;border-collapse:collapse">'
@@ -2732,7 +2733,7 @@ async function saveMeal() {
   var prot = document.getElementById('ml-protein').value;
   var carbs = document.getElementById('ml-carbs').value;
   var fat = document.getElementById('ml-fat').value;
-  if (!name) { alert('Please enter a meal description.'); return; }
+  if (!name && !_intakePhotoMealData) { alert('Please enter a description.'); return; }
   // Capitalize meal type to match DB convention (e.g. 'lunch' → 'Lunch')
   type = type.charAt(0).toUpperCase() + type.slice(1);
   var mealTime = dt ? new Date(dt).toISOString() : new Date().toISOString();
@@ -2747,7 +2748,11 @@ async function saveMeal() {
   var devFeedback = null;
   var aiNutritionBreakdown = null;
 
-  if (hasManualMacros) {
+  if (_intakePhotoMealData) {
+    // Photo-analyzed data — already structured from analyze-meal-from-image
+    mealData = _intakePhotoMealData;
+    mealDescription = mealData.meal_description || name || 'Photo intake';
+  } else if (hasManualMacros) {
     // Manual nutrition entry — build data in HealthBite-compatible NutrientResponse shape
     var manualMacros = [
       { name: 'Calories', value: parseFloat(cals) || 0, unit: 'kcal' },
@@ -2755,8 +2760,13 @@ async function saveMeal() {
       { name: 'Total Carbohydrates', value: parseFloat(carbs) || 0, unit: 'g' },
       { name: 'Total Fat', value: parseFloat(fat) || 0, unit: 'g' }
     ];
+    // Merge manual micronutrients if any
+    var manualMicros = collectManualMicros();
+    var totalNutrition = { Macronutrients: manualMacros };
+    if (manualMicros.Vitamins.length > 0) totalNutrition.Vitamins = manualMicros.Vitamins;
+    if (manualMicros.Minerals.length > 0) totalNutrition.Minerals = manualMicros.Minerals;
     mealData = {
-      total_nutrition: { Macronutrients: manualMacros },
+      total_nutrition: totalNutrition,
       nutrition_breakdown: { mealName: name, components: [{ name: name, serving_size: '', Macronutrients: manualMacros }] },
       meal_description: name,
       meal_analysis: '',
@@ -2777,11 +2787,11 @@ async function saveMeal() {
         patchPayload, currentSession.access_token);
       editingMealId = null;
     } else {
-      // New meal — call AI analysis if no manual macros
-      if (!hasManualMacros) {
+      // New meal — call AI analysis if no manual macros and no photo data
+      if (!hasManualMacros && !_intakePhotoMealData) {
         statusEl.style.display = 'block';
         statusEl.style.color = 'var(--muted)';
-        statusEl.textContent = 'Analyzing meal...';
+        statusEl.textContent = 'Analyzing...';
         saveBtn.disabled = true;
         try {
           var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
@@ -2804,7 +2814,7 @@ async function saveMeal() {
         } catch(e) {
           console.warn('[Healix] analyze-meal-ai failed:', e);
         }
-        statusEl.textContent = 'Saving meal...';
+        statusEl.textContent = 'Saving...';
       }
 
       // Ensure mealData is always HealthBite-compatible NutrientResponse shape
@@ -2885,13 +2895,15 @@ async function saveMeal() {
 
     // Reset and close
     closeModal('meal-modal');
-    document.querySelector('#meal-modal .modal-title').innerHTML = 'Log a <em>Meal</em>';
-    document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Log Meal';
+    document.querySelector('#meal-modal .modal-title').innerHTML = 'Log an <em>Intake</em>';
+    document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Log Intake';
     ['ml-name','ml-cals','ml-protein','ml-carbs','ml-fat'].forEach(function(id) { document.getElementById(id).value = ''; });
     var nf = document.getElementById('ml-nutrition-fields');
     var na = document.getElementById('ml-nutrition-arrow');
     if (nf) nf.style.display = 'none';
     if (na) na.style.transform = '';
+    clearIntakePhoto();
+    clearIntakeMicros();
     statusEl.style.display = 'none';
     saveBtn.disabled = false;
     loadMealsPage();
@@ -2901,6 +2913,218 @@ async function saveMeal() {
     statusEl.style.color = 'var(--down)';
     statusEl.textContent = 'Error: ' + e.message;
     saveBtn.disabled = false;
+  }
+}
+
+// ── INTAKE PHOTO & MICRONUTRIENTS ──
+var _intakePhotoBase64 = null;
+var _intakePhotoMealData = null;
+var _intakePhotoDetectedItems = null;
+var _intakePhotoAnalyzing = false;
+
+var MICRO_DEFS = {
+  vitamins: [
+    { name: 'Vitamin A', unit: 'mcg' },
+    { name: 'Vitamin B6', unit: 'mg' },
+    { name: 'Vitamin B12', unit: 'mcg' },
+    { name: 'Vitamin C', unit: 'mg' },
+    { name: 'Vitamin D', unit: 'mcg' },
+    { name: 'Vitamin E', unit: 'mg' },
+    { name: 'Vitamin K', unit: 'mcg' },
+    { name: 'Folate', unit: 'mcg' }
+  ],
+  minerals: [
+    { name: 'Calcium', unit: 'mg' },
+    { name: 'Iron', unit: 'mg' },
+    { name: 'Magnesium', unit: 'mg' },
+    { name: 'Potassium', unit: 'mg' },
+    { name: 'Sodium', unit: 'mg' },
+    { name: 'Zinc', unit: 'mg' }
+  ]
+};
+
+function initIntakeMicroGrids() {
+  var vitGrid = document.getElementById('ml-vitamins-grid');
+  var minGrid = document.getElementById('ml-minerals-grid');
+  if (vitGrid && !vitGrid.innerHTML) {
+    vitGrid.innerHTML = MICRO_DEFS.vitamins.map(function(v) {
+      return '<div class="modal-field"><label class="modal-label">' + v.name + ' (' + v.unit + ')</label>'
+        + '<input class="modal-input" type="number" data-micro="' + v.name + '" data-unit="' + v.unit + '" placeholder="' + v.unit + '"></div>';
+    }).join('');
+  }
+  if (minGrid && !minGrid.innerHTML) {
+    minGrid.innerHTML = MICRO_DEFS.minerals.map(function(m) {
+      return '<div class="modal-field"><label class="modal-label">' + m.name + ' (' + m.unit + ')</label>'
+        + '<input class="modal-input" type="number" data-micro="' + m.name + '" data-unit="' + m.unit + '" placeholder="' + m.unit + '"></div>';
+    }).join('');
+  }
+}
+
+function toggleIntakeVitamins() {
+  initIntakeMicroGrids();
+  var grid = document.getElementById('ml-vitamins-grid');
+  var arrow = document.getElementById('ml-vitamins-arrow');
+  if (!grid) return;
+  var show = grid.style.display === 'none';
+  grid.style.display = show ? 'grid' : 'none';
+  if (arrow) arrow.style.transform = show ? 'rotate(90deg)' : '';
+}
+
+function toggleIntakeMinerals() {
+  initIntakeMicroGrids();
+  var grid = document.getElementById('ml-minerals-grid');
+  var arrow = document.getElementById('ml-minerals-arrow');
+  if (!grid) return;
+  var show = grid.style.display === 'none';
+  grid.style.display = show ? 'grid' : 'none';
+  if (arrow) arrow.style.transform = show ? 'rotate(90deg)' : '';
+}
+
+function collectManualMicros() {
+  var result = { Vitamins: [], Minerals: [] };
+  var inputs = document.querySelectorAll('#ml-vitamins-grid input[data-micro], #ml-minerals-grid input[data-micro]');
+  inputs.forEach(function(inp) {
+    var val = parseFloat(inp.value);
+    if (!val) return;
+    var name = inp.getAttribute('data-micro');
+    var unit = inp.getAttribute('data-unit');
+    var isVitamin = MICRO_DEFS.vitamins.some(function(v) { return v.name === name; });
+    var arr = isVitamin ? result.Vitamins : result.Minerals;
+    arr.push({ name: name, value: val, unit: unit });
+  });
+  return result;
+}
+
+function clearIntakeMicros() {
+  var inputs = document.querySelectorAll('#ml-vitamins-grid input, #ml-minerals-grid input');
+  inputs.forEach(function(inp) { inp.value = ''; });
+  var vg = document.getElementById('ml-vitamins-grid');
+  var mg = document.getElementById('ml-minerals-grid');
+  var va = document.getElementById('ml-vitamins-arrow');
+  var ma = document.getElementById('ml-minerals-arrow');
+  if (vg) vg.style.display = 'none';
+  if (mg) mg.style.display = 'none';
+  if (va) va.style.transform = '';
+  if (ma) ma.style.transform = '';
+}
+
+function handleIntakePhoto(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var base64 = e.target.result;
+    _intakePhotoBase64 = base64;
+    document.getElementById('ml-photo-img').src = base64;
+    document.getElementById('ml-photo-preview').style.display = 'block';
+    document.getElementById('ml-photo-zone').style.display = 'none';
+    analyzeIntakePhoto(base64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearIntakePhoto() {
+  _intakePhotoBase64 = null;
+  _intakePhotoMealData = null;
+  _intakePhotoDetectedItems = null;
+  _intakePhotoAnalyzing = false;
+  var preview = document.getElementById('ml-photo-preview');
+  var zone = document.getElementById('ml-photo-zone');
+  var input = document.getElementById('ml-photo-input');
+  var status = document.getElementById('ml-photo-status');
+  var panel = document.getElementById('ml-detected-panel');
+  if (preview) preview.style.display = 'none';
+  if (zone) zone.style.display = 'flex';
+  if (input) input.value = '';
+  if (status) status.style.display = 'none';
+  if (panel) panel.style.display = 'none';
+}
+
+async function analyzeIntakePhoto(base64) {
+  var s = getSession(); if (!s) return;
+  var token = s.access_token;
+  var statusEl = document.getElementById('ml-photo-status');
+  var descEl = document.getElementById('ml-name');
+  _intakePhotoAnalyzing = true;
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--gold)';
+  statusEl.textContent = 'Analyzing photo...';
+
+  try {
+    var hint = descEl ? descEl.value : '';
+    var res = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-from-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        image: base64,
+        context: hint ? 'User hint: ' + hint : ''
+      })
+    });
+    if (!res.ok) throw new Error('Analysis failed');
+    var data = await res.json();
+
+    _intakePhotoMealData = data;
+
+    // Populate description if empty
+    if (descEl && !descEl.value && (data.meal_description || data.description)) {
+      descEl.value = data.meal_description || data.description;
+    }
+
+    // Show detected items if available
+    if (data.nutrition_breakdown && data.nutrition_breakdown.components) {
+      _intakePhotoDetectedItems = data.nutrition_breakdown.components;
+      renderDetectedItems(_intakePhotoDetectedItems);
+    }
+
+    statusEl.style.color = 'var(--up)';
+    statusEl.textContent = 'Photo analyzed — review below.';
+    _intakePhotoAnalyzing = false;
+  } catch(e) {
+    console.error('[Healix] Intake photo analysis error:', e);
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'Could not analyze photo. Enter details manually.';
+    _intakePhotoAnalyzing = false;
+  }
+}
+
+function renderDetectedItems(items) {
+  var panel = document.getElementById('ml-detected-panel');
+  var container = document.getElementById('ml-detected-items');
+  if (!panel || !container || !items || items.length === 0) return;
+
+  container.innerHTML = items.map(function(item, i) {
+    return '<div class="intake-detected-item">'
+      + '<span class="detected-name">' + escapeHtml(item.name || 'Item ' + (i + 1)) + '</span>'
+      + '<input class="detected-serving" type="text" value="' + escapeHtml(item.serving_size || '') + '" placeholder="serving" data-idx="' + i + '">'
+      + '<button class="detected-remove" onclick="removeDetectedItem(' + i + ')" title="Remove">✕</button>'
+      + '</div>';
+  }).join('');
+  panel.style.display = 'block';
+}
+
+function removeDetectedItem(index) {
+  if (!_intakePhotoDetectedItems) return;
+  _intakePhotoDetectedItems.splice(index, 1);
+  if (_intakePhotoDetectedItems.length === 0) {
+    _intakePhotoMealData = null;
+    _intakePhotoDetectedItems = null;
+    document.getElementById('ml-detected-panel').style.display = 'none';
+    var statusEl = document.getElementById('ml-photo-status');
+    statusEl.style.color = 'var(--muted)';
+    statusEl.textContent = 'All items removed. Enter details manually or retake photo.';
+    return;
+  }
+  renderDetectedItems(_intakePhotoDetectedItems);
+}
+
+function confirmDetectedItems() {
+  var panel = document.getElementById('ml-detected-panel');
+  var statusEl = document.getElementById('ml-photo-status');
+  if (panel) panel.style.display = 'none';
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--up)';
+    statusEl.textContent = 'Photo results confirmed.';
   }
 }
 
@@ -3892,8 +4116,14 @@ async function handleDocUpload(input) {
                 tempCard.style.border = '1px solid var(--success-border)';
                 tempCard.querySelector('.doc-card-meta').innerHTML = '<span style="color:var(--up)">✓ Extracted ' + count + ' biomarkers</span>';
               }
-              // Invalidate dashboard cache so bloodwork shows on next dashboard visit
+              // Invalidate dashboard cache and refresh dashboard data in background
               localStorage.removeItem('healix_dashboard_cache');
+              loadDashboardData().then(function() {
+                renderOnboardingChecklist();
+                renderMilestones();
+                renderVitalityUnlockState();
+                renderSmartEmptyStates(window._lastVitalityResult);
+              });
               // Navigate to bloodwork page with success message
               showPage('bloodwork', null);
               setTimeout(function() {
@@ -6197,6 +6427,13 @@ var MILESTONE_DEFINITIONS = [
       if (ctx.bloodworkDates && ctx.bloodworkDates.length > 0) {
         return { date: ctx.bloodworkDates[ctx.bloodworkDates.length - 1] };
       }
+      // Fallback: dashboard data loaded bloodwork but bloodwork page hasn't been visited yet
+      if (ctx.metrics && ctx.metrics.bloodwork) {
+        return { date: ctx.bloodworkTimestamp || null };
+      }
+      if (window._bloodworkRawCount > 0) {
+        return { date: null };
+      }
       return null;
     }
   },
@@ -6251,7 +6488,8 @@ function renderMilestones() {
     metrics: window._lastDashboardMetrics || null,
     result: window._lastVitalityResult || null,
     vaHistory: vaHistory,
-    bloodworkDates: bwDates
+    bloodworkDates: bwDates,
+    bloodworkTimestamp: window._lastDashboardTimestamps && window._lastDashboardTimestamps.bloodwork || null
   };
 
   var achieved = [];
@@ -6701,11 +6939,11 @@ function renderMealStreak(meals) {
     container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
       + '<div class="meal-streak-count-num">0</div>'
       + '<div class="meal-streak-info">'
-      + '<div class="meal-streak-label">Meal Streak</div>'
-      + '<div class="meal-streak-msg">Log your first meal to start building consistency.</div>'
+      + '<div class="meal-streak-label">Intake Streak</div>'
+      + '<div class="meal-streak-msg">Log your first intake to start building consistency.</div>'
       + dotsHtml
       + '</div>'
-      + '<div class="meal-streak-action">Log meal →</div>'
+      + '<div class="meal-streak-action">Log intake →</div>'
       + '</div>';
     return;
   }
@@ -6718,7 +6956,7 @@ function renderMealStreak(meals) {
     + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
     + dotsHtml
     + '</div>'
-    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log meal →') + '</div>'
+    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log intake →') + '</div>'
     + '</div>';
 }
 
@@ -7195,13 +7433,13 @@ function openEditMeal(mealId) {
     if (nutritionArrow) nutritionArrow.style.transform = 'rotate(90deg)';
   }
   // Update modal title and button
-  document.querySelector('#meal-modal .modal-title').innerHTML = 'Edit <em>Meal</em>';
+  document.querySelector('#meal-modal .modal-title').innerHTML = 'Edit <em>Intake</em>';
   document.querySelector('#meal-modal .modal-btn-primary').textContent = 'Save Changes';
   openModal('meal-modal');
 }
 
 async function deleteMeal(mealId) {
-  var confirmed = await confirmModal('This meal will be permanently deleted.', { title: 'Delete Meal', confirmText: 'Delete', danger: true });
+  var confirmed = await confirmModal('This entry will be permanently deleted.', { title: 'Delete Entry', confirmText: 'Delete', danger: true });
   if (!confirmed) return;
   try {
     await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'DELETE', null, currentSession.access_token);

@@ -1635,6 +1635,51 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   .nutrient-grid { grid-template-columns: 1fr; }
 }
 
+/* ── INTAKE PHOTO ── */
+.intake-photo-zone {
+  width: 100%; padding: 20px; background: var(--dark-3);
+  border: 1px dashed var(--gold-border); color: var(--gold);
+  cursor: pointer; font-family: var(--B); font-size: 13px;
+  letter-spacing: .05em; display: flex; align-items: center;
+  justify-content: center; gap: 8px; transition: border-color .2s;
+}
+.intake-photo-zone:hover { border-color: var(--gold-hover); }
+.intake-photo-preview { position: relative; margin-top: 8px; }
+.intake-detected-panel {
+  margin-top: 10px; padding: 12px; background: var(--dark-3);
+  border: 1px solid var(--gold-border);
+}
+.intake-detected-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--gold-border);
+}
+.intake-detected-item:last-child { border-bottom: none; }
+.intake-detected-item .detected-name {
+  flex: 1; font-size: 13px; color: var(--cream);
+}
+.intake-detected-item .detected-serving {
+  width: 90px; font-size: 12px; padding: 4px 6px;
+  background: var(--dark-4); border: 1px solid var(--gold-border);
+  color: var(--cream); font-family: var(--B);
+}
+.intake-detected-item .detected-remove {
+  background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 14px; padding: 2px 6px;
+}
+.intake-detected-item .detected-remove:hover { color: var(--down); }
+.intake-micro-toggle {
+  background: none; border: 1px solid var(--gold-border); color: var(--gold);
+  cursor: pointer; font-family: var(--B); font-size: 11px;
+  letter-spacing: .05em; padding: 6px 12px; margin-top: 8px;
+  transition: border-color .2s; display: flex; align-items: center; gap: 6px;
+}
+.intake-micro-toggle:hover { border-color: var(--gold-hover); }
+.intake-micro-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  margin-top: 8px; padding: 8px 0;
+}
+.intake-micro-grid .modal-field { margin-bottom: 0; }
+
 @media (max-width: 500px) {
   .vitality-drivers { grid-template-columns: 1fr; }
 }
