@@ -2328,20 +2328,22 @@ async function loadMealsPage() {
 
   try {
     // Ensure we have a valid session token
-    var session = currentSession || getSession();
-    if (!session || !session.access_token) {
+    var token = getToken();
+    if (!token) {
       document.getElementById('meals-list').innerHTML = '<div class="empty-state" style="padding:40px"><div class="empty-state-icon">🍽</div><div class="empty-state-text">Session expired. Please refresh.</div></div>';
       return;
     }
     // Fetch meals for the selected date range (with buffer for timezone shifts)
+    // Use meal_time (user-set) instead of created_at (server-set) so meals logged for
+    // a specific date always appear on that date, even when logged later
     var fetchStart = new Date(range.start); fetchStart.setDate(fetchStart.getDate() - 1);
     var fetchEnd   = new Date(range.end);   fetchEnd.setDate(fetchEnd.getDate() + 1);
     var meals = await supabaseRequest(
       '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id
-        + '&created_at=gte.' + fetchStart.toISOString()
-        + '&created_at=lte.' + fetchEnd.toISOString()
-        + '&order=created_at.desc&limit=500',
-      'GET', null, session.access_token
+        + '&meal_time=gte.' + fetchStart.toISOString()
+        + '&meal_time=lte.' + fetchEnd.toISOString()
+        + '&order=meal_time.desc&limit=500',
+      'GET', null, token
     );
     if (!meals || meals.error || !Array.isArray(meals)) {
       console.log('[Healix] meals fetch failed or empty:', meals);
