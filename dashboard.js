@@ -185,6 +185,9 @@ async function init() {
           document.getElementById('sb-avatar').textContent = profileFirst.charAt(0).toUpperCase();
           document.getElementById('page-title').textContent = greet() + ', ' + profileFirst;
         }
+        // Show Cycle nav for female users
+        var navCycle = document.getElementById('nav-cycle');
+        if (navCycle) navCycle.style.display = profileData[0].gender === 'female' ? '' : 'none';
       } else {
         // No profile row exists — create one so PATCH calls work later
         var fullName = (user.user_metadata && user.user_metadata.full_name) || '';
@@ -4569,6 +4572,9 @@ async function saveProfile() {
       document.getElementById('sb-name').textContent = profileName;
       document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
     }
+    // Toggle Cycle nav visibility based on gender
+    var navCycle = document.getElementById('nav-cycle');
+    if (navCycle) navCycle.style.display = sex === 'female' ? '' : 'none';
   } catch(e) {
     console.error('[Healix] Profile save error:', e);
     if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
