@@ -257,7 +257,7 @@ function greet() {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', cycle: 'Cycle', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
@@ -280,6 +280,7 @@ function showPage(id, btn) {
   if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
+  if (id === 'cycle') loadCyclePage();
 }
 
 // ── DATA FRESHNESS ──
@@ -7515,6 +7516,418 @@ async function deleteMeal(mealId) {
     loadDashboardData();
   } catch(e) {
     console.error('Delete meal error:', e);
+  }
+}
+
+// ── CYCLE TRACKING ──
+var cycleData = {};
+var cycleStarts = [];
+var cyclePeriodLengths = [];
+var cycleLengths = [];
+var cycleCalMonth = null;
+var cycleCalYear = null;
+
+var CYCLE_METRIC_TYPES = ['menstrual_flow', 'basal_body_temperature', 'cervical_mucus_quality', 'ovulation_test_result', 'progesterone_test_result'];
+
+async function loadCyclePage() {
+  var session = getSession();
+  if (!session || !session.access_token || !currentUser) return;
+
+  var daysAgo = new Date();
+  daysAgo.setDate(daysAgo.getDate() - 365);
+
+  try {
+    var data = await supabaseRequest(
+      '/rest/v1/apple_health_samples' +
+      '?select=metric_type,value,text_value,recorded_at' +
+      '&user_id=eq.' + currentUser.id +
+      '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
+      '&recorded_at=gte.' + daysAgo.toISOString() +
+      '&order=recorded_at.asc',
+      'GET', null, session.access_token
+    );
+
+    if (!data || data.error || !Array.isArray(data)) {
+      console.error('[Cycle] Error loading data:', data && data.error);
+      showCycleEmpty(true);
+      return;
+    }
+
+    if (data.length === 0) {
+      showCycleEmpty(true);
+      return;
+    }
+
+    showCycleEmpty(false);
+    processCycleData(data);
+    renderCyclePage();
+  } catch (e) {
+    console.error('[Cycle] Load error:', e);
+    showCycleEmpty(true);
+  }
+}
+
+function processCycleData(rows) {
+  cycleData = {};
+
+  rows.forEach(function(r) {
+    var dateStr = localDateStr(new Date(r.recorded_at));
+    if (!cycleData[dateStr]) cycleData[dateStr] = {};
+    var d = cycleData[dateStr];
+
+    if (r.metric_type === 'menstrual_flow') d.flow = r.text_value;
+    if (r.metric_type === 'basal_body_temperature') d.bbt = parseFloat(r.value);
+    if (r.metric_type === 'cervical_mucus_quality') d.mucus = r.text_value;
+    if (r.metric_type === 'ovulation_test_result') d.ovtest = r.text_value;
+    if (r.metric_type === 'progesterone_test_result') d.progesterone = parseFloat(r.value);
+  });
+
+  var flowDates = Object.keys(cycleData).filter(function(d) {
+    var f = cycleData[d].flow;
+    return f && f !== 'none';
+  }).sort();
+
+  cycleStarts = [];
+  cyclePeriodLengths = [];
+
+  if (flowDates.length > 0) {
+    var currentPeriodStart = flowDates[0];
+    var currentPeriodEnd = flowDates[0];
+
+    for (var i = 1; i < flowDates.length; i++) {
+      var prev = new Date(currentPeriodEnd + 'T12:00:00');
+      var curr = new Date(flowDates[i] + 'T12:00:00');
+      var gapDays = Math.round((curr - prev) / 86400000);
+
+      if (gapDays > 2) {
+        cycleStarts.push(currentPeriodStart);
+        var periodLen = Math.round((new Date(currentPeriodEnd + 'T12:00:00') - new Date(currentPeriodStart + 'T12:00:00')) / 86400000) + 1;
+        cyclePeriodLengths.push(periodLen);
+        currentPeriodStart = flowDates[i];
+      }
+      currentPeriodEnd = flowDates[i];
+    }
+    cycleStarts.push(currentPeriodStart);
+    var lastPeriodLen = Math.round((new Date(currentPeriodEnd + 'T12:00:00') - new Date(currentPeriodStart + 'T12:00:00')) / 86400000) + 1;
+    cyclePeriodLengths.push(lastPeriodLen);
+  }
+
+  cycleLengths = [];
+  for (var j = 1; j < cycleStarts.length; j++) {
+    var d1 = new Date(cycleStarts[j - 1] + 'T12:00:00');
+    var d2 = new Date(cycleStarts[j] + 'T12:00:00');
+    cycleLengths.push(Math.round((d2 - d1) / 86400000));
+  }
+}
+
+function renderCyclePage() {
+  renderCycleStats();
+  if (!cycleCalMonth) {
+    var now = new Date();
+    cycleCalMonth = now.getMonth();
+    cycleCalYear = now.getFullYear();
+  }
+  renderCycleCalendar();
+  renderCycleTemperatureChart();
+  var chatCta = document.getElementById('cycle-chat-cta');
+  if (chatCta && cycleStarts.length > 0) chatCta.style.display = 'block';
+}
+
+function renderCycleStats() {
+  var today = new Date();
+  var recentLengths = cycleLengths.slice(-6);
+  var avgCycleLen = recentLengths.length > 0 ? Math.round(recentLengths.reduce(function(a, b) { return a + b; }, 0) / recentLengths.length) : 0;
+  var recentPeriods = cyclePeriodLengths.slice(-6);
+  var avgPeriodLen = recentPeriods.length > 0 ? Math.round(recentPeriods.reduce(function(a, b) { return a + b; }, 0) / recentPeriods.length) : 0;
+
+  var cycleDay = 0;
+  var phase = '';
+  var lastStart = cycleStarts.length > 0 ? cycleStarts[cycleStarts.length - 1] : null;
+
+  if (lastStart) {
+    cycleDay = Math.round((today - new Date(lastStart + 'T12:00:00')) / 86400000) + 1;
+    var effectiveCycleLen = avgCycleLen || 28;
+    var ovulationDay = effectiveCycleLen - 14;
+
+    if (cycleDay <= avgPeriodLen && avgPeriodLen > 0) phase = 'Menstrual';
+    else if (cycleDay <= ovulationDay - 1) phase = 'Follicular';
+    else if (cycleDay >= ovulationDay - 1 && cycleDay <= ovulationDay + 1) phase = 'Ovulatory';
+    else phase = 'Luteal';
+  }
+
+  var nextPeriodStr = '';
+  var daysUntil = 0;
+  if (lastStart && avgCycleLen > 0) {
+    var nextDate = new Date(lastStart + 'T12:00:00');
+    nextDate.setDate(nextDate.getDate() + avgCycleLen);
+    daysUntil = Math.round((nextDate - today) / 86400000);
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    nextPeriodStr = months[nextDate.getMonth()] + ' ' + nextDate.getDate();
+  }
+
+  setEl('cyc-day', cycleDay > 0 ? cycleDay : '—');
+  setEl('cyc-day-sub', phase || 'current phase');
+  setEl('cyc-length', avgCycleLen > 0 ? avgCycleLen : '—');
+  setEl('cyc-length-sub', recentLengths.length > 0 ? 'days avg (' + recentLengths.length + ' cycles)' : 'days avg');
+  setEl('cyc-period', avgPeriodLen > 0 ? avgPeriodLen : '—');
+  setEl('cyc-period-sub', 'days avg');
+  setEl('cyc-next', nextPeriodStr || '—');
+  setEl('cyc-next-sub', daysUntil > 0 ? 'in ' + daysUntil + ' days' : 'predicted');
+}
+
+function renderCycleCalendar() {
+  var container = document.getElementById('cyc-calendar');
+  var label = document.getElementById('cyc-cal-label');
+  if (!container) return;
+
+  var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  label.textContent = months[cycleCalMonth] + ' ' + cycleCalYear;
+
+  var firstDay = new Date(cycleCalYear, cycleCalMonth, 1).getDay();
+  var daysInMonth = new Date(cycleCalYear, cycleCalMonth + 1, 0).getDate();
+  var today = localDateStr(new Date());
+
+  var fertileStartStr = null, fertileEndStr = null, ovDateStr = null;
+  var avgCycleLen = 0;
+  var recentLengths = cycleLengths.slice(-6);
+  if (recentLengths.length > 0) {
+    avgCycleLen = Math.round(recentLengths.reduce(function(a, b) { return a + b; }, 0) / recentLengths.length);
+  }
+  var lastStart = cycleStarts.length > 0 ? cycleStarts[cycleStarts.length - 1] : null;
+  if (lastStart && avgCycleLen > 0) {
+    var lastStartDate = new Date(lastStart + 'T12:00:00');
+    var ovDay = avgCycleLen - 14;
+    var ovDate = new Date(lastStartDate);
+    ovDate.setDate(ovDate.getDate() + ovDay - 1);
+    var fertStartDate = new Date(ovDate);
+    fertStartDate.setDate(fertStartDate.getDate() - 5);
+    var fertEndDate = new Date(ovDate);
+    fertEndDate.setDate(fertEndDate.getDate() + 1);
+    fertileStartStr = localDateStr(fertStartDate);
+    fertileEndStr = localDateStr(fertEndDate);
+    ovDateStr = localDateStr(ovDate);
+  }
+
+  var html = '';
+  for (var e = 0; e < firstDay; e++) {
+    html += '<div class="cycle-cal-day cyc-empty"></div>';
+  }
+
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateStr = cycleCalYear + '-' + String(cycleCalMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    var entry = cycleData[dateStr];
+    var classes = 'cycle-cal-day';
+
+    if (dateStr === today) classes += ' cyc-today';
+    if (entry && entry.flow) {
+      if (entry.flow === 'HEAVY') classes += ' cyc-flow-heavy';
+      else if (entry.flow === 'MEDIUM') classes += ' cyc-flow-medium';
+      else if (entry.flow === 'LIGHT') classes += ' cyc-flow-light';
+      else if (entry.flow === 'SPOTTING') classes += ' cyc-flow-spotting';
+    }
+    if (fertileStartStr && dateStr >= fertileStartStr && dateStr <= fertileEndStr) classes += ' cyc-fertile';
+    if (ovDateStr && dateStr === ovDateStr) classes += ' cyc-ovulation';
+
+    html += '<div class="' + classes + '" onclick="openCycleLogForDate(\'' + dateStr + '\')">' + d + '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function stepCycleCalendar(dir) {
+  cycleCalMonth += dir;
+  if (cycleCalMonth > 11) { cycleCalMonth = 0; cycleCalYear++; }
+  if (cycleCalMonth < 0) { cycleCalMonth = 11; cycleCalYear--; }
+  renderCycleCalendar();
+}
+
+function renderCycleTemperatureChart() {
+  var container = document.getElementById('cyc-temp-chart');
+  if (!container) return;
+
+  var lastStart = cycleStarts.length > 0 ? cycleStarts[cycleStarts.length - 1] : null;
+  var bbtPoints = [];
+  var dates = Object.keys(cycleData).sort();
+  dates.forEach(function(d) {
+    if (cycleData[d].bbt && (!lastStart || d >= lastStart)) {
+      bbtPoints.push({ date: d, temp: cycleData[d].bbt });
+    }
+  });
+
+  if (bbtPoints.length < 2) {
+    container.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-state-text">No BBT data logged yet. Log at least 2 temperatures to see your chart.</div></div>';
+    return;
+  }
+
+  var minTemp = 96.5, maxTemp = 99.0;
+  bbtPoints.forEach(function(p) {
+    if (p.temp < minTemp) minTemp = Math.floor(p.temp * 2) / 2;
+    if (p.temp > maxTemp) maxTemp = Math.ceil(p.temp * 2) / 2;
+  });
+
+  var w = 600, h = 140, pad = 40, padRight = 10, padTop = 10, padBottom = 25;
+  var chartW = w - pad - padRight;
+  var chartH = h - padTop - padBottom;
+  var tempRange = maxTemp - minTemp || 1;
+
+  function xPos(i) { return pad + (bbtPoints.length > 1 ? (i / (bbtPoints.length - 1)) * chartW : chartW / 2); }
+  function yPos(temp) { return padTop + chartH - ((temp - minTemp) / tempRange) * chartH; }
+
+  var svg = '<svg class="cyc-temp-svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">';
+  var steps = [96.5, 97.0, 97.5, 98.0, 98.5, 99.0].filter(function(v) { return v >= minTemp && v <= maxTemp; });
+  steps.forEach(function(t) {
+    var y = yPos(t);
+    var cls = Math.abs(t - 97.5) < 0.01 ? 'cyc-temp-ref' : 'cyc-temp-grid';
+    svg += '<line x1="' + pad + '" y1="' + y + '" x2="' + (w - padRight) + '" y2="' + y + '" class="' + cls + '"/>';
+    svg += '<text x="' + (pad - 4) + '" y="' + (y + 3) + '" text-anchor="end" class="cyc-temp-axis">' + t.toFixed(1) + '</text>';
+  });
+
+  var points = bbtPoints.map(function(p, i) { return xPos(i) + ',' + yPos(p.temp); }).join(' ');
+  svg += '<polyline points="' + points + '" class="cyc-temp-line"/>';
+
+  bbtPoints.forEach(function(p, i) {
+    var x = xPos(i);
+    var y = yPos(p.temp);
+    svg += '<circle cx="' + x + '" cy="' + y + '" r="3" class="cyc-temp-dot"/>';
+    if (bbtPoints.length <= 10 || i % Math.ceil(bbtPoints.length / 8) === 0 || i === bbtPoints.length - 1) {
+      svg += '<text x="' + x + '" y="' + (h - 4) + '" text-anchor="middle" class="cyc-temp-axis">' + p.date.slice(5) + '</text>';
+    }
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+async function saveCycleEntry() {
+  var session = getSession();
+  if (!session || !session.access_token || !currentUser) return;
+
+  var dateInput = document.getElementById('cyc-date').value;
+  if (!dateInput) { alert('Please select a date.'); return; }
+
+  var statusEl = document.getElementById('cyc-modal-status');
+  var saveBtn = document.getElementById('cyc-save-btn');
+  statusEl.textContent = 'Saving...';
+  statusEl.style.display = 'block';
+  saveBtn.disabled = true;
+
+  var flow = getCycleOptionValue('cyc-flow-group');
+  var mucus = getCycleOptionValue('cyc-mucus-group');
+  var ovtest = getCycleOptionValue('cyc-ovtest-group');
+  var bbt = document.getElementById('cyc-bbt').value ? parseFloat(document.getElementById('cyc-bbt').value) : null;
+  var progesterone = document.getElementById('cyc-progesterone').value ? parseFloat(document.getElementById('cyc-progesterone').value) : null;
+  var notes = document.getElementById('cyc-notes').value.trim();
+  var recordedAt = dateInput + 'T12:00:00Z';
+
+  try {
+    await supabaseRequest(
+      '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
+      '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
+      '&recorded_at=gte.' + dateInput + 'T00:00:00Z' +
+      '&recorded_at=lt.' + dateInput + 'T23:59:59Z',
+      'DELETE', null, session.access_token
+    );
+
+    var rows = [];
+    var baseRow = { user_id: currentUser.id, source_name: 'Healix Web', recorded_at: recordedAt, start_date: recordedAt, end_date: recordedAt };
+
+    if (flow && flow !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'menstrual_flow', text_value: flow, unit: 'category' }));
+    if (bbt !== null && !isNaN(bbt)) rows.push(Object.assign({}, baseRow, { metric_type: 'basal_body_temperature', value: bbt, unit: 'degF' }));
+    if (mucus && mucus !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'cervical_mucus_quality', text_value: mucus, unit: 'category' }));
+    if (ovtest && ovtest !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'ovulation_test_result', text_value: ovtest, unit: 'category' }));
+    if (progesterone !== null && !isNaN(progesterone)) rows.push(Object.assign({}, baseRow, { metric_type: 'progesterone_test_result', value: progesterone, unit: 'ng/mL' }));
+
+    if (notes && rows.length > 0) rows[0].metadata = { notes: notes };
+
+    if (rows.length > 0) {
+      await supabaseRequest('/rest/v1/apple_health_samples', 'POST', rows, session.access_token, { 'Prefer': 'return=minimal' });
+    }
+
+    closeModal('cycle-modal');
+    statusEl.style.display = 'none';
+    saveBtn.disabled = false;
+    loadCyclePage();
+  } catch (e) {
+    console.error('[Cycle] Save error:', e);
+    statusEl.textContent = 'Error saving entry. Please try again.';
+    statusEl.style.color = 'var(--down)';
+    saveBtn.disabled = false;
+  }
+}
+
+function openCycleLogForDate(dateStr) {
+  resetCycleModal();
+  document.getElementById('cyc-date').value = dateStr;
+  prefillCycleModal(dateStr);
+  openModal('cycle-modal');
+}
+
+function prefillCycleModal(dateStr) {
+  var entry = cycleData[dateStr];
+  if (!entry) return;
+  if (entry.flow) selectCycleOptionByValue('cyc-flow-group', entry.flow);
+  if (entry.bbt) document.getElementById('cyc-bbt').value = entry.bbt;
+  if (entry.mucus) selectCycleOptionByValue('cyc-mucus-group', entry.mucus);
+  if (entry.ovtest) selectCycleOptionByValue('cyc-ovtest-group', entry.ovtest);
+  if (entry.progesterone) document.getElementById('cyc-progesterone').value = entry.progesterone;
+}
+
+function resetCycleModal() {
+  document.getElementById('cyc-bbt').value = '';
+  document.getElementById('cyc-progesterone').value = '';
+  document.getElementById('cyc-notes').value = '';
+  var statusEl = document.getElementById('cyc-modal-status');
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.style.color = 'var(--muted)'; }
+  var saveBtn = document.getElementById('cyc-save-btn');
+  if (saveBtn) saveBtn.disabled = false;
+  ['cyc-flow-group', 'cyc-mucus-group', 'cyc-ovtest-group'].forEach(function(groupId) {
+    var group = document.getElementById(groupId);
+    if (!group) return;
+    var btns = group.querySelectorAll('.cycle-opt-btn');
+    btns.forEach(function(b) { b.classList.remove('active'); });
+    if (btns[0]) btns[0].classList.add('active');
+  });
+}
+
+function selectCycleOption(groupId, btn) {
+  var group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.cycle-opt-btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+
+function selectCycleOptionByValue(groupId, value) {
+  var group = document.getElementById(groupId);
+  if (!group) return;
+  group.querySelectorAll('.cycle-opt-btn').forEach(function(b) {
+    b.classList.remove('active');
+    if (b.getAttribute('data-value') === value) b.classList.add('active');
+  });
+}
+
+function getCycleOptionValue(groupId) {
+  var group = document.getElementById(groupId);
+  if (!group) return 'none';
+  var active = group.querySelector('.cycle-opt-btn.active');
+  return active ? active.getAttribute('data-value') : 'none';
+}
+
+function showCycleEmpty(show) {
+  var empty = document.getElementById('cycle-empty');
+  var scores = document.getElementById('cycle-scores');
+  var tempCard = document.getElementById('cyc-temp-card');
+  var chatCta = document.getElementById('cycle-chat-cta');
+  var logBtn = document.getElementById('cycle-log-btn');
+
+  if (empty) empty.style.display = show ? 'block' : 'none';
+  if (scores) scores.style.display = show ? 'none' : '';
+  if (tempCard) tempCard.style.display = show ? 'none' : '';
+  if (chatCta) chatCta.style.display = show ? 'none' : '';
+  if (logBtn) logBtn.style.display = show ? 'none' : '';
+
+  var page = document.getElementById('page-cycle');
+  if (page) {
+    var cards = page.querySelectorAll(':scope > .card');
+    cards.forEach(function(c) { c.style.display = show ? 'none' : ''; });
   }
 }
 
