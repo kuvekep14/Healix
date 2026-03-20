@@ -9,6 +9,10 @@ var _hbConnected = false;
 function getSession() {
   try { var s = localStorage.getItem('healix_session'); return s ? JSON.parse(s) : null; } catch(e) { return null; }
 }
+function getToken() {
+  var s = getSession();
+  return s ? s.access_token : (currentSession ? getToken() : null);
+}
 
 // ── LOGOUT ──
 function logout() {
@@ -380,7 +384,7 @@ function renderSyncBanner(timestamps) {
       supabaseRequest(
         '/rest/v1/health_sync_log?select=sync_completed_at,device_name&user_id=eq.' + currentUser.id
         + '&sync_status=eq.completed&order=sync_completed_at.desc&limit=1',
-        'GET', null, currentSession.access_token
+        'GET', null, getToken()
       ).then(function(rows) {
         if (rows && rows.length > 0 && rows[0].sync_completed_at) {
           var ago = formatRelativeTime(rows[0].sync_completed_at);
@@ -1856,7 +1860,7 @@ function renderDashMeals(meals, today) {
     var mealType = (m.meal_type || '').toLowerCase();
     return '<div class="meal-row">'
       + '<div class="meal-emoji">' + (emojis[mealType] || '🥘') + '</div>'
-      + '<div class="meal-info"><div class="meal-name">' + (m.meal_description || 'Intake') + '</div>'
+      + '<div class="meal-info"><div class="meal-name">' + escapeHtml(m.meal_description || 'Intake') + '</div>'
       + '<div class="meal-meta">' + (m.meal_type || '') + ' · ' + t.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'}) + '</div></div>'
       + '<div class="meal-cals">—</div>'
       + '</div>';
@@ -2178,7 +2182,7 @@ async function loadWeightHistory() {
   try {
     var data = await supabaseRequest(
       '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=14',
-      'GET', null, currentSession.access_token
+      'GET', null, getToken()
     );
     if (data && !data.error && data.length > 0) {
       weightEntries = data;
@@ -2226,7 +2230,7 @@ async function saveWeight() {
     await supabaseRequest('/rest/v1/weight_logs', 'POST', {
       user_id: currentUser.id, value: parseFloat(val), unit: unit,
       logged_at: date + 'T12:00:00Z', notes: notes
-    }, currentSession.access_token);
+    }, getToken());
     closeModal('weight-modal');
     document.getElementById('w-value').value = '';
     document.getElementById('w-notes').value = '';
@@ -2366,7 +2370,7 @@ async function loadMealsPage() {
       var ids = meals.map(function(m) { return m.id; }).join(',');
       var nutrientData = await supabaseRequest(
         '/rest/v1/meal_nutrient?meal_log_id=in.(' + ids + ')&select=meal_log_id,category,name,value',
-        'GET', null, currentSession.access_token
+        'GET', null, getToken()
       ).catch(function() { return []; });
       if (Array.isArray(nutrientData)) nutrients = nutrientData;
     }
@@ -2669,7 +2673,7 @@ async function renderWeightTrendChart(range) {
   try {
     var weightData = await supabaseRequest(
       '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&logged_at=gte.' + range.start.toISOString() + '&logged_at=lte.' + range.end.toISOString() + '&order=logged_at.asc',
-      'GET', null, currentSession.access_token
+      'GET', null, getToken()
     );
     var chart = document.getElementById('agg-weight-chart');
     var dates = document.getElementById('agg-weight-dates');
@@ -2777,7 +2781,7 @@ async function saveMeal() {
       };
       if (mealData) patchPayload.data = mealData;
       await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH',
-        patchPayload, currentSession.access_token);
+        patchPayload, getToken());
       editingMealId = null;
       resetMealModal();
       loadMealsPage();
@@ -2855,7 +2859,7 @@ async function saveMealBackground(processingId, name, type, mealTime, mealData, 
       try {
         var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
           body: JSON.stringify({ mealLog: name, meal_type: 'Cooked' })
         });
         if (aiRes.ok) {
@@ -2900,7 +2904,7 @@ async function saveMealBackground(processingId, name, type, mealTime, mealData, 
     if (devFeedback) insertPayload.dev_feedback = devFeedback;
 
     var inserted = await supabaseRequest('/rest/v1/meal_log', 'POST', insertPayload,
-      currentSession.access_token, { 'Prefer': 'return=representation' });
+      getToken(), { 'Prefer': 'return=representation' });
 
     // Insert meal_nutrient rows
     var mealLogId = inserted && inserted[0] && inserted[0].id;
@@ -2934,7 +2938,7 @@ async function saveMealBackground(processingId, name, type, mealTime, mealData, 
       }
       if (nutrientRows.length > 0) {
         try {
-          await supabaseRequest('/rest/v1/meal_nutrient', 'POST', nutrientRows, currentSession.access_token);
+          await supabaseRequest('/rest/v1/meal_nutrient', 'POST', nutrientRows, getToken());
         } catch(e) {
           console.warn('[Healix] Failed to insert meal_nutrient rows:', e);
         }
@@ -2983,7 +2987,7 @@ var _intakePhotoMealData = null;
 var _intakePhotoDetectedItems = null;
 var _intakePhotoAnalyzing = false;
 
-var MICRO_DEFS = {
+var MICRO_INPUT_DEFS = {
   vitamins: [
     { name: 'Vitamin A', unit: 'mcg' },
     { name: 'Vitamin B6', unit: 'mg' },
@@ -3008,13 +3012,13 @@ function initIntakeMicroGrids() {
   var vitGrid = document.getElementById('ml-vitamins-grid');
   var minGrid = document.getElementById('ml-minerals-grid');
   if (vitGrid && !vitGrid.innerHTML) {
-    vitGrid.innerHTML = MICRO_DEFS.vitamins.map(function(v) {
+    vitGrid.innerHTML = MICRO_INPUT_DEFS.vitamins.map(function(v) {
       return '<div class="modal-field"><label class="modal-label">' + v.name + ' (' + v.unit + ')</label>'
         + '<input class="modal-input" type="number" data-micro="' + v.name + '" data-unit="' + v.unit + '" placeholder="' + v.unit + '"></div>';
     }).join('');
   }
   if (minGrid && !minGrid.innerHTML) {
-    minGrid.innerHTML = MICRO_DEFS.minerals.map(function(m) {
+    minGrid.innerHTML = MICRO_INPUT_DEFS.minerals.map(function(m) {
       return '<div class="modal-field"><label class="modal-label">' + m.name + ' (' + m.unit + ')</label>'
         + '<input class="modal-input" type="number" data-micro="' + m.name + '" data-unit="' + m.unit + '" placeholder="' + m.unit + '"></div>';
     }).join('');
@@ -3049,7 +3053,7 @@ function collectManualMicros() {
     if (!val) return;
     var name = inp.getAttribute('data-micro');
     var unit = inp.getAttribute('data-unit');
-    var isVitamin = MICRO_DEFS.vitamins.some(function(v) { return v.name === name; });
+    var isVitamin = MICRO_INPUT_DEFS.vitamins.some(function(v) { return v.name === name; });
     var arr = isVitamin ? result.Vitamins : result.Minerals;
     arr.push({ name: name, value: val, unit: unit });
   });
@@ -3195,7 +3199,7 @@ var supplementLogsToday = {}; // { supplementId: true }
 
 async function loadSupplements() {
   if (!currentUser || !currentSession) return;
-  var token = currentSession.access_token;
+  var token = getToken();
   var today = localDateStr(mealsDate);
   try {
     var supps = await supabaseRequest(
@@ -3233,10 +3237,10 @@ function renderSupplements() {
   }
   container.innerHTML = userSupplements.map(function(s) {
     var taken = !!supplementLogsToday[s.id];
-    var dosageText = s.dosage ? ' <span style="font-size:11px;color:var(--muted)">(' + s.dosage + ')</span>' : '';
+    var dosageText = s.dosage ? ' <span style="font-size:11px;color:var(--muted)">(' + escapeHtml(s.dosage) + ')</span>' : '';
     return '<button class="supp-pill' + (taken ? ' taken' : '') + '" onclick="toggleSupplement(\'' + s.id + '\')">'
       + '<span class="supp-check">' + (taken ? '✓' : '○') + '</span>'
-      + '<span>' + s.name + dosageText + '</span>'
+      + '<span>' + escapeHtml(s.name) + dosageText + '</span>'
       + '<span class="supp-remove" onclick="event.stopPropagation(); removeSupplement(\'' + s.id + '\')">✕</span>'
       + '</button>';
   }).join('');
@@ -3244,7 +3248,7 @@ function renderSupplements() {
 
 async function toggleSupplement(suppId) {
   if (!currentUser || !currentSession) return;
-  var token = currentSession.access_token;
+  var token = getToken();
   var today = localDateStr(mealsDate);
   try {
     if (supplementLogsToday[suppId]) {
@@ -3305,7 +3309,7 @@ async function saveSupplement() {
         var desc = dosage ? dosage + ' ' + name : name;
         var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + currentSession.access_token },
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
           body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
         });
         if (aiRes.ok) {
@@ -3326,7 +3330,7 @@ async function saveSupplement() {
       nutrient_profile: nutrientProfile,
       is_active: true,
       sort_order: userSupplements.length
-    }, currentSession.access_token);
+    }, getToken());
 
     closeModal('supplement-modal');
     nameEl.value = '';
@@ -3420,7 +3424,7 @@ async function removeSupplement(suppId) {
   try {
     await supabaseRequest(
       '/rest/v1/user_supplements?id=eq.' + suppId,
-      'PATCH', { is_active: false }, currentSession.access_token
+      'PATCH', { is_active: false }, getToken()
     );
     await loadSupplements();
     if (window._healixMeals) renderMicronutrientsWithSupplements(window._healixMeals);
@@ -3663,7 +3667,7 @@ function getRange(name, sex) {
 
 async function loadBloodworkPage() {
   if (!currentUser) return;
-  var token = currentSession.access_token;
+  var token = getToken();
   try {
     var bw = await supabaseRequest(
       '/rest/v1/blood_work_samples?user_id=eq.' + currentUser.id + '&order=test_date.desc,created_at.desc&limit=500',
@@ -4044,7 +4048,7 @@ async function loadDocumentsPage() {
   try {
     var docs = await supabaseRequest(
       '/rest/v1/uploads?user_id=eq.' + currentUser.id + '&order=created_at.desc',
-      'GET', null, currentSession.access_token
+      'GET', null, getToken()
     );
     console.log('[Healix] uploads fetch:', docs ? (docs.error ? 'ERROR:'+JSON.stringify(docs.error) : docs.length + ' docs') : 'null');
     if (!docs || docs.error || docs.length === 0) {
@@ -4061,7 +4065,7 @@ async function loadDocumentsPage() {
       return '<div class="doc-card" style="position:relative;' + statusStyle + '">'
         + '<button class="doc-card-delete" onclick="event.stopPropagation();deleteDocument(\'' + doc.id + '\',\'' + (doc.file_url || '').replace(/'/g, "\\'") + '\')" title="Delete document">&times;</button>'
         + '<div class="doc-card-icon">' + icon + '</div>'
-        + '<div class="doc-card-name">' + (doc.title || 'Untitled') + '</div>'
+        + '<div class="doc-card-name">' + escapeHtml(doc.title || 'Untitled') + '</div>'
         + '<div class="doc-card-meta">' + sizeStr + ' · ' + dateStr + '</div>'
         + '<div class="doc-card-tag">' + tag + '</div>'
         + statusLabel
@@ -4092,7 +4096,7 @@ async function handleDocUpload(input) {
     grid.insertAdjacentHTML('afterbegin',
       '<div class="doc-card" id="' + tempId + '" style="opacity:0.6">'
       + '<div class="doc-card-icon">⏳</div>'
-      + '<div class="doc-card-name">' + file.name + '</div>'
+      + '<div class="doc-card-name">' + escapeHtml(file.name) + '</div>'
       + '<div class="doc-card-meta">Uploading…</div>'
       + '</div>'
     );
@@ -4102,7 +4106,7 @@ async function handleDocUpload(input) {
       var uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + path, {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ' + currentSession.access_token,
+          'Authorization': 'Bearer ' + getToken(),
           'apikey': SUPABASE_ANON_KEY,
           'Content-Type': file.type,
           'x-upsert': 'true'
@@ -4123,7 +4127,7 @@ async function handleDocUpload(input) {
         file_size: file.size,
         status: 'processing',
         metadata: { original_filename: file.name }
-      }, currentSession.access_token, { 'Prefer': 'return=representation' });
+      }, getToken(), { 'Prefer': 'return=representation' });
 
       var upload_id = inserted && inserted[0] && inserted[0].id;
 
@@ -4139,7 +4143,7 @@ async function handleDocUpload(input) {
       // Call process-document edge function
       if (upload_id) {
         try {
-          await supabaseRequest('/functions/v1/process-document', 'POST', { upload_id: upload_id }, currentSession.access_token);
+          await supabaseRequest('/functions/v1/process-document', 'POST', { upload_id: upload_id }, getToken());
         } catch(procErr) {
           console.error('process-document error:', procErr);
         }
@@ -4161,7 +4165,7 @@ async function handleDocUpload(input) {
           while (pollAttempts < maxPollAttempts) {
             updatedDoc = await supabaseRequest(
               '/rest/v1/uploads?id=eq.' + upload_id + '&select=document_type,status',
-              'GET', null, currentSession.access_token
+              'GET', null, getToken()
             );
             if (updatedDoc && updatedDoc[0] && updatedDoc[0].status !== 'processing') break;
             await new Promise(function(resolve) { setTimeout(resolve, 1500); });
@@ -4173,7 +4177,7 @@ async function handleDocUpload(input) {
             // Count extracted biomarkers
             var extracted = await supabaseRequest(
               '/rest/v1/blood_work_samples?upload_id=eq.' + upload_id + '&select=id',
-              'GET', null, currentSession.access_token
+              'GET', null, getToken()
             );
             var count = (extracted && Array.isArray(extracted)) ? extracted.length : 0;
             if (count > 0) {
@@ -4244,7 +4248,7 @@ async function deleteDocument(uploadId, filePath) {
       await fetch(SUPABASE_URL + '/storage/v1/object/' + DOC_BUCKET + '/' + filePath, {
         method: 'DELETE',
         headers: {
-          'Authorization': 'Bearer ' + currentSession.access_token,
+          'Authorization': 'Bearer ' + getToken(),
           'apikey': SUPABASE_ANON_KEY
         }
       });
@@ -4252,7 +4256,7 @@ async function deleteDocument(uploadId, filePath) {
     // Delete row from uploads table
     await supabaseRequest(
       '/rest/v1/uploads?id=eq.' + uploadId,
-      'DELETE', null, currentSession.access_token
+      'DELETE', null, getToken()
     );
     // Refresh the documents list
     loadDocumentsPage();
@@ -4311,7 +4315,7 @@ async function saveFamilyHistory() {
   try {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', {
       family_history: JSON.stringify(familyHistory)
-    }, currentSession.access_token);
+    }, getToken());
     alert('Family history saved.');
   } catch(e) { alert('Could not save family history: ' + e.message); console.error(e); }
 }
@@ -4544,13 +4548,13 @@ async function saveProfile() {
   try {
     // PATCH with return=representation so we can verify it actually updated
     var patchResult = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data,
-      currentSession.access_token, { 'Prefer': 'return=representation' });
+      getToken(), { 'Prefer': 'return=representation' });
     if (!patchResult || !Array.isArray(patchResult) || patchResult.length === 0) {
       // PATCH matched no rows — either row doesn't exist or RLS blocked the update. Insert.
       console.warn('[Healix] PATCH returned no rows — inserting profile');
       var insertData = newProfileRow(currentUser.id, currentUser.email, firstName, lastName);
       Object.keys(data).forEach(function(k) { if (data[k] != null) insertData[k] = data[k]; });
-      patchResult = await supabaseRequest('/rest/v1/profiles', 'POST', insertData, currentSession.access_token, { 'Prefer': 'return=representation' });
+      patchResult = await supabaseRequest('/rest/v1/profiles', 'POST', insertData, getToken(), { 'Prefer': 'return=representation' });
     }
     // Use DB-returned data if available, fall back to local data
     if (patchResult && Array.isArray(patchResult) && patchResult.length > 0) {
@@ -4738,7 +4742,7 @@ function renderCustomTags(containerId, arr, type) {
   if (!el) return;
   el.innerHTML = arr.map(function(v, i) {
     return '<div style="display:flex;align-items:center;gap:6px;background:var(--gold-faint);border:1px solid var(--gold-border);padding:4px 10px">'
-      + '<span style="font-size:11px;color:var(--cream-dim)">' + v + '</span>'
+      + '<span style="font-size:11px;color:var(--cream-dim)">' + escapeHtml(v) + '</span>'
       + '<span style="font-size:10px;color:var(--muted);cursor:pointer" data-container="' + containerId + '" data-type="' + type + '" data-idx="' + i + '" onclick="removeTagByIdx(this)">✕</span>'
       + '</div>';
   }).join('');
@@ -4770,7 +4774,7 @@ async function saveMedicalProfile() {
     await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', {
       health_conditions: medicalProfile.conditions.join(', '),
       dietary_restrictions: medicalProfile.allergies.join(', ')
-    }, currentSession.access_token);
+    }, getToken());
     alert('Saved.');
   } catch(e) { alert('Could not save: ' + e.message); console.error(e); }
 }
@@ -5381,7 +5385,7 @@ async function openEditTestModal(testKey, testId) {
   }
   // Fetch test data and pre-populate
   try {
-    var data = await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + testId + '&limit=1', 'GET', null, currentSession.access_token);
+    var data = await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + testId + '&limit=1', 'GET', null, getToken());
     if (!data || !data[0]) return;
     var test = data[0];
     var dateStr = test.tested_at ? test.tested_at.split('T')[0] : '';
@@ -5452,10 +5456,10 @@ async function saveFitnessTest() {
       // Update existing test
       delete payload.user_id;
       delete payload.created_at;
-      await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + editingTestId, 'PATCH', payload, currentSession.access_token);
+      await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + editingTestId, 'PATCH', payload, getToken());
       editingTestId = null;
     } else {
-      await supabaseRequest('/rest/v1/fitness_tests', 'POST', payload, currentSession.access_token);
+      await supabaseRequest('/rest/v1/fitness_tests', 'POST', payload, getToken());
     }
     closeModal('fitness-modal');
     // Reset modal title
@@ -5475,7 +5479,7 @@ async function deleteFitnessTest(testId) {
   var confirmed = await confirmModal('This test result will be permanently deleted.', { title: 'Delete Test', confirmText: 'Delete', danger: true });
   if (!confirmed) return;
   try {
-    await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + testId, 'DELETE', null, currentSession.access_token);
+    await supabaseRequest('/rest/v1/fitness_tests?id=eq.' + testId, 'DELETE', null, getToken());
     closeModal('fitness-modal');
     document.querySelector('#fitness-modal .modal-title').innerHTML = 'Log a <em>Test</em>';
     document.querySelector('#fitness-modal .modal-btn-primary').textContent = 'Save Result';
@@ -5495,7 +5499,7 @@ async function renderStrengthPage() {
   try {
     var tests = await supabaseRequest(
       '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&order=tested_at.desc&limit=200',
-      'GET', null, currentSession.access_token
+      'GET', null, getToken()
     );
     if (!tests || tests.error) tests = [];
 
@@ -5584,8 +5588,9 @@ async function renderStrengthPage() {
 
     container.innerHTML = html;
 
-    // Delegated listener for log buttons and card clicks
-    container.addEventListener('click', function(e) {
+    // Delegated listener for log buttons and card clicks (remove previous to avoid stacking)
+    if (container._fitnessClickHandler) container.removeEventListener('click', container._fitnessClickHandler);
+    container._fitnessClickHandler = function(e) {
       var logBtn = e.target.closest('.log-test-btn');
       if (logBtn) {
         e.stopPropagation();
@@ -5602,7 +5607,8 @@ async function renderStrengthPage() {
           openLogTestModal(testKey);
         }
       }
-    });
+    };
+    container.addEventListener('click', container._fitnessClickHandler);
 
   } catch(e) {
     console.error('Fitness page error:', e);
@@ -6147,7 +6153,7 @@ function formatDateLabel(date, page) {
 function getSelectedDateStr(page) {
   var d = pageSelectedDate[page];
   if (!d) return null;
-  return d.toISOString().split('T')[0];
+  return localDateStr(d);
 }
 
 function stepDate(page, dir) {
@@ -6213,7 +6219,7 @@ function reloadPageData(page) {
 // ── WEEKLY INSIGHTS ──
 async function loadWeeklyInsights() {
   if (!currentUser) return;
-  var token = currentSession.access_token;
+  var token = getToken();
   try {
     // Get insights from current week
     var weekStart = new Date();
@@ -6260,7 +6266,7 @@ function renderWeeklyInsights(insights) {
 // ── HEALTH SUMMARIES ──
 async function loadHealthSummary() {
   if (!currentUser) return;
-  var token = currentSession.access_token;
+  var token = getToken();
   try {
     var summaries = await supabaseRequest(
       '/rest/v1/user_health_summaries?user_id=eq.' + currentUser.id + '&summary_type=eq.weekly&order=created_at.desc&limit=1',
@@ -6751,18 +6757,18 @@ async function saveFirstRunProfile() {
 
   if (Object.keys(data).length > 0 && currentUser && currentSession) {
     try {
-      await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
+      await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, getToken());
       // Verify PATCH actually updated a row
       var verify = await supabaseRequest(
         '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
-        'GET', null, currentSession.access_token
+        'GET', null, getToken()
       );
       if (!verify || !Array.isArray(verify) || verify.length === 0) {
         // No row exists — insert with required defaults
         console.warn('[Healix] First-run PATCH matched no rows — inserting');
         var frInsert = newProfileRow(currentUser.id, currentUser.email, '', '');
         Object.keys(data).forEach(function(k) { if (data[k] != null) frInsert[k] = data[k]; });
-        await supabaseRequest('/rest/v1/profiles', 'POST', frInsert, currentSession.access_token, { 'Prefer': 'return=representation' });
+        await supabaseRequest('/rest/v1/profiles', 'POST', frInsert, getToken(), { 'Prefer': 'return=representation' });
       }
       window.userProfileData = Object.assign(window.userProfileData || {}, data);
     } catch(e) {
@@ -7512,7 +7518,7 @@ async function deleteMeal(mealId) {
   var confirmed = await confirmModal('This entry will be permanently deleted.', { title: 'Delete Entry', confirmText: 'Delete', danger: true });
   if (!confirmed) return;
   try {
-    await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'DELETE', null, currentSession.access_token);
+    await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'DELETE', null, getToken());
     loadMealsPage();
     loadDashboardData();
   } catch(e) {
@@ -7540,7 +7546,7 @@ async function loadCyclePage() {
   try {
     var data = await supabaseRequest(
       '/rest/v1/apple_health_samples' +
-      '?select=metric_type,value,text_value,recorded_at' +
+      '?select=metric_type,value,text_value,recorded_at,metadata' +
       '&user_id=eq.' + currentUser.id +
       '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
       '&recorded_at=gte.' + daysAgo.toISOString() +
@@ -7581,6 +7587,7 @@ function processCycleData(rows) {
     if (r.metric_type === 'cervical_mucus_quality') d.mucus = r.text_value;
     if (r.metric_type === 'ovulation_test_result') d.ovtest = r.text_value;
     if (r.metric_type === 'progesterone_test_result') d.progesterone = parseFloat(r.value);
+    if (r.metadata && r.metadata.notes && !d.notes) d.notes = r.metadata.notes;
   });
 
   var flowDates = Object.keys(cycleData).filter(function(d) {
@@ -7651,7 +7658,7 @@ function renderCycleStats() {
     var ovulationDay = effectiveCycleLen - 14;
 
     if (cycleDay <= avgPeriodLen && avgPeriodLen > 0) phase = 'Menstrual';
-    else if (cycleDay <= ovulationDay - 1) phase = 'Follicular';
+    else if (cycleDay < ovulationDay - 1) phase = 'Follicular';
     else if (cycleDay >= ovulationDay - 1 && cycleDay <= ovulationDay + 1) phase = 'Ovulatory';
     else phase = 'Luteal';
   }
@@ -7870,6 +7877,7 @@ function prefillCycleModal(dateStr) {
   if (entry.mucus) selectCycleOptionByValue('cyc-mucus-group', entry.mucus);
   if (entry.ovtest) selectCycleOptionByValue('cyc-ovtest-group', entry.ovtest);
   if (entry.progesterone) document.getElementById('cyc-progesterone').value = entry.progesterone;
+  if (entry.notes) document.getElementById('cyc-notes').value = entry.notes;
 }
 
 function resetCycleModal() {
