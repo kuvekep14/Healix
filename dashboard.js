@@ -4542,21 +4542,22 @@ async function saveProfile() {
   if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
 
   try {
-    // PATCH returns null/empty when zero rows matched — verify by re-fetching
-    await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, currentSession.access_token);
-    // Verify the save actually persisted
-    var verify = await supabaseRequest(
-      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
-      'GET', null, currentSession.access_token
-    );
-    if (!verify || !Array.isArray(verify) || verify.length === 0) {
-      // Row doesn't exist — PATCH silently matched nothing. Insert with required defaults.
-      console.warn('[Healix] PATCH matched no rows — inserting profile');
+    // PATCH with return=representation so we can verify it actually updated
+    var patchResult = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data,
+      currentSession.access_token, { 'Prefer': 'return=representation' });
+    if (!patchResult || !Array.isArray(patchResult) || patchResult.length === 0) {
+      // PATCH matched no rows — either row doesn't exist or RLS blocked the update. Insert.
+      console.warn('[Healix] PATCH returned no rows — inserting profile');
       var insertData = newProfileRow(currentUser.id, currentUser.email, firstName, lastName);
       Object.keys(data).forEach(function(k) { if (data[k] != null) insertData[k] = data[k]; });
-      await supabaseRequest('/rest/v1/profiles', 'POST', insertData, currentSession.access_token, { 'Prefer': 'return=representation' });
+      patchResult = await supabaseRequest('/rest/v1/profiles', 'POST', insertData, currentSession.access_token, { 'Prefer': 'return=representation' });
     }
-    window.userProfileData = Object.assign(window.userProfileData || {}, data);
+    // Use DB-returned data if available, fall back to local data
+    if (patchResult && Array.isArray(patchResult) && patchResult.length > 0) {
+      window.userProfileData = patchResult[0];
+    } else {
+      window.userProfileData = Object.assign(window.userProfileData || {}, data);
+    }
     if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
     // Update sidebar name
     var profileName = [firstName, lastName].filter(Boolean).join(' ');
