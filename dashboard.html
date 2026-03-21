@@ -852,10 +852,11 @@
           <option value="grip_strength">Grip Strength</option>
           <option value="dead_hang">Dead Hang</option>
           <option value="farmers_walk">Farmer's Walk</option>
+          <option value="plank">Plank</option>
           <option value="chair_stand">30-sec Chair Stand</option>
           <option value="balance">Single-leg Balance</option>
         </optgroup>
-        <optgroup label="Mobility">
+        <optgroup label="Flexibility">
           <option value="toe_touch">Toe Touch</option>
           <option value="shoulder_reach">Shoulder Reach</option>
         </optgroup>
@@ -951,6 +952,17 @@
         <button type="button" class="cycle-opt-btn" data-value="4" onclick="selectCycleOption('ft-scale-group',this)">4 — Good</button>
         <button type="button" class="cycle-opt-btn" data-value="5" onclick="selectCycleOption('ft-scale-group',this)">5 — Excellent</button>
       </div>
+    </div>
+    <div id="ft-fw-weight-fields" style="display:none;margin-bottom:14px">
+      <label class="modal-label">Weight per Hand</label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <input class="modal-input" id="ft-fw-weight" type="number" placeholder="e.g. 75" step="5" style="flex:2">
+        <select class="modal-input" id="ft-fw-wunit" style="flex:1;cursor:pointer">
+          <option value="lbs">lbs</option>
+          <option value="kg">kg</option>
+        </select>
+      </div>
+      <div id="ft-fw-target" style="font-size:11px;color:var(--gold)"></div>
     </div>
     <div class="modal-row" id="ft-value-row">
       <div class="modal-field" style="flex:2">
@@ -1269,7 +1281,7 @@
 
 <script src="config.js"></script>
 <script src="components/confirm-modal.js"></script>
-<script src="dashboard.js?v=20260321"></script>
+<script src="dashboard.js?v=20260321b"></script>
 <script src="chat-widget.js"></script>
 
 <datalist id="ex-presets"><option value="Bench Press"><option value="Overhead Press"><option value="Incline Press"><option value="Dumbbell Fly"><option value="Pull-ups"><option value="Chin-ups"><option value="Barbell Row"><option value="Cable Row"><option value="Lat Pulldown"><option value="Dumbbell Curl"><option value="Hammer Curl"><option value="Tricep Dip"><option value="Tricep Pushdown"><option value="Skull Crushers"><option value="Squat"><option value="Front Squat"><option value="Leg Press"><option value="Romanian Deadlift"><option value="Deadlift"><option value="Hip Thrust"><option value="Lunges"><option value="Leg Curl"><option value="Leg Extension"><option value="Plank"><option value="Cable Crunch"><option value="Ab Wheel"><option value="Face Pull"><option value="Running"><option value="Cycling"><option value="Row Machine"><option value="Jump Rope"></datalist>

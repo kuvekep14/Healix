@@ -5063,7 +5063,7 @@ var FITNESS_NORMS = {
   },
   dead_hang: {
     label: 'Dead Hang', unit: 'sec', higherBetter: true,
-    hint: 'Hang from a pull-up bar with a full grip, arms fully extended. Time until you drop.',
+    hint: 'Hang from a pull-up bar with an overhand grip, arms fully extended, feet off the ground. Time until you let go. Tests grip endurance and shoulder health under your own bodyweight.',
     norms: {
       male: {
         '18-29': [[120,99],[90,90],[75,80],[62,70],[52,60],[44,50],[36,40],[28,30],[18,20],[8,10]],
@@ -5083,7 +5083,7 @@ var FITNESS_NORMS = {
   },
   farmers_walk: {
     label: 'Farmers Walk', unit: 'm', higherBetter: true,
-    hint: 'Carry 50% of your bodyweight in each hand. Walk as far as possible without putting the weights down.',
+    hint: 'Carry heavy weights in each hand — target 50% of your bodyweight per hand. Walk as far as possible without setting them down.',
     relativeToWeight: false,
     norms: {
       male: {
@@ -5101,13 +5101,34 @@ var FITNESS_NORMS = {
         '60+':   [[50,99],[40,90],[34,80],[29,70],[24,60],[20,50],[16,40],[13,30],[9,20],[4,10]]
       }
     }
+  },
+  plank: {
+    label: 'Plank', unit: 'sec', higherBetter: true,
+    hint: 'Hold a forearm plank with hips level and core braced. Time stops when form breaks or knees touch down.',
+    norms: {
+      male: {
+        '18-29': [[240,99],[180,90],[150,80],[120,70],[100,60],[80,50],[65,40],[50,30],[35,20],[20,10]],
+        '30-39': [[210,99],[160,90],[130,80],[105,70],[90,60],[72,50],[58,40],[45,30],[30,20],[18,10]],
+        '40-49': [[180,99],[135,90],[110,80],[90,70],[75,60],[60,50],[48,40],[37,30],[25,20],[15,10]],
+        '50-59': [[150,99],[110,90],[90,80],[73,70],[60,60],[48,50],[38,40],[29,30],[20,20],[12,10]],
+        '60+':   [[120,99],[85,90],[70,80],[56,70],[45,60],[36,50],[28,40],[21,30],[14,20],[8,10]]
+      },
+      female: {
+        '18-29': [[210,99],[160,90],[130,80],[105,70],[85,60],[68,50],[55,40],[42,30],[28,20],[15,10]],
+        '30-39': [[180,99],[138,90],[112,80],[90,70],[73,60],[58,50],[47,40],[36,30],[24,20],[13,10]],
+        '40-49': [[150,99],[115,90],[93,80],[75,70],[60,60],[48,50],[38,40],[29,30],[20,20],[11,10]],
+        '50-59': [[120,99],[90,90],[73,80],[58,70],[47,60],[37,50],[30,40],[22,30],[15,20],[8,10]],
+        '60+':   [[90,99],[65,90],[52,80],[42,70],[33,60],[26,50],[20,40],[15,30],[10,20],[5,10]]
+      }
+    }
   }
 };
 
 var FITNESS_CATEGORIES = [
-  { key: 'strength',   label: 'Strength',   tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
-  { key: 'cardio',     label: 'Cardio',     tests: ['mile_time','vo2max','walk_6min'] },
-  { key: 'functional', label: 'Functional', tests: ['grip_strength','dead_hang','farmers_walk','chair_stand','balance','toe_touch','shoulder_reach'] }
+  { key: 'strength',    label: 'Strength',    tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
+  { key: 'cardio',      label: 'Cardio',      tests: ['mile_time','vo2max','walk_6min'] },
+  { key: 'functional',  label: 'Functional',  tests: ['grip_strength','dead_hang','farmers_walk','plank','chair_stand','balance'] },
+  { key: 'flexibility', label: 'Flexibility', tests: ['toe_touch','shoulder_reach'] }
 ];
 
 // Recommendation engine — returns ordered list of test keys for this user
@@ -5132,10 +5153,10 @@ function getRecommendedTests(profile, byKey) {
 
     // Age suitability
     if (age >= 60) {
-      if (['chair_stand','balance','walk_6min','grip_strength','sit_reach'].includes(key)) score += 30;
+      if (['chair_stand','balance','walk_6min','grip_strength','plank','toe_touch'].includes(key)) score += 30;
       if (['bench_1rm','squat_1rm','deadlift_1rm'].includes(key)) score -= 15;
     } else if (age >= 50) {
-      if (['chair_stand','balance','grip_strength','walk_6min'].includes(key)) score += 20;
+      if (['chair_stand','balance','grip_strength','walk_6min','plank'].includes(key)) score += 20;
       if (['bench_1rm','squat_1rm','deadlift_1rm'].includes(key)) score -= 5;
     } else if (age < 35) {
       if (['bench_1rm','squat_1rm','deadlift_1rm','pullup','vo2max'].includes(key)) score += 15;
@@ -5146,10 +5167,10 @@ function getRecommendedTests(profile, byKey) {
       if (['walk_6min','mile_time','vo2max','chair_stand'].includes(key)) score += 20;
     }
     if (goal.includes('muscle') || goal.includes('strength')) {
-      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength','dead_hang','farmers_walk'].includes(key)) score += 20;
+      if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength','dead_hang','farmers_walk','plank'].includes(key)) score += 20;
     }
     if (goal.includes('longevity') || goal.includes('health')) {
-      if (['grip_strength','dead_hang','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
+      if (['grip_strength','dead_hang','balance','vo2max','chair_stand','plank','toe_touch'].includes(key)) score += 20;
     }
 
     // Low percentile = needs attention
@@ -5158,7 +5179,7 @@ function getRecommendedTests(profile, byKey) {
     scored.push({ key: key, score: score });
   });
 
-  return scored.sort(function(a,b){ return b.score - a.score; }).slice(0,4).map(function(x){ return x.key; });
+  return scored.sort(function(a,b){ return b.score - a.score; }).slice(0,6).map(function(x){ return x.key; });
 }
 
 function getUserProfile() {
@@ -5294,6 +5315,18 @@ function onFitnessTestChange() {
       document.getElementById('ft-scale-label').textContent = norm.hint || 'How would you rate yourself?';
     }
   }
+  // Farmer's walk weight input
+  var fwFields = document.getElementById('ft-fw-weight-fields');
+  if (fwFields) {
+    fwFields.style.display = key === 'farmers_walk' ? 'block' : 'none';
+    if (key === 'farmers_walk') {
+      var p = getUserProfile();
+      var targetLbs = Math.round(p.weightLbs * 0.5);
+      var targetEl = document.getElementById('ft-fw-target');
+      if (targetEl) targetEl.textContent = 'Target: ' + targetLbs + ' lbs per hand (50% BW)';
+    }
+  }
+
   var vo2Calc = document.getElementById('vo2-calculator');
   if (vo2Calc) vo2Calc.style.display = isVO2 ? 'block' : 'none';
 
@@ -5465,6 +5498,16 @@ async function saveFitnessTest() {
   var profile = getUserProfile();
   var percentile = calcPercentile(key, rawValue, profile);
 
+  // Farmer's walk: prepend weight to notes
+  if (key === 'farmers_walk') {
+    var fwWeight = document.getElementById('ft-fw-weight');
+    var fwUnit = document.getElementById('ft-fw-wunit');
+    if (fwWeight && fwWeight.value) {
+      var weightStr = fwWeight.value + ' ' + (fwUnit ? fwUnit.value : 'lbs') + '/hand';
+      notes = '[' + weightStr + ']' + (notes ? ' ' + notes : '');
+    }
+  }
+
   var payload = {
     user_id: currentUser.id,
     test_key: key,
@@ -5517,6 +5560,30 @@ async function deleteFitnessTest(testId) {
   }
 }
 
+function orderTestsByRelevance(testKeys, profile, byKey) {
+  var age = profile.age;
+  return testKeys.slice().sort(function(a, b) {
+    var scoreA = 0, scoreB = 0;
+    // Age suitability
+    var seniorTests = ['chair_stand','balance','walk_6min','plank','toe_touch','shoulder_reach'];
+    var youngTests = ['bench_1rm','squat_1rm','deadlift_1rm','pullup','dead_hang','farmers_walk'];
+    if (age >= 60) {
+      if (seniorTests.includes(a)) scoreA += 20;
+      if (seniorTests.includes(b)) scoreB += 20;
+      if (youngTests.includes(a)) scoreA -= 10;
+      if (youngTests.includes(b)) scoreB -= 10;
+    } else if (age < 35) {
+      if (youngTests.includes(a)) scoreA += 10;
+      if (youngTests.includes(b)) scoreB += 10;
+    }
+    // Staleness: untested or stale tests first
+    var histA = byKey[a] || [], histB = byKey[b] || [];
+    if (!histA.length) scoreA += 10;
+    if (!histB.length) scoreB += 10;
+    return scoreB - scoreA;
+  });
+}
+
 async function renderStrengthPage() {
   if (!currentUser) return;
   var container = document.getElementById('fitness-categories');
@@ -5542,13 +5609,46 @@ async function renderStrengthPage() {
 
     var recommended = getRecommendedTests(profile, byKey);
 
+    // ── Recommended for You section ──
+    html += '<div style="margin-bottom:28px">'
+      + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Recommended for You</div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Based on your age, goals, and test history</div>'
+      + '<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">';
+    recommended.forEach(function(recKey) {
+      var norm = FITNESS_NORMS[recKey];
+      if (!norm) return;
+      var history = byKey[recKey] || [];
+      var latest = history[0];
+      var valText = '—';
+      if (latest) {
+        if (recKey === 'mile_time') {
+          var m = Math.floor(latest.raw_value);
+          var s = Math.round((latest.raw_value - m) * 60);
+          valText = m + ':' + (s < 10 ? '0' : '') + s;
+        } else if (norm.selfRated) {
+          valText = parseInt(latest.raw_value) + '/5';
+        } else {
+          valText = latest.raw_value % 1 === 0 ? latest.raw_value : parseFloat(latest.raw_value).toFixed(1);
+        }
+      }
+      html += '<div class="fitness-rec-card" onclick="openLogTestModal(\'' + recKey + '\')" style="min-width:140px;flex:0 0 auto;padding:14px 16px;background:var(--dark-3);border:1px solid var(--gold-border);cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor=\'var(--gold)\'" onmouseout="this.style.borderColor=\'\'">'
+        + '<div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">' + escapeHtml(norm.label) + '</div>'
+        + '<div style="font-family:var(--F);font-size:24px;font-weight:300">' + valText + '</div>'
+        + '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + (latest ? escapeHtml(norm.unit) : 'Not tested') + '</div>'
+        + '<div style="margin-top:8px;font-size:10px;color:var(--gold);cursor:pointer">+ Log</div>'
+        + '</div>';
+    });
+    html += '</div></div>';
+
     FITNESS_CATEGORIES.forEach(function(cat) {
       var hasAny = cat.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
+      // Smart ordering: sort tests within category by relevance to user
+      var orderedTests = orderTestsByRelevance(cat.tests, profile, byKey);
       html += '<div style="margin-bottom:28px">'
         + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:12px">' + cat.label + '</div>'
         + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">';
 
-      cat.tests.forEach(function(key) {
+      orderedTests.forEach(function(key) {
         var norm = FITNESS_NORMS[key];
         var history = byKey[key] || [];
         var latest = history[0];
@@ -5572,6 +5672,11 @@ async function renderStrengthPage() {
             valueDisplay = m + ':' + (s < 10 ? '0' : '') + s;
           } else {
             valueDisplay = latest.raw_value % 1 === 0 ? latest.raw_value : parseFloat(latest.raw_value).toFixed(1);
+            // Farmer's walk: show weight from notes if stored
+            if (key === 'farmers_walk' && latest.notes) {
+              var fwMatch = latest.notes.match(/^\[([^\]]+)\]/);
+              if (fwMatch) valueDisplay += '<div style="font-size:11px;color:var(--cream-dim);margin-top:2px;font-family:var(--B);font-weight:300">@ ' + escapeHtml(fwMatch[1]) + '</div>';
+            }
           }
           var p = latest.percentile || calcPercentile(key, parseFloat(latest.raw_value), profile);
           var pl = percentileLabel(p);
