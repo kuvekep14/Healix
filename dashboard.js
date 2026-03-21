@@ -781,16 +781,91 @@ function saveVitalityHistory(result, realAge) {
   var today = localDateStr(new Date());
   var history = [];
   try { history = JSON.parse(localStorage.getItem('healix_va_history_' + currentUser.id) || '[]'); } catch(e) { history = []; }
+  // Build per-driver score map
+  var driverScores = {};
+  if (result.scores) {
+    result.scores.forEach(function(s) { driverScores[s.name] = s.score; });
+  }
+  var entry = { date: today, vAge: result.vAge, composite: result.composite, realAge: realAge, drivers: driverScores };
   // Update today's entry or add new one
   var found = false;
   for (var i = 0; i < history.length; i++) {
-    if (history[i].date === today) { history[i] = { date: today, vAge: result.vAge, composite: result.composite, realAge: realAge }; found = true; break; }
+    if (history[i].date === today) { history[i] = entry; found = true; break; }
   }
-  if (!found) history.push({ date: today, vAge: result.vAge, composite: result.composite, realAge: realAge });
+  if (!found) history.push(entry);
   // Keep last 365 days
   history.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
   if (history.length > 365) history = history.slice(-365);
   try { localStorage.setItem('healix_va_history_' + currentUser.id, JSON.stringify(history)); } catch(e) {}
+}
+
+function renderVitalityChangeCard(result) {
+  var card = document.getElementById('va-change-card');
+  if (!card || !result || !result.scores) { if (card) card.style.display = 'none'; return; }
+
+  // Get history and find the most recent previous entry (not today)
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem('healix_va_history_' + currentUser.id) || '[]'); } catch(e) {}
+  var today = localDateStr(new Date());
+  var prev = null;
+  for (var i = history.length - 1; i >= 0; i--) {
+    if (history[i].date !== today && history[i].drivers) { prev = history[i]; break; }
+  }
+  if (!prev || !prev.drivers) { card.style.display = 'none'; return; }
+
+  // Compare vitality ages
+  var ageDiff = prev.vAge - result.vAge; // positive = improved (younger)
+  if (ageDiff === 0) { card.style.display = 'none'; return; }
+
+  var improved = ageDiff > 0;
+  var driverLabels = { bloodwork: 'Blood Work', hr: 'Heart Rate', weight: 'Weight', strength: 'Strength', aerobic: 'VO2 Max', sleep: 'Sleep' };
+
+  // Build driver diff rows
+  var currentDrivers = {};
+  result.scores.forEach(function(s) { currentDrivers[s.name] = s.score; });
+
+  var rows = '';
+  var allKeys = Object.keys(driverLabels);
+  allKeys.forEach(function(k) {
+    var cur = currentDrivers[k];
+    var prv = prev.drivers[k];
+    if (cur == null && prv == null) return;
+    var curVal = cur != null ? Math.round(cur) : '—';
+    var prvVal = prv != null ? Math.round(prv) : '—';
+    var diff = (cur != null && prv != null) ? Math.round(cur - prv) : null;
+    var diffStr = '—';
+    var diffColor = 'var(--muted)';
+    if (diff !== null && diff !== 0) {
+      diffStr = (diff > 0 ? '+' : '') + diff;
+      diffColor = diff > 0 ? 'var(--up)' : 'var(--down)';
+    } else if (diff === 0) {
+      diffStr = '—';
+    }
+    rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--gold-border)">'
+      + '<div style="font-size:12px;color:var(--cream-dim)">' + driverLabels[k] + '</div>'
+      + '<div style="display:flex;gap:12px;align-items:center;font-size:12px">'
+      + '<span style="color:var(--muted)">' + prvVal + '</span>'
+      + '<span style="color:var(--muted)">→</span>'
+      + '<span style="color:var(--cream)">' + curVal + '</span>'
+      + '<span style="color:' + diffColor + ';min-width:36px;text-align:right">' + diffStr + '</span>'
+      + '</div></div>';
+  });
+
+  var headerColor = improved ? 'var(--up)' : 'var(--down)';
+  var headerText = improved ? 'Improved by ' + Math.abs(ageDiff) + (Math.abs(ageDiff) === 1 ? ' year' : ' years') : 'Increased by ' + Math.abs(ageDiff) + (Math.abs(ageDiff) === 1 ? ' year' : ' years');
+
+  card.innerHTML = '<div class="card" style="padding:16px 20px;cursor:pointer" onclick="this.querySelector(\'.va-change-details\').style.display=this.querySelector(\'.va-change-details\').style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.va-change-arrow\').style.transform=this.querySelector(\'.va-change-details\').style.display===\'none\'?\'\':\' rotate(90deg)\'">'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<span class="vitality-insight-icon">◈</span>'
+    + '<span style="font-size:13px;color:' + headerColor + '">' + headerText + '</span>'
+    + '<span style="font-size:11px;color:var(--muted)">since ' + prev.date.slice(5).replace('-', '/') + '</span>'
+    + '<span class="va-change-arrow" style="margin-left:auto;font-size:10px;color:var(--muted);transition:transform .2s">▶</span>'
+    + '</div>'
+    + '<div class="va-change-details" style="display:none;margin-top:12px">'
+    + '<div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">What changed</div>'
+    + rows
+    + '</div></div>';
+  card.style.display = 'block';
 }
 
 function renderVitalityTimeline() {
@@ -1724,6 +1799,7 @@ async function loadDashboardData() {
   var shareBtn = document.getElementById('va-share-btn');
   if (shareBtn) shareBtn.style.display = result && result.vAge ? 'flex' : 'none';
   saveVitalityHistory(result, realAge);
+  renderVitalityChangeCard(result);
   renderVitalityTimeline();
   renderDriverCards(metrics, result);
 
