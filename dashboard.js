@@ -4899,7 +4899,7 @@ var FITNESS_NORMS = {
   },
   sit_reach: {
     label: 'Sit & Reach', unit: 'cm', higherBetter: true,
-    hint: 'Sit on floor, legs straight. Reach forward as far as possible. Measure from feet (positive = past feet).',
+    hint: 'Sit on floor with legs straight against a wall or step. Reach forward as far as you can. Use a ruler or tape measure from the edge of your feet — positive means past your toes, negative means short of them.',
     norms: {
       male: {
         '18-29': [[40,99],[34,90],[30,80],[27,70],[24,60],[21,50],[18,40],[15,30],[11,20],[5,10]],
@@ -4919,7 +4919,7 @@ var FITNESS_NORMS = {
   },
   shoulder_mobility: {
     label: 'Shoulder Mobility', unit: 'cm', higherBetter: true,
-    hint: 'FMS screen. Reach behind back from above and below. Measure gap (negative = hands apart).',
+    hint: 'Stand tall. Reach one hand over your shoulder and the other behind your lower back. Try to touch your fingers together. Measure the overlap in cm (positive) or the gap between fingertips (negative). Use your better side.',
     norms: {
       male: {
         '18-29': [[5,99],[2,90],[0,80],[-2,70],[-5,60],[-8,50],[-12,40],[-16,30],[-20,20],[-25,10]],
@@ -5021,7 +5021,7 @@ var FITNESS_NORMS = {
   },
   balance: {
     label: 'Single-leg Balance', unit: 'sec', higherBetter: true,
-    hint: 'Stand on one foot, eyes closed. Time until you touch down. Best of 2 attempts per leg, use better leg.',
+    hint: 'Stand on one foot with your eyes closed and start a timer. Stop when your other foot touches down or you open your eyes. Do 2 attempts on each leg and enter your best time in seconds.',
     norms: {
       male: {
         '18-29': [[45,99],[35,90],[28,80],[22,70],[17,60],[13,50],[9,40],[6,30],[3,20],[1,10]],
@@ -5432,8 +5432,11 @@ async function saveFitnessTest() {
   } else if (AMRAP_TESTS.includes(key)) {
     var w = parseFloat(document.getElementById('ft-amrap-weight').value);
     var r = parseInt(document.getElementById('ft-amrap-reps').value);
+    var amrapUnit = document.getElementById('ft-amrap-unit').value;
     if (!w || !r || r > 30) { alert('Enter weight and reps (max 30 for accuracy).'); return; }
-    rawValue = epley1RM(w, r);
+    // Convert kg to lbs since norms are in lbs
+    var wLbs = amrapUnit === 'kg' ? w * 2.205 : w;
+    rawValue = epley1RM(wLbs, r);
   } else if (REPS_ONLY_TESTS.includes(key)) {
     var r = parseInt(document.getElementById('ft-amrap-reps').value);
     if (!r || r <= 0) { alert('Enter reps completed.'); return; }
@@ -5550,7 +5553,8 @@ async function renderStrengthPage() {
           }
           var p = latest.percentile || calcPercentile(key, parseFloat(latest.raw_value), profile);
           var pl = percentileLabel(p);
-          percentileDisplay = p + 'th percentile';
+          var ord = p === 1 ? 'st' : p === 2 ? 'nd' : p === 3 ? 'rd' : 'th';
+          percentileDisplay = p + ord + ' percentile';
           pctClass = pl.cls;
 
           // Sparkline from history (last 6)
