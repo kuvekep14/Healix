@@ -1539,11 +1539,11 @@ async function loadDashboardData() {
     var wlData = await supabaseRequest(
       '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=14',
       'GET', null, token
-    );
+    ).catch(function() { return []; });
     if (wlData && !wlData.error && wlData.length > 0) {
       weightEntries = wlData;
     }
-  } catch(e) { console.error('Weight pre-fetch error:', e); }
+  } catch(e) { /* weight_logs table may not exist yet */ }
 
   // 2. Meals / nutrition score
   try {
@@ -1611,7 +1611,7 @@ async function loadDashboardData() {
     var weightLogs = await supabaseRequest(
       '/rest/v1/weight_logs?user_id=eq.' + currentUser.id + '&order=logged_at.desc&limit=1',
       'GET', null, token
-    );
+    ).catch(function() { return []; });
     if (weightLogs && !weightLogs.error && weightLogs.length > 0) {
       timestamps.weight = weightLogs[0].logged_at;
     }
@@ -6264,7 +6264,7 @@ async function loadWeeklyInsights() {
     var insights = await supabaseRequest(
       '/rest/v1/weekly_insights?user_id=eq.' + currentUser.id + '&week_start=gte.' + weekStartStr + '&order=created_at.desc&limit=5',
       'GET', null, token
-    );
+    ).catch(function() { return []; });
     if (!insights || insights.error || !Array.isArray(insights) || insights.length === 0) {
       // Try last week
       var lastWeek = new Date(weekStart);
@@ -6272,11 +6272,11 @@ async function loadWeeklyInsights() {
       insights = await supabaseRequest(
         '/rest/v1/weekly_insights?user_id=eq.' + currentUser.id + '&week_start=gte.' + localDateStr(lastWeek) + '&order=created_at.desc&limit=5',
         'GET', null, token
-      );
+      ).catch(function() { return []; });
     }
     if (!insights || insights.error || !Array.isArray(insights) || insights.length === 0) return;
     renderWeeklyInsights(insights);
-  } catch(e) { console.error('[Healix] Weekly insights error:', e); }
+  } catch(e) { /* weekly_insights table may not exist yet */ }
 }
 
 function renderWeeklyInsights(insights) {
@@ -6305,10 +6305,10 @@ async function loadHealthSummary() {
     var summaries = await supabaseRequest(
       '/rest/v1/user_health_summaries?user_id=eq.' + currentUser.id + '&summary_type=eq.weekly&order=created_at.desc&limit=1',
       'GET', null, token
-    );
+    ).catch(function() { return []; });
     if (!summaries || summaries.error || !Array.isArray(summaries) || summaries.length === 0) return;
     renderHealthSummaryCard(summaries[0]);
-  } catch(e) { console.error('[Healix] Health summary error:', e); }
+  } catch(e) { /* user_health_summaries table may not exist yet */ }
 }
 
 function renderHealthSummaryCard(summary) {
