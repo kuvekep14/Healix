@@ -5107,8 +5107,7 @@ var FITNESS_NORMS = {
 var FITNESS_CATEGORIES = [
   { key: 'strength',   label: 'Strength',   tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
   { key: 'cardio',     label: 'Cardio',     tests: ['mile_time','vo2max','walk_6min'] },
-  { key: 'functional', label: 'Functional', tests: ['grip_strength','dead_hang','farmers_walk','chair_stand','balance'] },
-  { key: 'mobility',   label: 'Mobility',   tests: ['toe_touch','shoulder_reach'] }
+  { key: 'functional', label: 'Functional', tests: ['grip_strength','dead_hang','farmers_walk','chair_stand','balance','toe_touch','shoulder_reach'] }
 ];
 
 // Recommendation engine — returns ordered list of test keys for this user
