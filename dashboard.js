@@ -1513,8 +1513,10 @@ async function loadDashboardData() {
       if (todaySteps === 0 && stepsRows.length > 0) todaySteps = parseFloat(stepsRows[0].value || 0);
       if (todaySteps > 0) metrics.steps = Math.round(todaySteps);
 
-      // HR
-      var hrRows = (byType['resting_heart_rate'] || []).concat(byType['heart_rate'] || []);
+      // HR — prefer resting HR (daily summary, stable) over instantaneous HR (fluctuates)
+      var restingHrRows = byType['resting_heart_rate'] || [];
+      var instantHrRows = byType['heart_rate'] || [];
+      var hrRows = restingHrRows.length > 0 ? restingHrRows : instantHrRows;
       if (hrRows.length > 0) {
         metrics.hr = Math.round(parseFloat(hrRows[0].value));
         timestamps.heart_rate = hrRows[0].recorded_at;
