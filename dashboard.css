@@ -1323,6 +1323,45 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 }
 .meal-streak-dot.logged .meal-streak-dot-label { color: var(--cream-dim); }
 
+/* Supplement overlay on streak dots */
+.meal-streak-dot { position: relative; }
+.meal-streak-dot.logged.supp-complete::after {
+  content: ''; position: absolute; top: 2.5px; left: 50%; transform: translateX(-50%);
+  width: 3px; height: 3px; border-radius: 50%; background: var(--cream);
+}
+
+/* Supplement summary line in streak card */
+.meal-streak-supp-line {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-family: var(--B); font-size: 9px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted);
+}
+.meal-streak-supp-bar {
+  width: 60px; height: 2px; background: var(--gold-border); border-radius: 1px; overflow: hidden;
+}
+.meal-streak-supp-bar-fill {
+  height: 100%; background: var(--gold); border-radius: 1px; transition: width .4s ease;
+}
+
+/* Supplement consistency grid on Intake page */
+.supp-consistency-header {
+  display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;
+}
+.supp-consistency-label {
+  font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted);
+}
+.supp-consistency-stat {
+  font-family: var(--F); font-size: 16px; font-weight: 300; color: var(--cream);
+}
+.supp-30-grid {
+  display: flex; flex-wrap: wrap; gap: 3px;
+}
+.supp-30-dot {
+  width: 6px; height: 6px; border-radius: 1px; background: var(--dark-4);
+}
+.supp-30-dot.complete { background: var(--gold); }
+.supp-30-dot.partial { background: var(--gold-partial); }
+
 /* Milestone glow animation */
 @keyframes streak-milestone {
   0% { box-shadow: 0 0 0 0 rgba(184,151,90,0); border-color: var(--gold-border); }
