@@ -468,6 +468,29 @@ function scoreWeight(weightKg, heightCm) {
   return 10;
 }
 
+// 5 fitness domains — at least one test from each domain required for a confirmed score
+var FITNESS_DOMAINS = [
+  { key: 'upper_push', label: 'Upper Push', tests: ['bench_1rm', 'pushup'] },
+  { key: 'upper_pull', label: 'Upper Pull', tests: ['pullup', 'dead_hang'] },
+  { key: 'lower',      label: 'Lower Body', tests: ['squat_1rm', 'chair_stand'] },
+  { key: 'core',       label: 'Core',       tests: ['plank'] },
+  { key: 'carry_grip', label: 'Carry/Grip', tests: ['farmers_walk', 'grip_strength'] }
+];
+
+function getCompletedDomains(strengthData) {
+  if (!strengthData || !strengthData.tests) return { completed: [], missing: FITNESS_DOMAINS.slice() };
+  var testedKeys = {};
+  strengthData.tests.forEach(function(t) { testedKeys[t.test_key] = true; });
+  var completed = [];
+  var missing = [];
+  FITNESS_DOMAINS.forEach(function(d) {
+    var hasDomain = d.tests.some(function(k) { return testedKeys[k]; });
+    if (hasDomain) completed.push(d);
+    else missing.push(d);
+  });
+  return { completed: completed, missing: missing };
+}
+
 function scoreStrength(strengthData) {
   // Fitness test percentile average — percentile maps directly to 0-100 score
   if (!strengthData) return null;
@@ -1072,9 +1095,15 @@ function renderDriverCards(metrics, result) {
 
   var hrVal  = metrics.hr !== null ? metrics.hr : null;
   var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
-  var strVal = metrics.strengthData !== null
-    ? metrics.strengthData.testCount + ' tests · ' + metrics.strengthData.avgPercentile + 'th pctl'
-    : null;
+  var strVal = null;
+  var strDomains = null;
+  if (metrics.strengthData !== null) {
+    strDomains = getCompletedDomains(metrics.strengthData);
+    var allComplete = strDomains.missing.length === 0;
+    var ord = metrics.strengthData.avgPercentile === 1 ? 'st' : metrics.strengthData.avgPercentile === 2 ? 'nd' : metrics.strengthData.avgPercentile === 3 ? 'rd' : 'th';
+    strVal = (allComplete ? '' : '~') + metrics.strengthData.avgPercentile + ord + ' pctl';
+    if (!allComplete) strVal += ' · ' + strDomains.completed.length + '/5 domains';
+  }
   var aerVal = metrics.vo2max !== null
     ? metrics.vo2max + ' ml/kg/min'
     : null;
@@ -1583,16 +1612,26 @@ async function loadDashboardData() {
     }
   } catch(e) { console.error('Meal error:', e); }
 
-  // 3. Strength — fitness test percentile average
+  // 3. Strength — fitness test percentile average (latest per test type, all test types)
   try {
     var strengthTests = await supabaseRequest(
-      '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&test_key=in.(bench_1rm,squat_1rm,deadlift_1rm,pushup,pullup)&order=tested_at.desc&limit=20',
+      '/rest/v1/fitness_tests?user_id=eq.' + currentUser.id + '&order=tested_at.desc&limit=200',
       'GET', null, token
     );
     if (strengthTests && !strengthTests.error && strengthTests.length > 0) {
-      var percentiles = strengthTests.filter(function(t) { return t.percentile != null; }).map(function(t) { return parseFloat(t.percentile); });
+      // Deduplicate: keep only the latest result per test_key
+      var latestByKey = {};
+      strengthTests.forEach(function(t) {
+        if (!latestByKey[t.test_key]) latestByKey[t.test_key] = t;
+      });
+      var percentiles = [];
+      Object.keys(latestByKey).forEach(function(k) {
+        var t = latestByKey[k];
+        if (t.percentile != null) percentiles.push(parseFloat(t.percentile));
+      });
+      var uniqueTestTypes = Object.keys(latestByKey).length;
       var avgPctl = percentiles.length > 0 ? Math.round(percentiles.reduce(function(s, p) { return s + p; }, 0) / percentiles.length) : 50;
-      metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, tests: strengthTests };
+      metrics.strengthData = { testCount: strengthTests.length, avgPercentile: avgPctl, uniqueTestTypes: uniqueTestTypes, tests: strengthTests };
       timestamps.strength = strengthTests[0].tested_at;
     } else {
       metrics.strengthData = null;
@@ -5656,6 +5695,28 @@ async function renderStrengthPage() {
         html += '</div></div>';
       }
     }
+
+    // ── Domain progress card ──
+    var domainStatus = getCompletedDomains({ tests: tests });
+    html += '<div class="card" style="padding:20px;margin-bottom:24px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+      + '<div>'
+      + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Fitness Score</div>'
+      + '<div style="font-size:13px;color:var(--cream-dim)">' + (domainStatus.missing.length === 0 ? 'All domains complete' : domainStatus.completed.length + ' of 5 domains tested') + '</div>'
+      + '</div>'
+      + (domainStatus.missing.length > 0 ? '<div style="font-size:11px;color:var(--muted)">Complete all 5 for a confirmed score</div>' : '<div style="font-size:11px;color:var(--up)">Score confirmed</div>')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+    FITNESS_DOMAINS.forEach(function(d) {
+      var done = d.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
+      var testOptions = d.tests.map(function(k) { return FITNESS_NORMS[k] ? FITNESS_NORMS[k].label : k; }).join(' or ');
+      html += '<div style="flex:1;min-width:100px;padding:10px 12px;background:' + (done ? 'var(--gold-faint)' : 'var(--dark-3)') + ';border:1px solid ' + (done ? 'var(--gold-border)' : 'rgba(245,240,232,0.06)') + ';cursor:' + (done ? 'default' : 'pointer') + '"'
+        + (!done ? ' onclick="openLogTestModal(\'' + d.tests[0] + '\')"' : '') + '>'
+        + '<div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:' + (done ? 'var(--gold)' : 'var(--muted)') + ';margin-bottom:3px">' + (done ? '&#10003; ' : '') + escapeHtml(d.label) + '</div>'
+        + '<div style="font-size:10px;color:var(--muted)">' + escapeHtml(testOptions) + '</div>'
+        + '</div>';
+    });
+    html += '</div></div>';
 
     FITNESS_CATEGORIES.forEach(function(cat) {
       var hasAny = cat.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
