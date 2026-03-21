@@ -2592,9 +2592,9 @@ function renderMealsDayView(meals, nutrients, today) {
         + '</div></div>'
         + '<div style="display:flex;align-items:center;gap:12px">'
         + '<div class="meal-card-cals">' + (cal || '—') + '</div>'
-        + '<div style="display:flex;gap:4px;opacity:0;transition:opacity .2s" class="meal-actions">'
-        + '<button onclick="event.stopPropagation();openEditMeal(\'' + m.id + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px" title="Edit">✎</button>'
-        + '<button onclick="event.stopPropagation();deleteMeal(\'' + m.id + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px" title="Delete">✕</button>'
+        + '<div style="display:flex;gap:4px" class="meal-actions">'
+        + '<button onclick="event.stopPropagation();openEditMeal(\'' + m.id + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:6px 8px" title="Edit">✎</button>'
+        + '<button onclick="event.stopPropagation();deleteMeal(\'' + m.id + '\')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:6px 8px" title="Delete">✕</button>'
         + '</div></div>'
         + '</div>';
     }).join('');
