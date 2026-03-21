@@ -11,7 +11,7 @@ function getSession() {
 }
 function getToken() {
   var s = getSession();
-  return s ? s.access_token : (currentSession ? getToken() : null);
+  return s ? s.access_token : (currentSession ? currentSession.access_token : null);
 }
 
 // ── LOGOUT ──
