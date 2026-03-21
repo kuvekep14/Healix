@@ -5609,36 +5609,53 @@ async function renderStrengthPage() {
 
     var recommended = getRecommendedTests(profile, byKey);
 
-    // ── Recommended for You section ──
-    html += '<div style="margin-bottom:28px">'
-      + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Recommended for You</div>'
-      + '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Based on your age, goals, and test history</div>'
-      + '<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">';
-    recommended.forEach(function(recKey) {
-      var norm = FITNESS_NORMS[recKey];
-      if (!norm) return;
-      var history = byKey[recKey] || [];
-      var latest = history[0];
-      var valText = '—';
-      if (latest) {
-        if (recKey === 'mile_time') {
-          var m = Math.floor(latest.raw_value);
-          var s = Math.round((latest.raw_value - m) * 60);
-          valText = m + ':' + (s < 10 ? '0' : '') + s;
-        } else if (norm.selfRated) {
-          valText = parseInt(latest.raw_value) + '/5';
-        } else {
-          valText = latest.raw_value % 1 === 0 ? latest.raw_value : parseFloat(latest.raw_value).toFixed(1);
-        }
+    // ── Recommended for You section (only show if user has some test history) ──
+    var testedKeys = Object.keys(byKey);
+    if (testedKeys.length > 0) {
+      // Filter: prioritize stale tests and low-percentile tests the user has done,
+      // then add up to 2 untested tests that match their profile
+      var testedRecs = recommended.filter(function(k) { return byKey[k] && byKey[k].length > 0; });
+      var untestedRecs = recommended.filter(function(k) { return !byKey[k] || byKey[k].length === 0; }).slice(0, 2);
+      var filteredRecs = testedRecs.concat(untestedRecs).slice(0, 6);
+
+      if (filteredRecs.length > 0) {
+        html += '<div style="margin-bottom:28px">'
+          + '<div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:4px">Recommended for You</div>'
+          + '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Based on your age, goals, and test history</div>'
+          + '<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">';
+        filteredRecs.forEach(function(recKey) {
+          var norm = FITNESS_NORMS[recKey];
+          if (!norm) return;
+          var history = byKey[recKey] || [];
+          var latest = history[0];
+          var valText = '—';
+          var subText = 'Not tested';
+          if (latest) {
+            if (recKey === 'mile_time') {
+              var m = Math.floor(latest.raw_value);
+              var s = Math.round((latest.raw_value - m) * 60);
+              valText = m + ':' + (s < 10 ? '0' : '') + s;
+            } else if (norm.selfRated) {
+              valText = parseInt(latest.raw_value) + '/5';
+            } else {
+              valText = latest.raw_value % 1 === 0 ? latest.raw_value : parseFloat(latest.raw_value).toFixed(1);
+            }
+            // Show why it's recommended
+            var daysSince = Math.round((Date.now() - new Date(latest.tested_at)) / 86400000);
+            if (latest.percentile && latest.percentile < 30) subText = 'Room to improve';
+            else if (daysSince > 90) subText = 'Last tested ' + daysSince + 'd ago';
+            else subText = escapeHtml(norm.unit);
+          }
+          html += '<div class="fitness-rec-card" onclick="openLogTestModal(\'' + recKey + '\')" style="min-width:140px;flex:0 0 auto;padding:14px 16px;background:var(--dark-3);border:1px solid var(--gold-border);cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor=\'var(--gold)\'" onmouseout="this.style.borderColor=\'\'">'
+            + '<div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">' + escapeHtml(norm.label) + '</div>'
+            + '<div style="font-family:var(--F);font-size:24px;font-weight:300">' + valText + '</div>'
+            + '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + subText + '</div>'
+            + '<div style="margin-top:8px;font-size:10px;color:var(--gold);cursor:pointer">+ Log</div>'
+            + '</div>';
+        });
+        html += '</div></div>';
       }
-      html += '<div class="fitness-rec-card" onclick="openLogTestModal(\'' + recKey + '\')" style="min-width:140px;flex:0 0 auto;padding:14px 16px;background:var(--dark-3);border:1px solid var(--gold-border);cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor=\'var(--gold)\'" onmouseout="this.style.borderColor=\'\'">'
-        + '<div style="font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">' + escapeHtml(norm.label) + '</div>'
-        + '<div style="font-family:var(--F);font-size:24px;font-weight:300">' + valText + '</div>'
-        + '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + (latest ? escapeHtml(norm.unit) : 'Not tested') + '</div>'
-        + '<div style="margin-top:8px;font-size:10px;color:var(--gold);cursor:pointer">+ Log</div>'
-        + '</div>';
-    });
-    html += '</div></div>';
+    }
 
     FITNESS_CATEGORIES.forEach(function(cat) {
       var hasAny = cat.tests.some(function(k) { return byKey[k] && byKey[k].length > 0; });
