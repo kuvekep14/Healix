@@ -107,17 +107,6 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
   });
 }
 
-// ── PROFILE DEFAULTS ──
-// Minimal row for web signups — NOT NULL constraints have been relaxed via migration.
-function newProfileRow(userId, email, firstName, lastName) {
-  return {
-    auth_user_id: userId,
-    email: email || '',
-    first_name: firstName || '',
-    last_name: lastName || ''
-  };
-}
-
 // ── AUTH ──
 var _authRedirecting = false;
 function handleAuthFailure() {
@@ -150,6 +139,9 @@ async function init() {
   var session = await ensureFreshToken();
   if (!session || !session.access_token) { handleAuthFailure(); return; }
   currentSession = session;
+  // Clean up legacy localStorage flags — profile existence is now the onboarding gate
+  localStorage.removeItem('healix_onboarding_done');
+  localStorage.removeItem('healix_firstrun_done');
   try {
     var user = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
     if (!user || !user.id || user.error) { handleAuthFailure(); return; }
@@ -189,27 +181,9 @@ async function init() {
         var navCycle = document.getElementById('nav-cycle');
         if (navCycle) navCycle.style.display = profileData[0].gender === 'female' ? '' : 'none';
       } else {
-        // No profile row exists — create one so PATCH calls work later
-        var fullName = (user.user_metadata && user.user_metadata.full_name) || '';
-        var nameParts = fullName.split(' ');
-        try {
-          await supabaseRequest('/rest/v1/profiles', 'POST', newProfileRow(user.id, user.email, nameParts[0] || '', nameParts.slice(1).join(' ') || ''),
-            session.access_token, { 'Prefer': 'return=representation' });
-          console.log('[Healix] profile row created for new user');
-        } catch(e) {
-          console.warn('[Healix] Profile INSERT failed:', e.message);
-        }
-        // Re-fetch so userProfileData is populated
-        try {
-          var newProfile = await supabaseRequest(
-            '/rest/v1/profiles?auth_user_id=eq.' + user.id + '&limit=1',
-            'GET', null, session.access_token
-          );
-          if (newProfile && newProfile.length > 0) {
-            window.userProfileData = newProfile[0];
-            populateProfileForm(newProfile[0]);
-          }
-        } catch(e) { console.warn('[Healix] Profile re-fetch error:', e.message); }
+        // No profile row — onboarding will handle creation
+        window.userProfileData = null;
+        console.log('[Healix] No profile found — onboarding required');
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
 
@@ -241,13 +215,7 @@ async function init() {
 
     loadDashboardData().then(function() {
       renderVitalityUnlockState();
-      var state = getDataConnectivityState();
-      if (state.isFirstRun && !localStorage.getItem('healix_onboarding_done')
-          && !localStorage.getItem('healix_firstrun_done')) {
-        renderFirstRunExperience();
-      } else {
-        renderOnboardingChecklist();
-      }
+      renderOnboardingChecklist();
       renderMilestones();
       renderSmartEmptyStates(window._lastVitalityResult);
     });
@@ -4594,18 +4562,13 @@ async function saveProfile() {
     var patchResult = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data,
       getToken(), { 'Prefer': 'return=representation' });
     if (!patchResult || !Array.isArray(patchResult) || patchResult.length === 0) {
-      // PATCH matched no rows — either row doesn't exist or RLS blocked the update. Insert.
-      console.warn('[Healix] PATCH returned no rows — inserting profile');
-      var insertData = newProfileRow(currentUser.id, currentUser.email, firstName, lastName);
-      Object.keys(data).forEach(function(k) { if (data[k] != null) insertData[k] = data[k]; });
-      patchResult = await supabaseRequest('/rest/v1/profiles', 'POST', insertData, getToken(), { 'Prefer': 'return=representation' });
+      console.error('[Healix] PATCH returned no rows — profile missing after onboarding');
+      var errEl = document.getElementById('profile-error');
+      if (errEl) { errEl.textContent = 'Profile not found. Please reload the page.'; errEl.style.display = 'block'; }
+      if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
+      return;
     }
-    // Use DB-returned data if available, fall back to local data
-    if (patchResult && Array.isArray(patchResult) && patchResult.length > 0) {
-      window.userProfileData = patchResult[0];
-    } else {
-      window.userProfileData = Object.assign(window.userProfileData || {}, data);
-    }
+    window.userProfileData = patchResult[0];
     if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }, 2000); }
     // Update sidebar name
     var profileName = [firstName, lastName].filter(Boolean).join(' ');
@@ -6879,139 +6842,6 @@ function renderOnboardingChecklist() {
     + '</div>';
 }
 
-// ── FIRST-RUN GUIDED EXPERIENCE ──
-function renderFirstRunExperience() {
-  var container = document.querySelector('.vitality-page');
-  if (!container) return;
-
-  var hiddenEls = container.querySelectorAll('.vitality-hero, .vitality-confidence, .vitality-insight-bar, .va-timeline, #va-drivers, #onboarding-checklist, #health-summary-section, #weekly-insights-section, .vitality-chat-card');
-  hiddenEls.forEach(function(el) { el.style.display = 'none'; });
-
-  var wizard = document.createElement('div');
-  wizard.className = 'firstrun-wizard';
-  wizard.id = 'firstrun-wizard';
-  container.insertBefore(wizard, container.firstChild);
-
-  renderFirstRunStep(1);
-}
-
-function renderFirstRunStep(step) {
-  var wizard = document.getElementById('firstrun-wizard');
-  if (!wizard) return;
-
-  var stepsIndicator = '<div class="firstrun-steps">'
-    + '<div class="firstrun-step-dot' + (step >= 1 ? ' active' : '') + '">1</div>'
-    + '<div class="firstrun-step-line' + (step >= 2 ? ' active' : '') + '"></div>'
-    + '<div class="firstrun-step-dot' + (step >= 2 ? ' active' : '') + '">2</div>'
-    + '<div class="firstrun-step-line' + (step >= 3 ? ' active' : '') + '"></div>'
-    + '<div class="firstrun-step-dot' + (step >= 3 ? ' active' : '') + '">3</div>'
-    + '</div>';
-
-  var html = '';
-  if (step === 1) {
-    html = '<div class="firstrun-card">'
-      + stepsIndicator
-      + '<div class="firstrun-title">Welcome to <em>Healix</em></div>'
-      + '<div class="firstrun-sub">Let\'s set up your profile so we can calculate your Vitality Age.</div>'
-      + '<div class="firstrun-form">'
-      + '<div class="firstrun-form-row">'
-      + '<div class="firstrun-field"><label class="firstrun-label">Date of Birth</label>'
-      + '<input type="date" id="fr-dob" class="firstrun-input"></div>'
-      + '<div class="firstrun-field"><label class="firstrun-label">Biological Sex</label>'
-      + '<select id="fr-sex" class="firstrun-input"><option value="">Select...</option>'
-      + '<option value="male">Male</option><option value="female">Female</option></select></div>'
-      + '</div>'
-      + '<div class="firstrun-form-row">'
-      + '<div class="firstrun-field"><label class="firstrun-label">Height</label>'
-      + '<input type="text" id="fr-height" class="firstrun-input" placeholder="5\'10&quot; or 178cm"></div>'
-      + '<div class="firstrun-field"><label class="firstrun-label">Weight</label>'
-      + '<input type="text" id="fr-weight" class="firstrun-input" placeholder="165 lbs or 75 kg"></div>'
-      + '</div>'
-      + '</div>'
-      + '<button class="firstrun-btn" onclick="saveFirstRunProfile()">Continue</button>'
-      + '<div class="firstrun-skip" onclick="renderFirstRunStep(2)">Skip for now</div>'
-      + '</div>';
-  } else if (step === 2) {
-    html = '<div class="firstrun-card">'
-      + stepsIndicator
-      + '<div class="firstrun-title">Connect Your <em>Wearable</em></div>'
-      + '<div class="firstrun-sub">Heart rate data from your Apple Watch or iPhone is worth 30% of your Vitality Age score.</div>'
-      + '<div class="firstrun-wearable-cta">'
-      + '<div class="firstrun-wearable-icon">&#9201;</div>'
-      + '<div><div class="firstrun-wearable-title">Download HealthBite</div>'
-      + '<div class="firstrun-wearable-desc">Our companion app syncs Apple Health data to Healix automatically.</div></div>'
-      + '</div>'
-      + '<button class="firstrun-btn" onclick="openConnectHealthBiteModal()">Set Up Connection</button>'
-      + '<div class="firstrun-skip" onclick="renderFirstRunStep(3)">I\'ll do this later</div>'
-      + '</div>';
-  } else if (step === 3) {
-    var state = getDataConnectivityState();
-    html = '<div class="firstrun-card">'
-      + stepsIndicator
-      + '<div class="firstrun-title">You\'re <em>Ready</em></div>'
-      + '<div class="firstrun-sub">Your dashboard is set up with ' + state.progressPct + '% data connectivity. Add more data sources to improve your Vitality Age accuracy.</div>'
-      + '<button class="firstrun-btn" onclick="dismissFirstRun()">Go to Dashboard</button>'
-      + '</div>';
-  }
-
-  wizard.innerHTML = html;
-}
-
-async function saveFirstRunProfile() {
-  var dob = document.getElementById('fr-dob').value;
-  var sex = document.getElementById('fr-sex').value;
-  var heightStr = document.getElementById('fr-height').value;
-  var weightStr = document.getElementById('fr-weight').value;
-
-  var heightCm = parseHeight(heightStr, 'imperial');
-  var weightKg = parseWeight(weightStr, 'lbs');
-
-  var data = {};
-  if (dob) data.birth_date = dob;
-  if (sex) data.gender = sex;
-  if (heightCm) data.height_cm = heightCm;
-  if (weightKg) data.current_weight_kg = weightKg;
-
-  if (Object.keys(data).length > 0 && currentUser && currentSession) {
-    try {
-      await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, getToken());
-      // Verify PATCH actually updated a row
-      var verify = await supabaseRequest(
-        '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&select=auth_user_id&limit=1',
-        'GET', null, getToken()
-      );
-      if (!verify || !Array.isArray(verify) || verify.length === 0) {
-        // No row exists — insert with required defaults
-        console.warn('[Healix] First-run PATCH matched no rows — inserting');
-        var frInsert = newProfileRow(currentUser.id, currentUser.email, '', '');
-        Object.keys(data).forEach(function(k) { if (data[k] != null) frInsert[k] = data[k]; });
-        await supabaseRequest('/rest/v1/profiles', 'POST', frInsert, getToken(), { 'Prefer': 'return=representation' });
-      }
-      window.userProfileData = Object.assign(window.userProfileData || {}, data);
-    } catch(e) {
-      console.error('[Healix] First-run profile save error:', e);
-    }
-  }
-
-  renderFirstRunStep(2);
-}
-
-function dismissFirstRun() {
-  localStorage.setItem('healix_firstrun_done', '1');
-  var wizard = document.getElementById('firstrun-wizard');
-  if (wizard) wizard.remove();
-
-  var container = document.querySelector('.vitality-page');
-  if (container) {
-    var hidden = container.querySelectorAll('.vitality-hero, .vitality-confidence, .vitality-insight-bar, .va-timeline, #va-drivers, #onboarding-checklist, #health-summary-section, #weekly-insights-section, .vitality-chat-card');
-    hidden.forEach(function(el) { el.style.display = ''; });
-  }
-
-  renderVitalityUnlockState();
-  renderOnboardingChecklist();
-  renderMilestones();
-}
-
 // ── MEAL STREAK + ENGAGEMENT ──
 var STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
 var MILESTONE_MESSAGES = {
@@ -7279,7 +7109,8 @@ var onboardingStep = 1;
 var ONBOARDING_TOTAL_STEPS = 7;
 
 function checkOnboarding() {
-  if (localStorage.getItem('healix_onboarding_done')) return;
+  // Profile exists in DB = onboarding was completed (either here or in HealthBite)
+  if (window.userProfileData) return;
   showOnboardingWizard();
 }
 
@@ -7629,7 +7460,9 @@ async function completeOnboarding() {
   }
   var birthDate = onboardingState.birthYear ? onboardingState.birthYear + '-01-01' : null;
 
-  var profilePatch = {
+  var profileData = {
+    auth_user_id: currentUser.id,
+    email: currentUser.email || '',
     first_name: onboardingState.firstName,
     last_name: onboardingState.lastName,
     gender: onboardingState.gender,
@@ -7643,34 +7476,44 @@ async function completeOnboarding() {
     health_conditions: onboardingState.healthConditions.join(', ') || null,
     dietary_restrictions: onboardingState.dietaryRestrictions.join(', ') || null
   };
-  if (birthDate) profilePatch.birth_date = birthDate;
-  if (targetWeightKg) profilePatch.target_weight_kg = targetWeightKg;
+  if (birthDate) profileData.birth_date = birthDate;
+  if (targetWeightKg) profileData.target_weight_kg = targetWeightKg;
 
   var btn = document.querySelector('#ob-card .ob-btn-primary');
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
   try {
-    await supabaseRequest(
-      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id,
-      'PATCH', profilePatch, session.access_token
+    var insertResult = await supabaseRequest(
+      '/rest/v1/profiles', 'POST', profileData, getToken(),
+      { 'Prefer': 'return=representation' }
     );
 
-    var newProfile = await supabaseRequest(
-      '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&limit=1',
-      'GET', null, session.access_token
-    );
-    if (newProfile && newProfile.length > 0) {
-      window.userProfileData = newProfile[0];
-      populateProfileForm(newProfile[0]);
-      var name = [onboardingState.firstName, onboardingState.lastName].filter(Boolean).join(' ');
-      if (onboardingState.firstName) {
-        document.getElementById('sb-name').textContent = name;
-        document.getElementById('sb-avatar').textContent = onboardingState.firstName.charAt(0).toUpperCase();
-        document.getElementById('page-title').textContent = greet() + ', ' + onboardingState.firstName;
+    if (insertResult && Array.isArray(insertResult) && insertResult.length > 0) {
+      window.userProfileData = insertResult[0];
+      populateProfileForm(insertResult[0]);
+    } else {
+      // INSERT succeeded but no representation — fetch it
+      var newProfile = await supabaseRequest(
+        '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&limit=1',
+        'GET', null, getToken()
+      );
+      if (newProfile && newProfile.length > 0) {
+        window.userProfileData = newProfile[0];
+        populateProfileForm(newProfile[0]);
       }
     }
 
-    localStorage.setItem('healix_onboarding_done', '1');
+    // Update sidebar
+    var name = [onboardingState.firstName, onboardingState.lastName].filter(Boolean).join(' ');
+    if (onboardingState.firstName) {
+      document.getElementById('sb-name').textContent = name;
+      document.getElementById('sb-avatar').textContent = onboardingState.firstName.charAt(0).toUpperCase();
+      document.getElementById('page-title').textContent = greet() + ', ' + onboardingState.firstName;
+    }
+    // Show/hide cycle nav based on gender
+    var navCycle = document.getElementById('nav-cycle');
+    if (navCycle) navCycle.style.display = onboardingState.gender === 'female' ? '' : 'none';
+
     var overlay = document.getElementById('onboarding-overlay');
     if (overlay) overlay.remove();
 
@@ -7681,15 +7524,10 @@ async function completeOnboarding() {
       renderSmartEmptyStates(window._lastVitalityResult);
     });
   } catch(e) {
-    console.error('[Healix] Onboarding save error:', e);
+    console.error('[Healix] Onboarding profile creation error:', e);
     if (btn) { btn.disabled = false; btn.textContent = 'Complete Setup'; }
+    alert('Could not save your profile. Please try again.');
   }
-}
-
-function dismissOnboarding() {
-  localStorage.setItem('healix_onboarding_done', '1');
-  var overlay = document.getElementById('onboarding-overlay');
-  if (overlay) overlay.remove();
 }
 
 // ── MEAL EDIT/DELETE ──
