@@ -1360,7 +1360,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   width: 6px; height: 6px; border-radius: 1px; background: var(--dark-4);
 }
 .supp-30-dot.complete { background: var(--gold); }
-.supp-30-dot.partial { background: rgba(184,151,90,0.35); }
+.supp-30-dot.partial { background: var(--gold-partial); }
 
 /* Milestone glow animation */
 @keyframes streak-milestone {

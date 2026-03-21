@@ -197,7 +197,13 @@ async function init() {
             session.access_token, { 'Prefer': 'return=representation' });
           console.log('[Healix] profile row created for new user');
         } catch(e) {
-          console.warn('[Healix] Profile INSERT failed:', e.message);
+          console.warn('[Healix] Profile INSERT failed, trying upsert:', e.message);
+          try {
+            await supabaseRequest('/rest/v1/profiles?on_conflict=auth_user_id', 'POST',
+              newProfileRow(user.id, user.email, nameParts[0] || '', nameParts.slice(1).join(' ') || ''),
+              session.access_token, { 'Prefer': 'resolution=merge-duplicates,return=representation' });
+            console.log('[Healix] profile row upserted for new user');
+          } catch(e2) { console.error('[Healix] Profile upsert also failed:', e2.message); }
         }
         // Re-fetch so userProfileData is populated
         try {
@@ -1548,7 +1554,7 @@ async function loadDashboardData() {
   // 2. Meals / nutrition score
   try {
     var mealLogs = await supabaseRequest(
-      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=created_at.desc&limit=100',
+      '/rest/v1/meal_log?select=id,meal_type,meal_time,meal_description,created_at,data&user_id=eq.' + currentUser.id + '&order=meal_time.desc&limit=100',
       'GET', null, token
     );
     console.log('[Healix] mealLogs:', mealLogs ? (mealLogs.error ? 'ERROR' : mealLogs.length) : 'null');
@@ -3290,7 +3296,7 @@ async function toggleSupplement(suppId) {
       renderMicronutrientsWithSupplements(window._healixMeals);
     }
     // Refresh consistency grid
-    var suppConsistency = await fetchSupplementConsistency(currentUser.id, currentSession.access_token, 30);
+    var suppConsistency = await fetchSupplementConsistency(currentUser.id, getToken(), 30);
     renderSupplementConsistencyDetail(suppConsistency);
   } catch(e) { console.error('[Healix] toggleSupplement error:', e); }
 }
@@ -3583,7 +3589,7 @@ function renderSupplementConsistencyDetail(suppConsistency) {
     var cls = 'supp-30-dot';
     if (day.complete) cls += ' complete';
     else if (day.partial) cls += ' partial';
-    html += '<div class="' + cls + '" title="' + day.date + '"></div>';
+    html += '<div class="' + cls + '" title="' + escapeHtml(day.date) + '"></div>';
   });
   html += '</div>';
   el.innerHTML = html;
@@ -5214,7 +5220,7 @@ function getRecommendedTests(profile, byKey) {
 
     // Age suitability
     if (age >= 60) {
-      if (['chair_stand','balance','walk_6min','grip_strength','sit_reach'].includes(key)) score += 30;
+      if (['chair_stand','balance','walk_6min','grip_strength','toe_touch'].includes(key)) score += 30;
       if (['bench_1rm','squat_1rm','deadlift_1rm'].includes(key)) score -= 15;
     } else if (age >= 50) {
       if (['chair_stand','balance','grip_strength','walk_6min'].includes(key)) score += 20;
@@ -5231,7 +5237,7 @@ function getRecommendedTests(profile, byKey) {
       if (['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup','grip_strength','dead_hang','farmers_walk'].includes(key)) score += 20;
     }
     if (goal.includes('longevity') || goal.includes('health')) {
-      if (['grip_strength','dead_hang','balance','vo2max','chair_stand','sit_reach'].includes(key)) score += 20;
+      if (['grip_strength','dead_hang','balance','vo2max','chair_stand','toe_touch'].includes(key)) score += 20;
     }
 
     // Low percentile = needs attention
@@ -5420,7 +5426,9 @@ function onFitnessTestChange() {
         var r = parseInt(document.getElementById('ft-amrap-reps').value);
         var preview = document.getElementById('ft-amrap-1rm-preview');
         if (w > 0 && r > 0 && r <= 30) {
-          preview.textContent = 'Estimated 1RM: ' + epley1RM(w, r) + ' ' + document.getElementById('ft-amrap-unit').value;
+          var previewUnit = document.getElementById('ft-amrap-unit').value;
+          var previewW = previewUnit === 'kg' ? w * 2.205 : w;
+          preview.textContent = 'Estimated 1RM: ' + epley1RM(previewW, r) + ' lbs';
         } else {
           preview.textContent = '';
         }
@@ -5657,7 +5665,7 @@ async function renderStrengthPage() {
           }
           var p = latest.percentile || calcPercentile(key, parseFloat(latest.raw_value), profile);
           var pl = percentileLabel(p);
-          var ord = p === 1 ? 'st' : p === 2 ? 'nd' : p === 3 ? 'rd' : 'th';
+          var ord = (p % 100 >= 11 && p % 100 <= 13) ? 'th' : p % 10 === 1 ? 'st' : p % 10 === 2 ? 'nd' : p % 10 === 3 ? 'rd' : 'th';
           percentileDisplay = p + ord + ' percentile';
           pctClass = pl.cls;
 
@@ -7528,8 +7536,7 @@ function onboardingToggleWatch() {
 }
 
 async function completeOnboarding() {
-  var session = getSession();
-  if (!session || !currentUser) return;
+  if (!getToken() || !currentUser) return;
 
   var unit = onboardingState.measurementSystem;
   var heightCm = parseHeight(onboardingState.height, unit === 'imperial' ? 'imperial' : 'metric');
@@ -7565,12 +7572,12 @@ async function completeOnboarding() {
   try {
     await supabaseRequest(
       '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id,
-      'PATCH', profilePatch, session.access_token
+      'PATCH', profilePatch, getToken()
     );
 
     var newProfile = await supabaseRequest(
       '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&limit=1',
-      'GET', null, session.access_token
+      'GET', null, getToken()
     );
     if (newProfile && newProfile.length > 0) {
       window.userProfileData = newProfile[0];
@@ -7667,8 +7674,8 @@ var cycleCalYear = null;
 var CYCLE_METRIC_TYPES = ['menstrual_flow', 'basal_body_temperature', 'cervical_mucus_quality', 'ovulation_test_result', 'progesterone_test_result'];
 
 async function loadCyclePage() {
-  var session = getSession();
-  if (!session || !session.access_token || !currentUser) return;
+  var token = getToken();
+  if (!token || !currentUser) return;
 
   var daysAgo = new Date();
   daysAgo.setDate(daysAgo.getDate() - 365);
@@ -7681,7 +7688,7 @@ async function loadCyclePage() {
       '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
       '&recorded_at=gte.' + daysAgo.toISOString() +
       '&order=recorded_at.asc',
-      'GET', null, session.access_token
+      'GET', null, token
     );
 
     if (!data || data.error || !Array.isArray(data)) {
@@ -7936,8 +7943,8 @@ function renderCycleTemperatureChart() {
 }
 
 async function saveCycleEntry() {
-  var session = getSession();
-  if (!session || !session.access_token || !currentUser) return;
+  var token = getToken();
+  if (!token || !currentUser) return;
 
   var dateInput = document.getElementById('cyc-date').value;
   if (!dateInput) { alert('Please select a date.'); return; }
@@ -7956,28 +7963,35 @@ async function saveCycleEntry() {
   var notes = document.getElementById('cyc-notes').value.trim();
   var recordedAt = dateInput + 'T12:00:00Z';
 
+  var rows = [];
+  var baseRow = { user_id: currentUser.id, source_name: 'Healix Web', recorded_at: recordedAt, start_date: recordedAt, end_date: recordedAt };
+
+  if (flow && flow !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'menstrual_flow', text_value: flow, unit: 'category' }));
+  if (bbt !== null && !isNaN(bbt)) rows.push(Object.assign({}, baseRow, { metric_type: 'basal_body_temperature', value: bbt, unit: 'degF' }));
+  if (mucus && mucus !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'cervical_mucus_quality', text_value: mucus, unit: 'category' }));
+  if (ovtest && ovtest !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'ovulation_test_result', text_value: ovtest, unit: 'category' }));
+  if (progesterone !== null && !isNaN(progesterone)) rows.push(Object.assign({}, baseRow, { metric_type: 'progesterone_test_result', value: progesterone, unit: 'ng/mL' }));
+
+  if (notes && rows.length > 0) rows[0].metadata = { notes: notes };
+
+  // If no metrics selected, nothing to save — don't delete existing data
+  if (rows.length === 0 && !notes) {
+    closeModal('cycle-modal');
+    saveBtn.disabled = false;
+    return;
+  }
+
   try {
-    await supabaseRequest(
-      '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
-      '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
-      '&recorded_at=gte.' + dateInput + 'T00:00:00Z' +
-      '&recorded_at=lt.' + dateInput + 'T23:59:59Z',
-      'DELETE', null, session.access_token
-    );
-
-    var rows = [];
-    var baseRow = { user_id: currentUser.id, source_name: 'Healix Web', recorded_at: recordedAt, start_date: recordedAt, end_date: recordedAt };
-
-    if (flow && flow !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'menstrual_flow', text_value: flow, unit: 'category' }));
-    if (bbt !== null && !isNaN(bbt)) rows.push(Object.assign({}, baseRow, { metric_type: 'basal_body_temperature', value: bbt, unit: 'degF' }));
-    if (mucus && mucus !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'cervical_mucus_quality', text_value: mucus, unit: 'category' }));
-    if (ovtest && ovtest !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'ovulation_test_result', text_value: ovtest, unit: 'category' }));
-    if (progesterone !== null && !isNaN(progesterone)) rows.push(Object.assign({}, baseRow, { metric_type: 'progesterone_test_result', value: progesterone, unit: 'ng/mL' }));
-
-    if (notes && rows.length > 0) rows[0].metadata = { notes: notes };
-
+    // Only delete existing data if we have new rows to replace it with
     if (rows.length > 0) {
-      await supabaseRequest('/rest/v1/apple_health_samples', 'POST', rows, session.access_token, { 'Prefer': 'return=minimal' });
+      await supabaseRequest(
+        '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
+        '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
+        '&recorded_at=gte.' + dateInput + 'T00:00:00Z' +
+        '&recorded_at=lt.' + dateInput + 'T23:59:59Z',
+        'DELETE', null, token
+      );
+      await supabaseRequest('/rest/v1/apple_health_samples', 'POST', rows, token, { 'Prefer': 'return=minimal' });
     }
 
     closeModal('cycle-modal');

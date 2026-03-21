@@ -22,6 +22,7 @@
   --gold-focus: rgba(184,151,90,0.5);
   --gold-glow: rgba(184,151,90,0.25);
   --gold-hover: rgba(184,151,90,0.4);
+  --gold-partial: rgba(184,151,90,0.35);
 
   --muted: rgba(245,240,232,0.3);
   --neutral: rgba(245,240,232,0.4);
