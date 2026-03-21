@@ -4897,43 +4897,45 @@ var FITNESS_NORMS = {
       }
     }
   },
-  sit_reach: {
-    label: 'Sit & Reach', unit: 'cm', higherBetter: true,
-    hint: 'Sit on floor with legs straight against a wall or step. Reach forward as far as you can. Use a ruler or tape measure from the edge of your feet — positive means past your toes, negative means short of them.',
+  toe_touch: {
+    label: 'Toe Touch', unit: '/5', higherBetter: true, selfRated: true,
+    hint: 'Stand with feet together and bend forward to touch your toes. Keep your knees straight.',
+    scaleLabels: ['Can\'t reach past knees', 'Fingertips reach mid-shin', 'Fingertips reach ankles', 'Fingertips touch toes', 'Palms flat on the floor'],
     norms: {
       male: {
-        '18-29': [[40,99],[34,90],[30,80],[27,70],[24,60],[21,50],[18,40],[15,30],[11,20],[5,10]],
-        '30-39': [[38,99],[32,90],[28,80],[25,70],[22,60],[19,50],[16,40],[12,30],[8,20],[3,10]],
-        '40-49': [[35,99],[29,90],[25,80],[22,70],[19,60],[16,50],[13,40],[9,30],[5,20],[0,10]],
-        '50-59': [[33,99],[27,90],[23,80],[19,70],[16,60],[13,50],[10,40],[6,30],[2,20],[-3,10]],
-        '60+':   [[30,99],[24,90],[20,80],[16,70],[13,60],[10,50],[7,40],[3,30],[-1,20],[-6,10]]
+        '18-29': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '30-39': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '40-49': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '50-59': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '60+':   [[5,95],[4,75],[3,50],[2,25],[1,5]]
       },
       female: {
-        '18-29': [[45,99],[39,90],[35,80],[32,70],[29,60],[26,50],[23,40],[20,30],[15,20],[10,10]],
-        '30-39': [[43,99],[37,90],[33,80],[30,70],[27,60],[24,50],[21,40],[18,30],[13,20],[8,10]],
-        '40-49': [[41,99],[35,90],[31,80],[28,70],[25,60],[22,50],[19,40],[16,30],[11,20],[6,10]],
-        '50-59': [[38,99],[32,90],[28,80],[25,70],[22,60],[19,50],[16,40],[13,30],[8,20],[3,10]],
-        '60+':   [[35,99],[29,90],[25,80],[22,70],[19,60],[16,50],[13,40],[10,30],[5,20],[0,10]]
+        '18-29': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '30-39': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '40-49': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '50-59': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '60+':   [[5,95],[4,75],[3,50],[2,25],[1,5]]
       }
     }
   },
-  shoulder_mobility: {
-    label: 'Shoulder Mobility', unit: 'cm', higherBetter: true,
-    hint: 'Stand tall. Reach one hand over your shoulder and the other behind your lower back. Try to touch your fingers together. Measure the overlap in cm (positive) or the gap between fingertips (negative). Use your better side.',
+  shoulder_reach: {
+    label: 'Shoulder Reach', unit: '/5', higherBetter: true, selfRated: true,
+    hint: 'Reach one hand over your shoulder and the other behind your lower back. Try to touch your fingers together. Test both sides, rate your better side.',
+    scaleLabels: ['Hands are more than a fist apart', 'Hands within a fist-width', 'Fingertips just touching', 'Fingers overlap slightly', 'Hands clasp easily'],
     norms: {
       male: {
-        '18-29': [[5,99],[2,90],[0,80],[-2,70],[-5,60],[-8,50],[-12,40],[-16,30],[-20,20],[-25,10]],
-        '30-39': [[4,99],[1,90],[-1,80],[-4,70],[-7,60],[-10,50],[-14,40],[-18,30],[-22,20],[-27,10]],
-        '40-49': [[3,99],[0,90],[-2,80],[-5,70],[-9,60],[-12,50],[-16,40],[-20,30],[-24,20],[-29,10]],
-        '50-59': [[2,99],[-1,90],[-3,80],[-7,70],[-11,60],[-14,50],[-18,40],[-22,30],[-27,20],[-32,10]],
-        '60+':   [[1,99],[-2,90],[-5,80],[-9,70],[-13,60],[-17,50],[-21,40],[-25,30],[-30,20],[-36,10]]
+        '18-29': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '30-39': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '40-49': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '50-59': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '60+':   [[5,95],[4,75],[3,50],[2,25],[1,5]]
       },
       female: {
-        '18-29': [[8,99],[5,90],[3,80],[0,70],[-3,60],[-6,50],[-9,40],[-13,30],[-17,20],[-22,10]],
-        '30-39': [[7,99],[4,90],[2,80],[-1,70],[-4,60],[-7,50],[-11,40],[-15,30],[-19,20],[-24,10]],
-        '40-49': [[6,99],[3,90],[1,80],[-2,70],[-6,60],[-9,50],[-13,40],[-17,30],[-21,20],[-26,10]],
-        '50-59': [[5,99],[2,90],[-1,80],[-4,70],[-8,60],[-11,50],[-15,40],[-19,30],[-23,20],[-28,10]],
-        '60+':   [[4,99],[1,90],[-2,80],[-6,70],[-10,60],[-14,50],[-18,40],[-22,30],[-27,20],[-33,10]]
+        '18-29': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '30-39': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '40-49': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '50-59': [[5,95],[4,75],[3,50],[2,25],[1,5]],
+        '60+':   [[5,95],[4,75],[3,50],[2,25],[1,5]]
       }
     }
   },
@@ -5106,7 +5108,7 @@ var FITNESS_CATEGORIES = [
   { key: 'strength',   label: 'Strength',   tests: ['bench_1rm','squat_1rm','deadlift_1rm','pushup','pullup'] },
   { key: 'cardio',     label: 'Cardio',     tests: ['mile_time','vo2max','walk_6min'] },
   { key: 'functional', label: 'Functional', tests: ['grip_strength','dead_hang','farmers_walk','chair_stand','balance'] },
-  { key: 'mobility',   label: 'Mobility',   tests: ['sit_reach','shoulder_mobility'] }
+  { key: 'mobility',   label: 'Mobility',   tests: ['toe_touch','shoulder_reach'] }
 ];
 
 // Recommendation engine — returns ordered list of test keys for this user
@@ -5277,10 +5279,22 @@ function onFitnessTestChange() {
   var isAMRAP = AMRAP_TESTS.includes(key);
   var isRepsOnly = REPS_ONLY_TESTS.includes(key);
   var isVO2 = key === 'vo2max';
+  var isSelfRated = norm && norm.selfRated;
 
   document.getElementById('ft-time-fields').style.display = isMileTime ? 'block' : 'none';
   document.getElementById('ft-amrap-fields').style.display = (isAMRAP || isRepsOnly) ? 'block' : 'none';
-  document.getElementById('ft-value-row').style.display = (!isMileTime && !isAMRAP && !isRepsOnly) ? 'flex' : 'none';
+  document.getElementById('ft-value-row').style.display = (!isMileTime && !isAMRAP && !isRepsOnly && !isSelfRated) ? 'flex' : 'none';
+  var scaleFields = document.getElementById('ft-scale-fields');
+  if (scaleFields) {
+    scaleFields.style.display = isSelfRated ? 'block' : 'none';
+    if (isSelfRated && norm.scaleLabels) {
+      var group = document.getElementById('ft-scale-group');
+      group.innerHTML = norm.scaleLabels.map(function(label, i) {
+        return '<button type="button" class="cycle-opt-btn" data-value="' + (i + 1) + '" onclick="selectCycleOption(\'ft-scale-group\',this)">' + (i + 1) + ' — ' + escapeHtml(label) + '</button>';
+      }).join('');
+      document.getElementById('ft-scale-label').textContent = norm.hint || 'How would you rate yourself?';
+    }
+  }
   var vo2Calc = document.getElementById('vo2-calculator');
   if (vo2Calc) vo2Calc.style.display = isVO2 ? 'block' : 'none';
 
@@ -5424,7 +5438,10 @@ async function saveFitnessTest() {
   var notes = document.getElementById('ft-notes').value.trim();
   var rawValue;
 
-  if (key === 'mile_time') {
+  if (norm && norm.selfRated) {
+    rawValue = parseInt(getCycleOptionValue('ft-scale-group'));
+    if (!rawValue || rawValue < 1 || rawValue > 5) { alert('Select a rating.'); return; }
+  } else if (key === 'mile_time') {
     var mins = parseFloat(document.getElementById('ft-mins').value) || 0;
     var secs = parseFloat(document.getElementById('ft-secs').value) || 0;
     rawValue = mins + secs / 60;
@@ -5543,7 +5560,13 @@ async function renderStrengthPage() {
         var historyBars = '';
 
         if (latest) {
-          if (key === 'mile_time') {
+          if (norm.selfRated) {
+            var scaleVal = parseInt(latest.raw_value);
+            valueDisplay = scaleVal + '/5';
+            if (norm.scaleLabels && norm.scaleLabels[scaleVal - 1]) {
+              valueDisplay += '<div style="font-size:11px;color:var(--cream-dim);margin-top:4px;font-family:var(--B);font-weight:300">' + escapeHtml(norm.scaleLabels[scaleVal - 1]) + '</div>';
+            }
+          } else if (key === 'mile_time') {
             var totalMins = latest.raw_value;
             var m = Math.floor(totalMins);
             var s = Math.round((totalMins - m) * 60);

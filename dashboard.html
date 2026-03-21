@@ -856,8 +856,8 @@
           <option value="balance">Single-leg Balance</option>
         </optgroup>
         <optgroup label="Mobility">
-          <option value="sit_reach">Sit &amp; Reach</option>
-          <option value="shoulder_mobility">Shoulder Mobility</option>
+          <option value="toe_touch">Toe Touch</option>
+          <option value="shoulder_reach">Shoulder Reach</option>
         </optgroup>
       </select>
     </div>
@@ -940,6 +940,16 @@
           </div>
         </div>
         <div id="vo2-cooper-result" style="font-size:14px;color:var(--gold);font-weight:600"></div>
+      </div>
+    </div>
+    <div id="ft-scale-fields" style="display:none">
+      <label class="modal-label" id="ft-scale-label">How would you rate yourself?</label>
+      <div class="cycle-option-group" id="ft-scale-group">
+        <button type="button" class="cycle-opt-btn" data-value="1" onclick="selectCycleOption('ft-scale-group',this)">1 — Poor</button>
+        <button type="button" class="cycle-opt-btn" data-value="2" onclick="selectCycleOption('ft-scale-group',this)">2 — Limited</button>
+        <button type="button" class="cycle-opt-btn" data-value="3" onclick="selectCycleOption('ft-scale-group',this)">3 — Average</button>
+        <button type="button" class="cycle-opt-btn" data-value="4" onclick="selectCycleOption('ft-scale-group',this)">4 — Good</button>
+        <button type="button" class="cycle-opt-btn" data-value="5" onclick="selectCycleOption('ft-scale-group',this)">5 — Excellent</button>
       </div>
     </div>
     <div class="modal-row" id="ft-value-row">
