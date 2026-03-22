@@ -1150,7 +1150,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   font-family: var(--F); font-size: 28px; font-weight: 300; color: var(--cream); line-height: 1;
 }
 .macro-rings-cal-label {
-  font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-top: 2px;
+  font-size: 9px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); margin-top: 6px;
 }
 .macro-rings-row {
   display: flex; justify-content: space-around; align-items: flex-start; gap: 12px;

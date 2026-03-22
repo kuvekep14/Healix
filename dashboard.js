@@ -1355,7 +1355,13 @@ function renderSleepPageData() {
   // Compute per-session data
   var sessionData = sessions.map(function(sess) {
     var computed = computeSessionMinutes(sess);
-    var dateStr = localDateStr(new Date(sess.startTime));
+    // Attribute sessions starting before noon to the previous calendar day
+    // so a 3am fragment is grouped with the night it belongs to
+    var sleepDate = new Date(sess.startTime);
+    if (sleepDate.getHours() < 12) {
+      sleepDate.setDate(sleepDate.getDate() - 1);
+    }
+    var dateStr = localDateStr(sleepDate);
     return {
       date: dateStr,
       startTime: sess.startTime,
@@ -1367,6 +1373,29 @@ function renderSleepPageData() {
       efficiency: computed.totalMinutes > 0 ? Math.round(computed.actualSleepMinutes / computed.totalMinutes * 100) : 0
     };
   }).sort(function(a, b) { return b.startTime - a.startTime; });
+
+  // Merge sessions that share the same sleep-night date
+  var mergedMap = {};
+  sessionData.forEach(function(d) {
+    if (!mergedMap[d.date]) {
+      mergedMap[d.date] = { date: d.date, startTime: d.startTime, endTime: d.endTime, totalHours: 0, stages: { deep: 0, rem: 0, core: 0, awake: 0 }, totalMinutes: 0, actualMinutes: 0, efficiency: 0 };
+    }
+    var m = mergedMap[d.date];
+    m.totalMinutes += d.totalMinutes;
+    m.actualMinutes += d.actualMinutes;
+    m.stages.deep += d.stages.deep;
+    m.stages.rem += d.stages.rem;
+    m.stages.core += d.stages.core;
+    m.stages.awake += d.stages.awake;
+    if (d.startTime < m.startTime) m.startTime = d.startTime;
+    if (d.endTime > m.endTime) m.endTime = d.endTime;
+  });
+  sessionData = Object.keys(mergedMap).map(function(k) {
+    var m = mergedMap[k];
+    m.totalHours = Math.round(m.actualMinutes / 60 * 10) / 10;
+    m.efficiency = m.totalMinutes > 0 ? Math.round(m.actualMinutes / m.totalMinutes * 100) : 0;
+    return m;
+  }).sort(function(a, b) { return b.date > a.date ? -1 : a.date > b.date ? 1 : 0; }).reverse();
 
   // Score cards
   var latest = sessionData[0];
@@ -1428,8 +1457,8 @@ function renderSleepStageChart(sessionData) {
     var remH = (d.stages.rem / maxMinutes * 120);
     var coreH = (d.stages.core / maxMinutes * 120);
     var awakeH = (d.stages.awake / maxMinutes * 120);
-    var dt = new Date(d.startTime);
-    var dayLabel = dt.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+    var dt = new Date(d.date + 'T12:00:00');
+    var dayLabel = (dt.getMonth() + 1) + '/' + dt.getDate();
     var dayOfWeek = dt.toLocaleDateString('en-US', { weekday: 'narrow' });
 
     html += '<div class="sleep-stage-bar">';
@@ -2649,7 +2678,7 @@ function renderMealsAggregateView(meals, nutrients, range) {
   var safeSet = function(id,v) { var e=document.getElementById(id); if(e) e.textContent=v; };
   var safeHTML = function(id,v) { var e=document.getElementById(id); if(e) e.innerHTML=v; };
   safeSet('mp-cal', avgCal || '—');
-  safeSet('mp-cal-sub', 'avg/day ' + periodLabel);
+  safeSet('mp-cal-sub', 'avg/day calories ' + periodLabel);
   safeHTML('mp-protein', (avgProt || '—') + '<span>g</span>');
   safeSet('mp-prot-sub', 'avg/day protein');
   safeHTML('mp-carbs', (avgCarb || '—') + '<span>g</span>');
