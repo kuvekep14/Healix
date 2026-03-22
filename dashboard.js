@@ -1297,21 +1297,23 @@ function setSleepRange(days, btn) {
   var btns = document.querySelectorAll('#page-sleep .tf-btn');
   btns.forEach(function(b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
-  renderSleepPageData();
+  loadSleepPage();
 }
 
 async function loadSleepPage() {
   if (!currentUser) return;
   var s = getSession(); if (!s) return;
   var token = s.access_token;
+  // Fetch range + 7-day buffer for sessions spanning midnight
   var daysAgo = new Date();
-  daysAgo.setDate(daysAgo.getDate() - 90); // Fetch 90 days max, filter client-side
+  daysAgo.setDate(daysAgo.getDate() - sleepPageRange - 7);
 
   try {
     var data = await supabaseRequest(
-      '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
+      '/rest/v1/apple_health_samples?select=metric_type,start_date,end_date,value,text_value,recorded_at' +
+      '&user_id=eq.' + currentUser.id +
       '&metric_type=eq.sleep_analysis&recorded_at=gte.' + daysAgo.toISOString() +
-      '&order=start_date.asc&limit=5000',
+      '&order=recorded_at.desc&limit=1000',
       'GET', null, token
     );
     if (!data || data.error || !Array.isArray(data) || data.length === 0) {
@@ -4412,13 +4414,38 @@ async function saveFamilyHistory() {
 
 var profileHeightUnit = 'imperial'; // 'imperial' or 'metric'
 var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
+var PROFILE_GOAL_OPTIONS = [
+  { val: 'lose_weight', label: 'Lose weight' },
+  { val: 'improve_cardio', label: 'Improve cardio' },
+  { val: 'gain_strength', label: 'Gain strength' },
+  { val: 'sleep_better', label: 'Sleep better' },
+  { val: 'feel_better', label: 'Feel better' },
+  { val: 'healthier_diet', label: 'Healthier diet' }
+];
+var profileSelectedGoals = [];
+
+function renderProfileGoalPills(goalStr) {
+  profileSelectedGoals = goalStr ? goalStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+  var el = document.getElementById('p-goals');
+  if (!el) return;
+  el.innerHTML = PROFILE_GOAL_OPTIONS.map(function(g) {
+    var sel = profileSelectedGoals.indexOf(g.val) !== -1 ? ' selected' : '';
+    return '<div class="goal-pill' + sel + '" onclick="toggleProfileGoal(\'' + g.val + '\')">' + g.label + '</div>';
+  }).join('');
+}
+
+function toggleProfileGoal(val) {
+  var idx = profileSelectedGoals.indexOf(val);
+  if (idx === -1) { profileSelectedGoals.push(val); } else { profileSelectedGoals.splice(idx, 1); }
+  renderProfileGoalPills(profileSelectedGoals.join(', '));
+}
 
 function populateProfileForm(profile) {
   var fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
   if (fullName) document.getElementById('p-name').value = fullName;
   if (profile.birth_date) document.getElementById('p-dob').value = profile.birth_date;
   if (profile.gender) document.getElementById('p-sex').value = profile.gender;
-  if (profile.primary_goal) document.getElementById('p-goal').value = profile.primary_goal;
+  renderProfileGoalPills(profile.primary_goal || '');
   // Restore unit preferences from localStorage
   var savedHeightUnit = localStorage.getItem('healix_height_unit_' + currentUser.id);
   var savedWeightUnit = localStorage.getItem('healix_weight_unit_' + currentUser.id);
@@ -4620,8 +4647,7 @@ async function saveProfile() {
     first_name: firstName,
     last_name: lastName
   };
-  var goal = document.getElementById('p-goal').value;
-  data.primary_goal = goal || null;
+  data.primary_goal = profileSelectedGoals.length > 0 ? profileSelectedGoals.join(', ') : null;
   data.birth_date = dob;
   data.gender = sex;
   data.height_cm = heightCm;
@@ -6080,15 +6106,24 @@ var goalKeyMap = {
 function loadDidYouKnow() {
   if (!currentUser) return;
 
-  // Get goal from profiles table first
-  var goal = (window.userProfileData && window.userProfileData.primary_goal) || '';
-  if (!goal) goal = document.getElementById('p-goal') ? document.getElementById('p-goal').value : '';
+  // Get goals from profiles table (may be comma-separated)
+  var goalStr = (window.userProfileData && window.userProfileData.primary_goal) || '';
 
-  var key = goalKeyMap[goal] || 'longevity';
-  var insights = insightLibrary[key] || insightLibrary.longevity;
+  // Collect insights from all selected goals
+  var goalParts = goalStr.split(',').map(function(g) { return g.trim(); }).filter(Boolean);
+  var allInsights = [];
+  var firstKey = 'longevity';
+  goalParts.forEach(function(g) {
+    var key = goalKeyMap[g] || 'longevity';
+    if (allInsights.length === 0) firstKey = key;
+    var lib = insightLibrary[key] || [];
+    lib.forEach(function(ins) { if (allInsights.indexOf(ins) === -1) allInsights.push(ins); });
+  });
+  if (allInsights.length === 0) allInsights = insightLibrary.longevity || [];
+  var key = firstKey;
 
   // Show top 2 insights
-  var toShow = insights.slice(0, 2);
+  var toShow = allInsights.slice(0, 2);
   var goalLabels = {
     longevity: 'Longevity', energy: 'Energy', sleep: 'Sleep',
     fitness: 'Fitness', mood: 'Mood', weight: 'Weight management', focus: 'Focus'
@@ -7178,7 +7213,7 @@ var onboardingState = {
   firstName: '', lastName: '',
   birthYear: null, gender: 'prefer-not-to-say',
   measurementSystem: 'imperial', height: '', weight: '',
-  primaryGoal: 'feel_better', targetWeight: '',
+  primaryGoals: [], targetWeight: '',
   activityLevel: 'moderately_active', fitnessLevel: 'beginner',
   healthConditions: [], dietaryRestrictions: [],
   hasAppleWatch: true
@@ -7269,10 +7304,37 @@ function renderOnboardingStep(step) {
 
   if (step === 4) {
     var sys = onboardingState.measurementSystem;
-    var hPlaceholder = sys === 'imperial' ? 'e.g. 5\'10"' : 'e.g. 178';
     var wPlaceholder = sys === 'imperial' ? 'e.g. 170' : 'e.g. 77';
-    var hLabel = sys === 'imperial' ? 'Height (ft\'in")' : 'Height (cm)';
     var wLabel = sys === 'imperial' ? 'Weight (lbs)' : 'Weight (kg)';
+
+    // Parse stored height back into components for pre-fill
+    var obFt = '', obIn = '', obM = '', obCm = '';
+    if (sys === 'imperial' && onboardingState.height) {
+      var ftInParts = (onboardingState.height + '').match(/(\d+)\s*[''′]\s*(\d+)/);
+      if (ftInParts) { obFt = ftInParts[1]; obIn = ftInParts[2]; }
+    } else if (sys === 'metric' && onboardingState.height) {
+      var totalCm = parseInt(onboardingState.height);
+      if (totalCm) { obM = Math.floor(totalCm / 100); obCm = totalCm % 100; }
+    }
+
+    var heightHtml;
+    if (sys === 'imperial') {
+      heightHtml = '<div class="ob-field"><div class="ob-label">Height</div>'
+        + '<div style="display:flex;gap:8px;align-items:center">'
+        + '<input class="ob-input" id="ob-height-ft" type="number" min="3" max="8" placeholder="ft" value="' + obFt + '" style="flex:1;text-align:center" onkeydown="if(event.key===\'Enter\')document.getElementById(\'ob-height-in\').focus()">'
+        + '<span style="color:var(--muted);font-size:13px">ft</span>'
+        + '<input class="ob-input" id="ob-height-in" type="number" min="0" max="11" placeholder="in" value="' + obIn + '" style="flex:1;text-align:center" onkeydown="if(event.key===\'Enter\')document.getElementById(\'ob-weight\').focus()">'
+        + '<span style="color:var(--muted);font-size:13px">in</span>'
+        + '</div></div>';
+    } else {
+      heightHtml = '<div class="ob-field"><div class="ob-label">Height</div>'
+        + '<div style="display:flex;gap:8px;align-items:center">'
+        + '<input class="ob-input" id="ob-height-m" type="number" min="1" max="2" placeholder="m" value="' + obM + '" style="flex:1;text-align:center" onkeydown="if(event.key===\'Enter\')document.getElementById(\'ob-height-cm\').focus()">'
+        + '<span style="color:var(--muted);font-size:13px">m</span>'
+        + '<input class="ob-input" id="ob-height-cm" type="number" min="0" max="99" placeholder="cm" value="' + obCm + '" style="flex:1;text-align:center" onkeydown="if(event.key===\'Enter\')document.getElementById(\'ob-weight\').focus()">'
+        + '<span style="color:var(--muted);font-size:13px">cm</span>'
+        + '</div></div>';
+    }
 
     return '<div class="ob-step-indicator">Step 3 of 6</div>'
       + '<div class="ob-title">Body Metrics</div>'
@@ -7282,10 +7344,9 @@ function renderOnboardingStep(step) {
       + '<div class="ob-unit-btn' + (sys === 'metric' ? ' active' : '') + '" onclick="onboardingToggleUnit(\'metric\')">Metric</div>'
       + '</div>'
       + '<div class="ob-row">'
-      + '<div class="ob-field"><div class="ob-label">' + hLabel + '</div>'
-      + '<input class="ob-input" id="ob-height" type="text" placeholder="' + hPlaceholder + '" value="' + escapeHtml(onboardingState.height) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + heightHtml
       + '<div class="ob-field"><div class="ob-label">' + wLabel + '</div>'
-      + '<input class="ob-input" id="ob-weight" type="text" placeholder="' + wPlaceholder + '" value="' + escapeHtml(onboardingState.weight) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
+      + '<input class="ob-input" id="ob-weight" type="number" placeholder="' + wPlaceholder + '" value="' + escapeHtml(onboardingState.weight) + '" onkeydown="if(event.key===\'Enter\')onboardingNext()"></div>'
       + '</div>'
       + '<div class="ob-error" id="ob-error">Please enter your height and weight.</div>'
       + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
@@ -7302,14 +7363,14 @@ function renderOnboardingStep(step) {
     ];
     var goalsHtml = '<div class="ob-cards">';
     goals.forEach(function(g) {
-      var sel = onboardingState.primaryGoal === g.val ? ' selected' : '';
-      goalsHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectGoal(\'' + g.val + '\')">'
+      var sel = onboardingState.primaryGoals.indexOf(g.val) !== -1 ? ' selected' : '';
+      goalsHtml += '<div class="ob-card' + sel + '" onclick="onboardingToggleGoal(\'' + g.val + '\')">'
         + '<div class="ob-card-icon">' + g.icon + '</div>'
         + '<div class="ob-card-label">' + g.label + '</div></div>';
     });
     goalsHtml += '</div>';
 
-    var showTarget = onboardingState.primaryGoal === 'lose_weight' || onboardingState.primaryGoal === 'gain_strength';
+    var showTarget = onboardingState.primaryGoals.indexOf('lose_weight') !== -1 || onboardingState.primaryGoals.indexOf('gain_strength') !== -1;
     var twLabel = onboardingState.measurementSystem === 'imperial' ? 'Target Weight (lbs)' : 'Target Weight (kg)';
 
     return '<div class="ob-step-indicator">Step 4 of 6</div>'
@@ -7437,11 +7498,18 @@ function validateOnboardingStep(step) {
     }
   }
   if (step === 4) {
-    var h = (document.getElementById('ob-height') || {}).value || '';
-    var w = (document.getElementById('ob-weight') || {}).value || '';
     var unit = onboardingState.measurementSystem;
-    var hCm = parseHeight(h, unit === 'imperial' ? 'imperial' : 'metric');
-    var wKg = parseWeight(w, unit === 'imperial' ? 'lbs' : 'kg');
+    var hCm = null;
+    if (unit === 'imperial') {
+      var ft = parseInt((document.getElementById('ob-height-ft') || {}).value) || 0;
+      var inches = parseInt((document.getElementById('ob-height-in') || {}).value) || 0;
+      if (ft >= 3 && ft <= 8) hCm = (ft * 12 + inches) * 2.54;
+    } else {
+      var m = parseInt((document.getElementById('ob-height-m') || {}).value) || 0;
+      var cm = parseInt((document.getElementById('ob-height-cm') || {}).value) || 0;
+      if (m >= 1 && m <= 2) hCm = m * 100 + cm;
+    }
+    var wKg = parseWeight((document.getElementById('ob-weight') || {}).value || '', unit === 'imperial' ? 'lbs' : 'kg');
     if (!hCm || !wKg) {
       var err = document.getElementById('ob-error');
       if (err) err.classList.add('visible');
@@ -7460,7 +7528,15 @@ function saveOnboardingStepData(step) {
     onboardingState.birthYear = parseInt((document.getElementById('ob-birth-year') || {}).value) || null;
   }
   if (step === 4) {
-    onboardingState.height = ((document.getElementById('ob-height') || {}).value || '').trim();
+    if (onboardingState.measurementSystem === 'imperial') {
+      var ft = (document.getElementById('ob-height-ft') || {}).value || '';
+      var inches = (document.getElementById('ob-height-in') || {}).value || '0';
+      onboardingState.height = ft + '\'' + inches + '"';
+    } else {
+      var m = (document.getElementById('ob-height-m') || {}).value || '0';
+      var cm = (document.getElementById('ob-height-cm') || {}).value || '0';
+      onboardingState.height = '' + (parseInt(m) * 100 + parseInt(cm));
+    }
     onboardingState.weight = ((document.getElementById('ob-weight') || {}).value || '').trim();
   }
   if (step === 5) {
@@ -7469,13 +7545,21 @@ function saveOnboardingStepData(step) {
 }
 
 function onboardingSelectGender(val) {
+  // Save birth year before re-render so typed value isn't lost
+  var yearEl = document.getElementById('ob-birth-year');
+  if (yearEl) onboardingState.birthYear = parseInt(yearEl.value) || null;
   onboardingState.gender = val;
   var card = document.getElementById('ob-card');
   if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
 }
 
-function onboardingSelectGoal(val) {
-  onboardingState.primaryGoal = val;
+function onboardingToggleGoal(val) {
+  var idx = onboardingState.primaryGoals.indexOf(val);
+  if (idx === -1) {
+    onboardingState.primaryGoals.push(val);
+  } else {
+    onboardingState.primaryGoals.splice(idx, 1);
+  }
   var tw = document.getElementById('ob-target-weight');
   if (tw) onboardingState.targetWeight = tw.value.trim();
   var card = document.getElementById('ob-card');
@@ -7547,7 +7631,7 @@ async function completeOnboarding() {
     height_cm: heightCm ? Math.round(heightCm * 10) / 10 : null,
     current_weight_kg: weightKg ? Math.round(weightKg * 10) / 10 : null,
     body_mass_index: bmi ? Math.round(bmi * 10) / 10 : null,
-    primary_goal: onboardingState.primaryGoal,
+    primary_goal: onboardingState.primaryGoals.join(', ') || null,
     activity_level: onboardingState.activityLevel,
     fitness_level: onboardingState.fitnessLevel,
     has_apple_watch: onboardingState.hasAppleWatch,
@@ -7565,6 +7649,12 @@ async function completeOnboarding() {
       '/rest/v1/profiles', 'POST', profileData, getToken(),
       { 'Prefer': 'return=representation' }
     );
+    console.log('[Healix] Onboarding INSERT result:', JSON.stringify(insertResult));
+
+    if (insertResult && insertResult.code) {
+      // PostgREST error (e.g. duplicate key, constraint violation)
+      throw new Error(insertResult.message || insertResult.code);
+    }
 
     if (insertResult && Array.isArray(insertResult) && insertResult.length > 0) {
       window.userProfileData = insertResult[0];

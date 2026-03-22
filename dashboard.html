@@ -744,16 +744,8 @@
             </div>
           </div>
           <div class="modal-field">
-            <label class="modal-label">Primary Health Goal</label>
-            <select class="modal-input" id="p-goal" style="cursor:pointer">
-              <option value="">Select goal</option>
-              <option value="lose_weight">Lose weight</option>
-              <option value="improve_cardio">Improve cardio</option>
-              <option value="gain_strength">Gain strength</option>
-              <option value="sleep_better">Sleep better</option>
-              <option value="feel_better">Feel better overall</option>
-              <option value="healthier_diet">Healthier diet</option>
-            </select>
+            <label class="modal-label">Health Goals</label>
+            <div class="goal-pills" id="p-goals"></div>
           </div>
           <div id="profile-errors" style="display:none;color:var(--down);font-family:var(--B);font-size:13px;padding:10px 14px;border:1px solid var(--error-border);background:var(--error-bg);border-radius:8px;margin-top:8px"></div>
           <button class="save-btn" onclick="saveProfile()">Save Changes</button>
