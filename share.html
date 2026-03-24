@@ -282,7 +282,7 @@ body {
 
       renderDashboard(data);
     } catch (e) {
-      console.error('[Share] Failed to load:', e);
+      console.error('[Share] Failed to load:', e, e.stack);
       showError();
     }
   }
@@ -394,8 +394,8 @@ body {
     // VO2 max
     var vo2 = null;
     for (var j = 0; j < tests.length; j++) {
-      if (tests[j].test_type === 'vo2max' && tests[j].value) {
-        vo2 = parseFloat(tests[j].value);
+      if (tests[j].test_key === 'vo2max' && tests[j].raw_value) {
+        vo2 = parseFloat(tests[j].raw_value);
         break;
       }
     }
@@ -584,8 +584,8 @@ body {
     var seen = {};
     var unique = [];
     tests.forEach(function(t) {
-      if (!seen[t.test_type]) {
-        seen[t.test_type] = true;
+      if (!seen[t.test_key]) {
+        seen[t.test_key] = true;
         unique.push(t);
       }
     });
@@ -601,12 +601,12 @@ body {
 
     var html = '';
     unique.forEach(function(t) {
-      var label = testLabels[t.test_type] || t.test_type;
+      var label = testLabels[t.test_key] || t.test_key;
       var pctCls = t.percentile >= 70 ? 'pct-great' : t.percentile >= 40 ? 'pct-good' : 'pct-low';
 
       html += '<div class="share-fitness-card">';
       html += '<div class="share-fitness-type">' + escapeHtml(label) + '</div>';
-      html += '<div><span class="share-fitness-val">' + t.value + '</span>';
+      html += '<div><span class="share-fitness-val">' + t.raw_value + '</span>';
       if (t.unit) html += '<span class="share-fitness-unit">' + escapeHtml(t.unit) + '</span>';
       html += '</div>';
       if (t.percentile != null) {
