@@ -6695,7 +6695,8 @@ async function createShareLink() {
     await supabaseRequest('/rest/v1/shared_dashboards', 'POST', body, session.access_token);
 
     // Show the link
-    var url = 'https://usehealix.com/share.html?token=' + shareToken;
+    var base = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
+    var url = window.location.origin + base + 'share.html?token=' + shareToken;
     var urlInput = document.getElementById('share-link-url');
     urlInput.value = url;
     document.getElementById('share-link-result').style.display = 'block';
