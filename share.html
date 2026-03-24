@@ -261,7 +261,11 @@ body {
     try {
       var response = await fetch(SUPABASE_URL + '/functions/v1/get-shared-dashboard', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+        },
         body: JSON.stringify({ shareToken: shareToken })
       });
 
