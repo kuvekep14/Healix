@@ -620,12 +620,14 @@ function calcVitalityAge(metrics) {
 
   // Normalise weights for missing dimensions
   var totalW = scores.reduce(function(s, d) { return s + d.weight; }, 0);
-  var composite = scores.reduce(function(s, d) { return s + (d.score * d.weight / totalW); }, 0);
-  composite = Math.round(composite);
+  var compositeRaw = scores.reduce(function(s, d) { return s + (d.score * d.weight / totalW); }, 0);
+  var composite = Math.round(compositeRaw);
 
   // Clinical mapping: composite 70 = real age baseline
   // Each 5 points = ~1 year. Range ±15 years max.
-  var adjustment = Math.round((composite - 70) / 5);
+  // Use raw composite (not rounded) to avoid staircase jumps where
+  // vitality age changes by a year without visible driver score changes
+  var adjustment = Math.round((compositeRaw - 70) / 5);
   var vAge = Math.max(18, Math.min(realAge + 20, realAge - adjustment));
 
   return {
@@ -710,6 +712,12 @@ function toggleDriverExplainer(key) {
     el.textContent = DRIVER_EXPLAINERS[key];
     el.style.display = 'block';
   }
+}
+
+function toggleSleepDebtExplainer() {
+  var el = document.getElementById('sleep-debt-explainer');
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function toggleVaExplainer() {
@@ -2017,7 +2025,7 @@ function renderDashMeals(meals, today) {
   if (!el) return;
   var todayMeals = meals;
   var el = document.getElementById('d-meals');
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', 'ate out':'🍽', beverage:'🥤', supplement:'💊', medication:'💊', other:'📦' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', 'ate out':'🍽', beverage:'🥤', supplement:'💊', medication:'💊', alcohol:'🍷', other:'📦' };
   if (todayMeals.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🍽</div><div class="empty-state-text">No intake logged today</div></div>';
     return;
@@ -2631,7 +2639,7 @@ function renderMealsDayView(meals, nutrients, today) {
   console.log("[Healix] dayMeals after filter:", dayMeals.length);
   if (meals.length > 0) { console.log("[Healix] sample:", meals.slice(0,3).map(function(m){ return (m.meal_time||m.created_at) + " -> " + localDateStr(new Date(m.meal_time||m.created_at)); })); }
 
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊', 'ate out':'🍽', beverage:'🥤', medication:'💊', other:'📦' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', cooked:'🍳', drink:'🥤', dessert:'🍰', supplement:'💊', 'ate out':'🍽', beverage:'🥤', medication:'💊', alcohol:'🍷', other:'📦' };
   var list = document.getElementById('meals-list');
 
   if (dayMeals.length === 0) {
@@ -2977,7 +2985,7 @@ async function saveMeal() {
 }
 
 function showIntakeProcessing(id, name, type, needsAI) {
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', beverage:'🥤', supplement:'💊', medication:'💊', other:'📦' };
+  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', beverage:'🥤', supplement:'💊', medication:'💊', alcohol:'🍷', other:'📦' };
   var emoji = emojis[type.toLowerCase()] || '🥘';
   var card = document.createElement('div');
   card.id = id;

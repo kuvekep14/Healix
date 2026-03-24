@@ -526,7 +526,8 @@
           <div class="stat-item-delta delta-neutral" id="slp-avg-sub">hours/night</div>
         </div>
         <div class="card">
-          <div class="card-label">Sleep Debt</div>
+          <div class="card-label" onclick="event.stopPropagation();toggleSleepDebtExplainer()" style="cursor:pointer">Sleep Debt <span style="font-size:9px;color:var(--muted)">ⓘ</span></div>
+          <div id="sleep-debt-explainer" class="driver-explainer" style="display:none">Cumulative hours below the 8-hour target over the past week. A debt of 3+ hours is linked to impaired focus, higher cortisol, and slower recovery.</div>
           <div class="stat-item-val" id="slp-debt" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
           <div class="stat-item-delta delta-neutral" id="slp-debt-sub">hours this week</div>
         </div>
@@ -1096,6 +1097,7 @@
           <option value="dinner">Dinner</option>
           <option value="snack">Snack</option>
           <option value="beverage">Beverage</option>
+          <option value="alcohol">Alcohol</option>
           <option value="supplement">Supplement</option>
           <option value="medication">Medication</option>
           <option value="other">Other</option>
@@ -1321,7 +1323,7 @@
 
 <script src="config.js"></script>
 <script src="components/confirm-modal.js"></script>
-<script src="dashboard.js?v=20260324"></script>
+<script src="dashboard.js?v=20260324b"></script>
 <script src="chat-widget.js"></script>
 
 <datalist id="ex-presets"><option value="Bench Press"><option value="Overhead Press"><option value="Incline Press"><option value="Dumbbell Fly"><option value="Pull-ups"><option value="Chin-ups"><option value="Barbell Row"><option value="Cable Row"><option value="Lat Pulldown"><option value="Dumbbell Curl"><option value="Hammer Curl"><option value="Tricep Dip"><option value="Tricep Pushdown"><option value="Skull Crushers"><option value="Squat"><option value="Front Squat"><option value="Leg Press"><option value="Romanian Deadlift"><option value="Deadlift"><option value="Hip Thrust"><option value="Lunges"><option value="Leg Curl"><option value="Leg Extension"><option value="Plank"><option value="Cable Crunch"><option value="Ab Wheel"><option value="Face Pull"><option value="Running"><option value="Cycling"><option value="Row Machine"><option value="Jump Rope"></datalist>
