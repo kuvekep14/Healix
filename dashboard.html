@@ -841,6 +841,31 @@
           <button class="save-btn" onclick="saveMedicalProfile()" style="margin-top:16px">Save Allergies</button>
         </div>
 
+        <!-- Share with Coach -->
+        <div class="card span-2">
+          <div class="profile-section-title">Share with <em>Coach</em></div>
+          <p style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;line-height:1.6">Generate a read-only link to share your Vitality Age, driver scores, bloodwork, and fitness assessments with a coach or practitioner.</p>
+          <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px">
+            <div style="flex:1">
+              <label class="modal-label">Label (optional)</label>
+              <input class="modal-input" id="share-label" type="text" placeholder='e.g. "My trainer", "Dr. Smith"'>
+            </div>
+            <button class="save-btn" style="width:auto;padding:13px 24px;margin:0;flex-shrink:0" onclick="createShareLink()">Generate Link</button>
+          </div>
+          <div id="share-link-result" style="display:none;margin-bottom:20px">
+            <label class="modal-label">Shareable Link</label>
+            <div style="display:flex;gap:8px">
+              <input class="modal-input" id="share-link-url" type="text" readonly style="flex:1;font-size:12px;color:var(--gold)">
+              <button class="save-btn" style="width:auto;padding:13px 18px;margin:0;flex-shrink:0" onclick="copyShareLink()">Copy</button>
+            </div>
+            <div id="share-copy-msg" style="font-size:11px;color:var(--up);margin-top:6px;display:none">Copied to clipboard</div>
+          </div>
+          <div id="share-list-container" style="display:none">
+            <label class="modal-label" style="margin-bottom:10px">Active Shares</label>
+            <div id="share-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+        </div>
+
         <!-- Family Medical History -->
         <div class="card span-2">
           <div class="profile-section-title">Family Medical <em>History</em></div>

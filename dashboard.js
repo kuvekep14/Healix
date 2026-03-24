@@ -165,6 +165,7 @@ async function init() {
         window.userProfileData = profileData[0];
         console.log('[Healix] profile loaded:', Object.keys(window.userProfileData), 'birth_date:', window.userProfileData.birth_date);
         populateProfileForm(profileData[0]);
+        loadShareList();
         // Update sidebar and greeting with profile name
         // Try first_name, then full_name from profile, then full_name from auth metadata
         var profileFirst = profileData[0].first_name
@@ -6669,6 +6670,117 @@ function safeMarkdownDashboard(text) {
   return escapeHtml(text)
     .replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--cream)">$1</strong>')
     .replace(/\n/g, '<br>');
+}
+
+// ── COACH SHARE LINKS ──
+async function createShareLink() {
+  var session = getSession();
+  if (!session || !session.access_token) return;
+
+  var label = (document.getElementById('share-label').value || '').trim();
+
+  // Generate 32-char hex token
+  var arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  var shareToken = Array.from(arr).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+
+  try {
+    var body = {
+      user_id: session.user.id,
+      share_token: shareToken,
+      is_active: true
+    };
+    if (label) body.label = label;
+
+    await supabaseRequest('/rest/v1/shared_dashboards', 'POST', body, session.access_token);
+
+    // Show the link
+    var url = 'https://usehealix.com/share.html?token=' + shareToken;
+    var urlInput = document.getElementById('share-link-url');
+    urlInput.value = url;
+    document.getElementById('share-link-result').style.display = 'block';
+    document.getElementById('share-label').value = '';
+
+    // Refresh share list
+    loadShareList();
+  } catch (e) {
+    console.error('[Share] Error creating share link:', e);
+    alert('Failed to create share link. Please try again.');
+  }
+}
+
+function copyShareLink() {
+  var urlInput = document.getElementById('share-link-url');
+  if (!urlInput.value) return;
+  navigator.clipboard.writeText(urlInput.value).then(function() {
+    var msg = document.getElementById('share-copy-msg');
+    msg.style.display = 'block';
+    setTimeout(function() { msg.style.display = 'none'; }, 2000);
+  }).catch(function() {
+    // Fallback: select and copy
+    urlInput.select();
+    document.execCommand('copy');
+  });
+}
+
+async function loadShareList() {
+  var session = getSession();
+  if (!session || !session.access_token) return;
+
+  try {
+    var shares = await supabaseRequest(
+      '/rest/v1/shared_dashboards?user_id=eq.' + session.user.id + '&order=created_at.desc',
+      'GET', null, session.access_token
+    );
+
+    if (!shares || !Array.isArray(shares) || shares.length === 0) {
+      document.getElementById('share-list-container').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('share-list-container').style.display = 'block';
+    var container = document.getElementById('share-list');
+    var html = '';
+
+    shares.forEach(function(s) {
+      var dateStr = new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      var label = s.label ? escapeHtml(s.label) : 'Unlabeled';
+      var statusColor = s.is_active ? 'var(--up)' : 'var(--muted)';
+      var statusText = s.is_active ? 'Active' : 'Revoked';
+
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--dark-3);border:1px solid var(--gold-border)">';
+      html += '<div>';
+      html += '<div style="font-size:13px;color:var(--cream)">' + label + '</div>';
+      html += '<div style="font-size:11px;color:var(--muted);margin-top:2px">Created ' + dateStr + ' · <span style="color:' + statusColor + '">' + statusText + '</span></div>';
+      html += '</div>';
+      if (s.is_active) {
+        html += '<button onclick="revokeShare(\'' + s.id + '\')" style="background:none;border:1px solid var(--error-border);color:var(--down);font-family:var(--B);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:7px 14px;cursor:pointer;transition:all .2s">Revoke</button>';
+      }
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+  } catch (e) {
+    console.error('[Share] Error loading shares:', e);
+  }
+}
+
+async function revokeShare(shareId) {
+  var session = getSession();
+  if (!session || !session.access_token) return;
+
+  try {
+    await supabaseRequest(
+      '/rest/v1/shared_dashboards?id=eq.' + shareId,
+      'PATCH',
+      { is_active: false },
+      session.access_token
+    );
+    loadShareList();
+  } catch (e) {
+    console.error('[Share] Error revoking share:', e);
+    alert('Failed to revoke share. Please try again.');
+  }
 }
 
 // ── SHARE/EXPORT ──
