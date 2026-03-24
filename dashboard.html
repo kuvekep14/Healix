@@ -246,6 +246,9 @@
           </div>
         </div>
 
+        <!-- Boss insight (proactive AI) -->
+        <div id="boss-insight-card" style="display:none"></div>
+
         <!-- Onboarding checklist -->
         <div id="onboarding-checklist" style="display:none"></div>
 
@@ -288,6 +291,11 @@
 
     <!-- ══ MEALS PAGE ══ -->
     <div class="page" id="page-meals">
+
+      <div class="section-intro" id="intro-meals">
+        <button class="section-intro-dismiss" onclick="dismissIntro('meals')">&times;</button>
+        Track what you eat to see macro and micronutrient breakdowns. Log meals by describing them in plain text — AI analyzes the nutrition automatically. Consistent logging powers your weekly nutrition insights.
+      </div>
 
       <!-- Top bar: view toggle + date nav -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px">
@@ -489,6 +497,10 @@
 
     <!-- ══ SLEEP PAGE ══ -->
     <div class="page" id="page-sleep">
+      <div class="section-intro" id="intro-sleep">
+        <button class="section-intro-dismiss" onclick="dismissIntro('sleep')">&times;</button>
+        Sleep data syncs automatically from Apple Watch via HealthBite. Healix groups raw samples into sessions and breaks down your deep, REM, core, and awake stages. Just wear your watch to bed.
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
         <div>
           <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Rest & Recovery</div>
@@ -670,6 +682,10 @@
           <button class="upload-btn" onclick="document.getElementById('doc-input-full').click()">+ Upload Labs</button>
         </div>
       </div>
+      <div class="section-intro" id="intro-bloodwork">
+        <button class="section-intro-dismiss" onclick="dismissIntro('bloodwork')">&times;</button>
+        Upload a PDF of your lab results and Healix extracts biomarkers automatically. Blood work is the highest-weighted component of your Vitality Age (35%). Re-upload after each lab visit to track trends.
+      </div>
       <div id="bw-summary" style="margin-bottom:20px"></div>
       <div id="bw-collection-grid" style="display:none"></div>
       <div id="bw-biomarkers">
@@ -837,6 +853,10 @@
 
     <!-- ══ STRENGTH LOG PAGE ══ -->
     <div class="page" id="page-strength">
+      <div class="section-intro" id="intro-strength">
+        <button class="section-intro-dismiss" onclick="dismissIntro('strength')">&times;</button>
+        Test yourself across 5 fitness domains — upper push, upper pull, lower body, core, and carry/grip. Complete all 5 for a confirmed fitness score that feeds into your Vitality Age. Each test compares you to published norms for your age and sex.
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
         <div>
           <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Benchmarks &amp; Percentiles</div>

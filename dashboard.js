@@ -218,7 +218,9 @@ async function init() {
       renderOnboardingChecklist();
       renderMilestones();
       renderSmartEmptyStates(window._lastVitalityResult);
+      loadBossInsight();
     });
+    initSectionIntros();
     loadFamilyHistoryForm();
     setWeightDateDefault();
   } catch(e) {
@@ -679,6 +681,23 @@ function renderVitalityUnlockState() {
   if (ageEl) ageEl.classList.remove('va-locked');
   if (ringWrap) ringWrap.style.display = 'none';
   return true;
+}
+
+// ── SECTION INTROS ──
+function dismissIntro(section) {
+  var el = document.getElementById('intro-' + section);
+  if (el) el.style.display = 'none';
+  try { localStorage.setItem('healix_intro_dismissed_' + section, '1'); } catch(e) {}
+}
+function initSectionIntros() {
+  ['meals', 'sleep', 'bloodwork', 'strength'].forEach(function(s) {
+    try {
+      if (localStorage.getItem('healix_intro_dismissed_' + s) === '1') {
+        var el = document.getElementById('intro-' + s);
+        if (el) el.style.display = 'none';
+      }
+    } catch(e) {}
+  });
 }
 
 function toggleDriverExplainer(key) {
@@ -8219,6 +8238,108 @@ function showCycleEmpty(show) {
     var cards = page.querySelectorAll(':scope > .card');
     cards.forEach(function(c) { c.style.display = show ? 'none' : ''; });
   }
+}
+
+// ── BOSS INSIGHT (PROACTIVE AI) ──
+var BOSS_INSIGHT_TTL = 6 * 60 * 60 * 1000; // 6 hours
+
+async function loadBossInsight() {
+  if (!currentUser) return;
+
+  // Don't call if user has no health data at all
+  var state = getDataConnectivityState();
+  if (state.totalConnected < 1) return;
+
+  var cacheKey = 'healix_boss_insight_' + currentUser.id;
+  var container = document.getElementById('boss-insight-card');
+  if (!container) return;
+
+  // Check cache
+  try {
+    var cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      var c = JSON.parse(cached);
+      if (c.cachedAt && (Date.now() - c.cachedAt < BOSS_INSIGHT_TTL) && c.insight) {
+        renderBossInsight(c.insight);
+        return;
+      }
+    }
+  } catch(e) {}
+
+  // Show loading state
+  container.style.display = 'block';
+  container.innerHTML = '<div class="boss-insight" style="text-align:center;padding:24px"><div style="color:var(--muted);font-size:12px">Generating your daily insight...</div></div>';
+
+  try {
+    var today = new Date();
+    var sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    var response = await fetch(SUPABASE_URL + '/functions/v1/generate-unified-health-summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+      body: JSON.stringify({
+        userId: currentUser.id,
+        startDate: localDateStr(sevenDaysAgo),
+        endDate: localDateStr(today)
+      })
+    });
+
+    if (!response.ok) throw new Error('Status ' + response.status);
+    var data = await response.json();
+
+    if (data && data.insight) {
+      try { localStorage.setItem(cacheKey, JSON.stringify({ insight: data.insight, cachedAt: Date.now() })); } catch(e) {}
+      renderBossInsight(data.insight);
+    } else {
+      container.style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('[Healix] Boss insight error:', e.message);
+    container.style.display = 'none';
+  }
+}
+
+function renderBossInsight(insight) {
+  var container = document.getElementById('boss-insight-card');
+  if (!container || !insight) return;
+
+  var badgeCls = (insight.statusBadge || 'NEUTRAL').toLowerCase();
+  var badgeText = insight.statusBadge === 'POSITIVE' ? 'On Track' : insight.statusBadge === 'ATTENTION' ? 'Needs Attention' : 'Neutral';
+
+  var html = '<div class="boss-insight">';
+  html += '<div class="boss-badge ' + badgeCls + '">' + badgeText + '</div>';
+  html += '<div class="boss-headline">' + escapeHtml(insight.headline || '') + '</div>';
+  html += '<div class="boss-summary">' + escapeHtml(insight.summary || '') + '</div>';
+
+  // Primary action
+  if (insight.primaryAction) {
+    html += '<div class="boss-action"><strong>' + escapeHtml(insight.primaryAction.label || '') + '</strong>';
+    if (insight.primaryAction.details) html += '<br>' + escapeHtml(insight.primaryAction.details);
+    html += '</div>';
+  }
+
+  // Domain check-in bullets
+  if (insight.overallCheckIn && insight.overallCheckIn.length > 0) {
+    var toneColors = { POSITIVE: 'var(--up)', NEUTRAL: 'var(--gold)', ATTENTION: 'var(--down)' };
+    html += '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">';
+    insight.overallCheckIn.forEach(function(d) {
+      var dotColor = toneColors[d.tone] || 'var(--muted)';
+      html += '<div style="display:flex;gap:8px;align-items:flex-start">'
+        + '<div class="boss-domain-dot" style="background:' + dotColor + '"></div>'
+        + '<div style="font-size:12px;color:var(--cream-dim);line-height:1.5">' + escapeHtml(d.bullet || '') + '</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Discuss link
+  var chatQ = encodeURIComponent(insight.headline || 'What should I focus on today?');
+  html += '<a href="#" onclick="event.preventDefault();HealixChat.openWithQuestion(decodeURIComponent(\'' + chatQ + '\'))" style="font-size:11px;color:var(--gold);text-decoration:none">Discuss with Healix →</a>';
+
+  html += '</div>';
+  container.innerHTML = html;
+  container.style.display = 'block';
 }
 
 // ── INIT ──
