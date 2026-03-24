@@ -681,6 +681,27 @@ function renderVitalityUnlockState() {
   return true;
 }
 
+function toggleDriverExplainer(key) {
+  var el = document.getElementById('drv-' + key + '-explainer');
+  if (!el) return;
+  var show = el.style.display === 'none';
+  // Close all other explainers
+  document.querySelectorAll('.driver-explainer').forEach(function(e) { e.style.display = 'none'; });
+  if (show && DRIVER_EXPLAINERS[key]) {
+    el.textContent = DRIVER_EXPLAINERS[key];
+    el.style.display = 'block';
+  }
+}
+
+function toggleVaExplainer() {
+  var el = document.getElementById('va-explainer');
+  var btn = document.getElementById('va-explainer-toggle');
+  if (!el) return;
+  var show = el.style.display === 'none';
+  el.style.display = show ? 'block' : 'none';
+  if (btn) btn.textContent = show ? 'How this works ▴' : 'How this works ▾';
+}
+
 function renderVitalityAge(result, realAge) {
   var unlocked = renderVitalityUnlockState();
 
@@ -1011,6 +1032,14 @@ function getDataConnectivityState() {
     allComplete: allComplete
   };
 }
+
+var DRIVER_EXPLAINERS = {
+  heart: 'Your resting heart rate reflects cardiovascular fitness. Lower is generally better — elite athletes are often 50-60 bpm. This metric carries 30% of your Vitality Age score.',
+  weight: 'Based on your BMI (height + weight). The optimal range is BMI 20-25. Both under and overweight are penalized, with obesity weighted more heavily. Worth 20% of your score.',
+  strength: 'Average percentile across your fitness test results, compared to others your age and sex. Covers 5 domains: upper push, upper pull, lower body, core, and carry/grip. Worth 10%.',
+  aerobic: 'VO2 max measures how efficiently your body uses oxygen during exercise. It\'s the single strongest predictor of all-cause mortality. Worth 5% of your score.',
+  bloodwork: 'Scored from your latest lab results — glucose, cholesterol, HbA1c, and other biomarkers each compared to optimal ranges. This is the most objective measure and carries 35% of your score.'
+};
 
 var GHOST_CTAS = {
   heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect HealthBite →', action: function() { openConnectHealthBiteModal(); }, chatQ: 'Why is resting heart rate important for longevity?' },

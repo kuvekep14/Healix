@@ -147,6 +147,26 @@
         <!-- Vitality Age data confidence line -->
         <div class="vitality-confidence" id="va-confidence"></div>
 
+        <!-- How this works -->
+        <div style="text-align:center;margin-top:8px">
+          <button id="va-explainer-toggle" onclick="toggleVaExplainer()" style="background:none;border:none;color:var(--muted);font-family:var(--B);font-size:11px;letter-spacing:.1em;cursor:pointer;padding:4px 8px;transition:color .2s">How this works ▾</button>
+        </div>
+        <div id="va-explainer" style="display:none;margin-top:8px">
+          <div class="card" style="padding:20px 24px;font-size:13px;color:var(--cream-dim);line-height:1.7">
+            <div style="font-family:var(--F);font-size:18px;font-weight:300;color:var(--cream);margin-bottom:10px">What is Vitality Age?</div>
+            <p style="margin-bottom:12px">Your Vitality Age estimates your biological age based on real health data. A Vitality Age lower than your actual age means your body is performing younger than average for your age group.</p>
+            <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">What goes into the score</div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between"><span>Blood Work</span><span style="color:var(--gold)">35%</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Resting Heart Rate</span><span style="color:var(--gold)">30%</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Weight / BMI</span><span style="color:var(--gold)">20%</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Strength</span><span style="color:var(--gold)">10%</span></div>
+              <div style="display:flex;justify-content:space-between"><span>VO2 Max</span><span style="color:var(--gold)">5%</span></div>
+            </div>
+            <p style="margin-bottom:0;font-size:12px;color:var(--muted)">When a metric is missing, its weight is redistributed across the others. The more data you connect, the more accurate your score becomes.</p>
+          </div>
+        </div>
+
         <!-- AI sentence -->
         <div class="vitality-insight-bar" id="va-insight-bar" style="display:none">
           <span class="vitality-insight-icon">◈</span>
@@ -170,7 +190,8 @@
           <div class="vitality-drivers">
             <div class="driver-card" id="drv-heart" onclick="showPage('dashboard',null)">
               <div class="driver-icon">◇</div>
-              <div class="driver-label">Heart Rate</div>
+              <div class="driver-label" onclick="event.stopPropagation();toggleDriverExplainer('heart')">Heart Rate <span style="font-size:9px;color:var(--muted)">ⓘ</span></div>
+              <div class="driver-explainer" id="drv-heart-explainer" style="display:none"></div>
               <div class="driver-val" id="drv-heart-val">—</div>
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-heart-bar"></div></div>
               <div class="driver-status" id="drv-heart-status"></div>
@@ -180,7 +201,8 @@
             </div>
             <div class="driver-card" id="drv-weight" onclick="openModal('weight-modal')">
               <div class="driver-icon">◉</div>
-              <div class="driver-label">Weight</div>
+              <div class="driver-label" onclick="event.stopPropagation();toggleDriverExplainer('weight')">Weight <span style="font-size:9px;color:var(--muted)">ⓘ</span></div>
+              <div class="driver-explainer" id="drv-weight-explainer" style="display:none"></div>
               <div class="driver-val" id="drv-weight-val">—</div>
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-weight-bar"></div></div>
               <div class="driver-status" id="drv-weight-status"></div>
@@ -190,7 +212,8 @@
             </div>
             <div class="driver-card" id="drv-strength" onclick="showPage('strength',null)">
               <div class="driver-icon">◈</div>
-              <div class="driver-label">Strength</div>
+              <div class="driver-label" onclick="event.stopPropagation();toggleDriverExplainer('strength')">Strength <span style="font-size:9px;color:var(--muted)">ⓘ</span></div>
+              <div class="driver-explainer" id="drv-strength-explainer" style="display:none"></div>
               <div class="driver-val" id="drv-strength-val">—</div>
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-strength-bar"></div></div>
               <div class="driver-status" id="drv-strength-status"></div>
@@ -200,7 +223,8 @@
             </div>
             <div class="driver-card" id="drv-aerobic" onclick="showPage('strength','vo2max')">
               <div class="driver-icon">◎</div>
-              <div class="driver-label">VO2 Max</div>
+              <div class="driver-label" onclick="event.stopPropagation();toggleDriverExplainer('aerobic')">VO2 Max <span style="font-size:9px;color:var(--muted)">ⓘ</span></div>
+              <div class="driver-explainer" id="drv-aerobic-explainer" style="display:none"></div>
               <div class="driver-val" id="drv-aerobic-val">—</div>
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-aerobic-bar"></div></div>
               <div class="driver-status" id="drv-aerobic-status"></div>
@@ -210,7 +234,8 @@
             </div>
             <div class="driver-card" id="drv-bloodwork" onclick="showPage('bloodwork',null)">
               <div class="driver-icon">◐</div>
-              <div class="driver-label">Blood Work</div>
+              <div class="driver-label" onclick="event.stopPropagation();toggleDriverExplainer('bloodwork')">Blood Work <span style="font-size:9px;color:var(--muted)">ⓘ</span></div>
+              <div class="driver-explainer" id="drv-bloodwork-explainer" style="display:none"></div>
               <div class="driver-val" id="drv-bloodwork-val">—</div>
               <div class="driver-bar-track"><div class="driver-bar-fill" id="drv-bloodwork-bar"></div></div>
               <div class="driver-status" id="drv-bloodwork-status"></div>

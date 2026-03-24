@@ -193,7 +193,12 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 }
 .driver-card:hover { border-color: rgba(184,151,90,.4); background: var(--dark-3); }
 .driver-icon { font-size: 14px; color: var(--gold); margin-bottom: 4px; opacity: .6; }
-.driver-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); }
+.driver-label { font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.driver-label:hover { color: var(--cream-dim); }
+.driver-explainer {
+  font-size: 11px; color: var(--cream-dim); line-height: 1.5;
+  padding: 8px 0 4px; letter-spacing: 0; text-transform: none;
+}
 .driver-val { font-family: var(--F); font-size: 26px; font-weight: 300; color: var(--cream); line-height: 1.2; margin-top: 2px; }
 .driver-bar-track { height: 2px; background: rgba(245,240,232,.07); border-radius: 1px; margin-top: 4px; }
 .driver-bar-fill { height: 100%; border-radius: 1px; transition: width .8s cubic-bezier(.4,0,.2,1); width: 0%; }
