@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /login.html
+Disallow: /signup.html
+Disallow: /confirm.html
+Disallow: /reset-password.html
+Disallow: /dashboard.html
+Disallow: /chat.html
+Disallow: /dev/
+
+Sitemap: https://usehealix.com/sitemap.xml
