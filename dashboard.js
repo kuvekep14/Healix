@@ -171,7 +171,6 @@ async function init() {
         window.userProfileData = profileData[0];
         console.log('[Healix] profile loaded:', Object.keys(window.userProfileData), 'birth_date:', window.userProfileData.birth_date);
         populateProfileForm(profileData[0]);
-        loadShareDetails();
         // Update sidebar and greeting with profile name
         // Try first_name, then full_name from profile, then full_name from auth metadata
         var profileFirst = profileData[0].first_name
@@ -193,6 +192,9 @@ async function init() {
         console.log('[Healix] No profile found — onboarding required');
       }
     } catch(e) { console.warn('Profile fetch error:', e); }
+
+    // Load sharing state (always — even without profile, coach accounts need sidebar)
+    loadShareDetails();
 
     loadMedicalProfileUI();
 
