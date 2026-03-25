@@ -844,25 +844,32 @@
         <!-- Share with Coach -->
         <div class="card span-2">
           <div class="profile-section-title">Share with <em>Coach</em></div>
-          <p style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;line-height:1.6">Generate a read-only link to share your Vitality Age, driver scores, bloodwork, and fitness assessments with a coach or practitioner.</p>
-          <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px">
-            <div style="flex:1">
-              <label class="modal-label">Label (optional)</label>
-              <input class="modal-input" id="share-label" type="text" placeholder='e.g. "My trainer", "Dr. Smith"'>
-            </div>
-            <button class="save-btn" style="width:auto;padding:13px 24px;margin:0;flex-shrink:0" onclick="createShareLink()">Generate Link</button>
+          <p style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;line-height:1.6">Share a live, read-only view of your dashboard with coaches or practitioners. One link — anyone with access sees your latest data.</p>
+
+          <!-- Off state: no link yet -->
+          <div id="share-off">
+            <button class="save-btn" style="width:auto;padding:13px 24px;margin:0" onclick="enableSharing()">Enable Sharing</button>
           </div>
-          <div id="share-link-result" style="display:none;margin-bottom:20px">
-            <label class="modal-label">Shareable Link</label>
-            <div style="display:flex;gap:8px">
+
+          <!-- On state: link active -->
+          <div id="share-on" style="display:none">
+            <div style="display:flex;gap:8px;margin-bottom:16px">
               <input class="modal-input" id="share-link-url" type="text" readonly style="flex:1;font-size:12px;color:var(--gold)">
               <button class="save-btn" style="width:auto;padding:13px 18px;margin:0;flex-shrink:0" onclick="copyShareLink()">Copy</button>
             </div>
             <div id="share-copy-msg" style="font-size:11px;color:var(--up);margin-top:6px;display:none">Copied to clipboard</div>
-          </div>
-          <div id="share-list-container" style="display:none">
-            <label class="modal-label" style="margin-bottom:10px">Active Shares</label>
-            <div id="share-list" style="display:flex;flex-direction:column;gap:8px"></div>
+
+            <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:16px;margin-top:16px">
+              <div style="flex:1">
+                <label class="modal-label">Add a person</label>
+                <input class="modal-input" id="share-person-name" type="text" placeholder='e.g. "My trainer", "Dr. Smith"'>
+              </div>
+              <button class="save-btn" style="width:auto;padding:13px 18px;margin:0;flex-shrink:0" onclick="addSharePerson()">Add</button>
+            </div>
+
+            <div id="share-people" style="display:flex;flex-direction:column;gap:8px"></div>
+
+            <button onclick="disableSharing()" style="background:none;border:none;color:var(--muted);font-family:var(--B);font-size:11px;cursor:pointer;margin-top:16px;padding:0;text-decoration:underline">Disable sharing and revoke all access</button>
           </div>
         </div>
 
