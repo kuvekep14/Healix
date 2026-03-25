@@ -245,6 +245,11 @@ function greet() {
 // ── PAGE NAV ──
 var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', cycle: 'Cycle', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
+  // Exit client view if user navigates away via sidebar (not triggered by switchToClientView itself)
+  if (_viewingUserId && id !== 'dashboard') {
+    switchToOwnView();
+    return;
+  }
   document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
