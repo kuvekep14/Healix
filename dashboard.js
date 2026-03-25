@@ -1951,11 +1951,14 @@ async function loadDashboardData() {
   loadHealthSummary();
 
   // Cache dashboard data in localStorage for instant render on next visit
-  try {
-    localStorage.setItem('healix_dashboard_cache', JSON.stringify({
-      metrics: metrics, timestamps: timestamps, result: result, realAge: realAge, cachedAt: Date.now()
-    }));
-  } catch(e) { /* localStorage full or unavailable */ }
+  // Skip caching when viewing a client's dashboard (don't corrupt the coach's own cache)
+  if (!_viewingUserId) {
+    try {
+      localStorage.setItem('healix_dashboard_cache', JSON.stringify({
+        metrics: metrics, timestamps: timestamps, result: result, realAge: realAge, cachedAt: Date.now()
+      }));
+    } catch(e) { /* localStorage full or unavailable */ }
+  }
 }
 
 function escapeHtml(str) {
@@ -6918,6 +6921,16 @@ async function switchToClientView(ownerId, name) {
   document.getElementById('page-title').textContent = escapeHtml(name) + "'s Dashboard";
   var eyebrow = document.getElementById('va-eyebrow');
   if (eyebrow) eyebrow.textContent = escapeHtml(name).toUpperCase() + "'S VITALITY AGE";
+
+  // Clear stale values so the coach's own data doesn't flash
+  var clearIds = ['va-age', 'va-delta', 'va-composite', 'drv-heart-val', 'drv-weight-val',
+    'drv-strength-val', 'drv-aerobic-val', 'drv-bloodwork-val', 'drv-sleep-val',
+    'drv-heart-status', 'drv-weight-status', 'drv-strength-status', 'drv-aerobic-status',
+    'drv-bloodwork-status', 'drv-sleep-status'];
+  clearIds.forEach(function(cid) {
+    var el = document.getElementById(cid);
+    if (el) el.textContent = '—';
+  });
 
   // Highlight the active client in sidebar
   var items = document.querySelectorAll('.client-nav-item');
