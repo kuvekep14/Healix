@@ -245,8 +245,8 @@ function greet() {
 // ── PAGE NAV ──
 var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', cycle: 'Cycle', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
-  // Exit client view if user navigates away via sidebar (not triggered by switchToClientView itself)
-  if (_viewingUserId && id !== 'dashboard') {
+  // Exit client view only when navigating to profile (owner-only page)
+  if (_viewingUserId && id === 'profile') {
     switchToOwnView();
     return;
   }
@@ -256,7 +256,11 @@ function showPage(id, btn) {
   if (btn) btn.classList.add('active');
   // Set page title — respect client view mode
   if (_viewingUserId && _viewingUserName) {
-    document.getElementById('page-title').textContent = escapeHtml(_viewingUserName) + "'s Dashboard";
+    var clientFirst = _viewingUserName.split(' ')[0];
+    var pageLabel = pageTitles[id] || id;
+    document.getElementById('page-title').textContent = id === 'dashboard'
+      ? escapeHtml(_viewingUserName) + "'s Dashboard"
+      : escapeHtml(clientFirst) + "'s " + pageLabel;
   } else if (currentUser) {
     var profileFirst = window.userProfileData && window.userProfileData.first_name;
     var profileFull = window.userProfileData && window.userProfileData.full_name;
