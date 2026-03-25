@@ -6844,12 +6844,19 @@ function renderSharedWithMe(clients) {
 
 // ── CLIENT VIEW SWITCHER ──
 
-function switchToClientView(ownerId, name) {
+var _ownProfileData = null; // stash viewer's own profile when switching to client
+
+async function switchToClientView(ownerId, name) {
   var session = getSession();
   if (!session || !session.access_token) return;
 
   _viewingUserId = ownerId;
   _viewingUserName = name;
+
+  // Save viewer's own profile so we can restore it later
+  if (!_ownProfileData) {
+    _ownProfileData = window.userProfileData;
+  }
 
   // Override supabaseRequest to proxy through the edge function
   if (!_origSupabaseRequest) {
@@ -6880,6 +6887,18 @@ function switchToClientView(ownerId, name) {
     });
   };
 
+  // Fetch the client's profile via proxy (needed for vitality age, BMI, etc.)
+  try {
+    var clientProfile = await supabaseRequest(
+      '/rest/v1/profiles?auth_user_id=eq.' + ownerId + '&limit=1', 'GET'
+    );
+    if (clientProfile && Array.isArray(clientProfile) && clientProfile.length > 0) {
+      window.userProfileData = clientProfile[0];
+    }
+  } catch (e) {
+    console.warn('[Share] Could not load client profile:', e);
+  }
+
   // Visual: add shared-mode class, show back button, update header
   document.body.classList.add('shared-mode');
   var backBtn = document.getElementById('back-to-my-dashboard');
@@ -6889,12 +6908,11 @@ function switchToClientView(ownerId, name) {
   // Highlight the active client in sidebar
   var items = document.querySelectorAll('.client-nav-item');
   items.forEach(function(el) { el.classList.remove('active'); });
-  // Find matching button
   items.forEach(function(el) {
     if (el.textContent.trim().indexOf(name) !== -1) el.classList.add('active');
   });
 
-  // Navigate to dashboard page and reload data
+  // Navigate to dashboard page and reload data with client's profile
   showPage('dashboard', document.querySelector('.nav-item'));
   loadDashboardData();
 }
@@ -6908,6 +6926,12 @@ function switchToOwnView() {
 
   _viewingUserId = null;
   _viewingUserName = null;
+
+  // Restore viewer's own profile data
+  if (_ownProfileData) {
+    window.userProfileData = _ownProfileData;
+    _ownProfileData = null;
+  }
 
   document.body.classList.remove('shared-mode');
   var backBtn = document.getElementById('back-to-my-dashboard');
