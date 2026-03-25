@@ -1847,7 +1847,7 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .shared-mode .modal-btn-secondary,
 .shared-mode #page-profile,
 .shared-mode .topbar-right .tf-btn,
-.shared-mode .doc-upload-area,
+.shared-mode .doc-upload-zone,
 .shared-mode .sync-banner,
 .shared-mode .va-share-btn,
 .shared-mode .share-btn,
@@ -1860,5 +1860,9 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .shared-mode .add-supplement-btn,
 .shared-mode .log-test-btn,
 .shared-mode .cycle-log-btn,
-.shared-mode .ghost-cta-link { display: none !important; }
+.shared-mode .ghost-cta-link,
+.shared-mode .meal-actions,
+.shared-mode .doc-card-delete,
+.shared-mode .cw-fab,
+.shared-mode .cw-window { display: none !important; }
 .shared-mode .driver-card-ghost { pointer-events: none; }

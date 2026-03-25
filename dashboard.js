@@ -675,7 +675,7 @@ function renderVitalityUnlockState() {
   if (wasUnlocked) isLocked = false;
 
   if (!isLocked && !wasUnlocked && state.progressPct >= UNLOCK_THRESHOLD) {
-    localStorage.setItem(unlockKey, '1');
+    if (!_viewingUserId) localStorage.setItem(unlockKey, '1');
     if (ageEl) {
       ageEl.classList.remove('va-locked');
       ageEl.classList.add('va-unlock-reveal');
@@ -815,7 +815,7 @@ function renderVitalityAge(result, realAge) {
 
 // ── VITALITY CELEBRATION ──
 function checkVitalityCelebration(result) {
-  if (!result || !result.vAge || !currentUser) return;
+  if (!result || !result.vAge || !currentUser || _viewingUserId) return;
   var key = 'healix_va_prev_' + currentUser.id;
   var prev = null;
   try { prev = JSON.parse(localStorage.getItem(key)); } catch(e) {}
@@ -846,7 +846,7 @@ function checkVitalityCelebration(result) {
 
 // ── VITALITY AGE TIMELINE ──
 function saveVitalityHistory(result, realAge) {
-  if (!result || !result.vAge) return;
+  if (!result || !result.vAge || _viewingUserId) return;
   var today = localDateStr(new Date());
   var history = [];
   try { history = JSON.parse(localStorage.getItem('healix_va_history_' + currentUser.id) || '[]'); } catch(e) { history = []; }
@@ -6897,11 +6897,17 @@ async function switchToClientView(ownerId, name) {
       },
       body: JSON.stringify({ viewUserId: ownerId, endpoint: endpoint })
     }).then(function(r) {
+      if (r.status === 401 || r.status === 403) {
+        console.warn('[Share] Auth failure from proxy — session expired');
+        handleAuthFailure();
+        return Promise.reject(new Error('auth_failure'));
+      }
       if (!r.ok) return null;
       var ct = r.headers.get('content-type') || '';
       if (ct.indexOf('json') === -1) return null;
       return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
     }).catch(function(e) {
+      if (e && e.message === 'auth_failure') return null;
       console.error('[Share] Proxy error:', e);
       return null;
     });
@@ -6917,6 +6923,12 @@ async function switchToClientView(ownerId, name) {
     }
   } catch (e) {
     console.warn('[Share] Could not load client profile:', e);
+  }
+
+  // Update cycle nav visibility based on client's gender
+  var navCycle = document.getElementById('nav-cycle');
+  if (navCycle && window.userProfileData) {
+    navCycle.style.display = window.userProfileData.gender === 'female' ? '' : 'none';
   }
 
   // Visual: add shared-mode class, show back button, update header
@@ -6966,6 +6978,12 @@ function switchToOwnView() {
   if (_ownProfileData) {
     window.userProfileData = _ownProfileData;
     _ownProfileData = null;
+  }
+
+  // Restore cycle nav visibility based on coach's own gender
+  var navCycle = document.getElementById('nav-cycle');
+  if (navCycle && window.userProfileData) {
+    navCycle.style.display = window.userProfileData.gender === 'female' ? '' : 'none';
   }
 
   document.body.classList.remove('shared-mode');
@@ -7322,7 +7340,7 @@ function renderOnboardingChecklist() {
   var prevCount = parseInt(localStorage.getItem('healix_checklist_count_' + currentUser.id) || '0');
   var currentCount = state.totalConnected;
   var newlyCompleted = currentCount > prevCount;
-  localStorage.setItem('healix_checklist_count_' + currentUser.id, currentCount.toString());
+  if (!_viewingUserId) localStorage.setItem('healix_checklist_count_' + currentUser.id, currentCount.toString());
 
   var items = [
     { key: 'profile', label: 'Complete profile', time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
@@ -8570,6 +8588,13 @@ var BOSS_INSIGHT_TTL = 6 * 60 * 60 * 1000; // 6 hours
 
 async function loadBossInsight() {
   if (!currentUser) return;
+
+  // Skip in client view — edge function bypasses proxy and would show coach's data
+  if (_viewingUserId) {
+    var bossContainer = document.getElementById('boss-insight-card');
+    if (bossContainer) bossContainer.style.display = 'none';
+    return;
+  }
 
   // Don't call if user has no health data at all
   var state = getDataConnectivityState();
