@@ -6733,8 +6733,7 @@ function safeMarkdownDashboard(text) {
 }
 
 // ── COACH SHARING ──
-// One link per user. People are labels for reference — they all use the same link.
-var _shareData = null; // the single active share row
+// Each person gets their own token/link. Revoking a person kills their specific link.
 
 async function loadShareState() {
   var session = getSession();
@@ -6742,36 +6741,20 @@ async function loadShareState() {
 
   try {
     var shares = await supabaseRequest(
-      '/rest/v1/shared_dashboards?user_id=eq.' + session.user.id + '&is_active=eq.true&limit=1',
+      '/rest/v1/shared_dashboards?user_id=eq.' + session.user.id + '&is_active=eq.true&order=created_at.desc',
       'GET', null, session.access_token
     );
-
-    if (shares && Array.isArray(shares) && shares.length > 0) {
-      _shareData = shares[0];
-      showShareOn();
-    } else {
-      _shareData = null;
-      document.getElementById('share-off').style.display = 'block';
-      document.getElementById('share-on').style.display = 'none';
-    }
+    renderSharePeople(shares);
   } catch (e) {
     console.error('[Share] Error loading state:', e);
   }
 }
 
-function showShareOn() {
-  document.getElementById('share-off').style.display = 'none';
-  document.getElementById('share-on').style.display = 'block';
+async function addSharePerson() {
+  var input = document.getElementById('share-person-name');
+  var name = (input.value || '').trim();
+  if (!name) return;
 
-  var base = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
-  var url = window.location.origin + base + 'dashboard.html?token=' + _shareData.share_token;
-  document.getElementById('share-link-url').value = url;
-
-  // Render people list from label (comma-separated names stored in label field)
-  renderSharePeople();
-}
-
-async function enableSharing() {
   var session = getSession();
   if (!session || !session.access_token) return;
 
@@ -6784,106 +6767,63 @@ async function enableSharing() {
       user_id: session.user.id,
       share_token: shareToken,
       is_active: true,
-      label: ''
+      label: name
     }, session.access_token);
 
-    loadShareState();
-  } catch (e) {
-    console.error('[Share] Error enabling:', e);
-  }
-}
-
-async function disableSharing() {
-  if (!_shareData) return;
-  var session = getSession();
-  if (!session || !session.access_token) return;
-
-  try {
-    await supabaseRequest(
-      '/rest/v1/shared_dashboards?id=eq.' + _shareData.id,
-      'PATCH', { is_active: false }, session.access_token
-    );
-    _shareData = null;
-    document.getElementById('share-off').style.display = 'block';
-    document.getElementById('share-on').style.display = 'none';
-  } catch (e) {
-    console.error('[Share] Error disabling:', e);
-  }
-}
-
-function copyShareLink() {
-  var urlInput = document.getElementById('share-link-url');
-  if (!urlInput.value) return;
-  navigator.clipboard.writeText(urlInput.value).then(function() {
-    var msg = document.getElementById('share-copy-msg');
-    msg.style.display = 'block';
-    setTimeout(function() { msg.style.display = 'none'; }, 2000);
-  }).catch(function() {
-    urlInput.select();
-    document.execCommand('copy');
-  });
-}
-
-async function addSharePerson() {
-  var input = document.getElementById('share-person-name');
-  var name = (input.value || '').trim();
-  if (!name || !_shareData) return;
-
-  var session = getSession();
-  if (!session || !session.access_token) return;
-
-  // Store people as comma-separated in the label field
-  var people = _shareData.label ? _shareData.label.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-  people.push(name);
-  _shareData.label = people.join(', ');
-
-  try {
-    await supabaseRequest(
-      '/rest/v1/shared_dashboards?id=eq.' + _shareData.id,
-      'PATCH', { label: _shareData.label }, session.access_token
-    );
     input.value = '';
-    renderSharePeople();
+    loadShareState();
   } catch (e) {
     console.error('[Share] Error adding person:', e);
   }
 }
 
-async function removeSharePerson(index) {
-  if (!_shareData) return;
+async function revokeSharePerson(shareId) {
   var session = getSession();
   if (!session || !session.access_token) return;
 
-  var people = _shareData.label ? _shareData.label.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-  people.splice(index, 1);
-  _shareData.label = people.join(', ');
-
   try {
     await supabaseRequest(
-      '/rest/v1/shared_dashboards?id=eq.' + _shareData.id,
-      'PATCH', { label: _shareData.label }, session.access_token
+      '/rest/v1/shared_dashboards?id=eq.' + shareId,
+      'PATCH', { is_active: false }, session.access_token
     );
-    renderSharePeople();
+    loadShareState();
   } catch (e) {
-    console.error('[Share] Error removing person:', e);
+    console.error('[Share] Error revoking:', e);
   }
 }
 
-function renderSharePeople() {
-  var container = document.getElementById('share-people');
-  if (!container || !_shareData) return;
+function copyPersonLink(token) {
+  var base = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
+  var url = window.location.origin + base + 'dashboard.html?token=' + token;
+  navigator.clipboard.writeText(url).catch(function() {});
+}
 
-  var people = _shareData.label ? _shareData.label.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-  if (people.length === 0) { container.innerHTML = ''; return; }
+function renderSharePeople(shares) {
+  var container = document.getElementById('share-people');
+  if (!container) return;
+
+  if (!shares || !Array.isArray(shares) || shares.length === 0) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">No one has access yet.</div>';
+    return;
+  }
 
   var html = '';
-  people.forEach(function(name, i) {
-    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--dark-3);border:1px solid var(--gold-border)">';
+  shares.forEach(function(s) {
+    var name = s.label || 'Unnamed';
+    var dateStr = new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--dark-3);border:1px solid var(--gold-border)">';
     html += '<div style="display:flex;align-items:center;gap:10px">';
     html += '<div style="width:28px;height:28px;border:1px solid var(--gold-border);display:grid;place-items:center;font-size:11px;color:var(--gold);font-family:var(--F)">' + escapeHtml(name.charAt(0).toUpperCase()) + '</div>';
-    html += '<span style="font-size:13px;color:var(--cream)">' + escapeHtml(name) + '</span>';
+    html += '<div>';
+    html += '<div style="font-size:13px;color:var(--cream)">' + escapeHtml(name) + '</div>';
+    html += '<div style="font-size:10px;color:var(--muted);margin-top:2px">Shared ' + dateStr + '</div>';
     html += '</div>';
-    html += '<button onclick="removeSharePerson(' + i + ')" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px 8px;transition:color .2s" onmouseover="this.style.color=\'var(--down)\'" onmouseout="this.style.color=\'var(--muted)\'">&times;</button>';
+    html += '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center">';
+    html += '<button onclick="copyPersonLink(\'' + s.share_token + '\')" style="background:none;border:1px solid var(--gold-border);color:var(--cream-dim);font-family:var(--B);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;cursor:pointer;transition:all .2s">Copy Link</button>';
+    html += '<button onclick="revokeSharePerson(\'' + s.id + '\')" style="background:none;border:1px solid var(--error-border);color:var(--down);font-family:var(--B);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;cursor:pointer;transition:all .2s">Revoke</button>';
+    html += '</div>';
     html += '</div>';
   });
   container.innerHTML = html;
