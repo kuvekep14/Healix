@@ -11,6 +11,12 @@ Complete reference for the `INSIGHT_RULES` engine in `dashboard.js`. These rules
 3. [Goal-Aware Rules](#goal-aware-rules)
 4. [Cross-Domain Correlations (Research-Backed)](#cross-domain-correlations-research-backed)
 5. [Nutrition Correlations](#nutrition-correlations)
+6. [Family History Integration](#family-history-integration)
+7. [Protein Distribution](#protein-distribution)
+8. [Strength Imbalances](#strength-imbalances)
+9. [Additional Micronutrient Rules](#additional-micronutrient-rules)
+10. [Doctor-Level Escalation Rules](#doctor-level-escalation-rules)
+11. [Strength-to-Bodyweight Ratios](#strength-to-bodyweight-ratios)
 
 ---
 
@@ -1150,6 +1156,298 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
+## Family History Integration
+
+These cross-reference the user's family history (from their profile) with current biomarkers to flag genetic risk amplifiers.
+
+### #49 -- `family_diabetes_glucose`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | cross |
+| **Severity** | attention |
+| **Data needed** | `ctx.profile.family_history` (Type 2 Diabetes or Type 1 Diabetes), `ctx.metrics.bloodwork.glucose`, `ctx.metrics.bloodwork.hba1c` |
+| **Goal filter** | None |
+
+**Detection logic**: Parses family history JSON. Fires when a diabetes entry exists (Type 2 or Type 1) AND at least one glucose marker is borderline (glucose > 90 mg/dL OR HbA1c > 5.4%).
+
+**Headline**: "Family diabetes history + borderline blood sugar"
+
+**Body**: "You have family history of diabetes ({members}) and your {fasting glucose of X mg/dL / HbA1c of X%} is approaching the pre-diabetic threshold. With genetic predisposition, maintaining healthy glucose is more important than for the general population. Focus on sleep (>7h), daily walking, and limiting refined carbs."
+
+**Action**: "What should I do about borderline blood sugar with family history of diabetes?"
+
+---
+
+### #50 -- `family_heart_disease_risk`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | cross |
+| **Severity** | attention (base), dynamically escalated to `alert` via template |
+| **Data needed** | `ctx.profile.family_history` (Heart disease, High blood pressure, High cholesterol, Stroke, Sudden cardiac death), `ctx.metrics.bloodwork` (LDL, HDL, triglycerides, CRP), `ctx.metrics.hr` |
+| **Goal filter** | None |
+
+**Detection logic**: Checks family history for any of 5 cardiovascular conditions. If at least one is present, scans current markers for concerns: LDL > 100, HDL < 45, triglycerides > 150, CRP > 1, resting HR > 75. Fires only when both family history AND at least one biomarker concern exist.
+
+**Headline**: "Cardiovascular risk factors with family history"
+
+**Body**: "Your family history includes {conditions}. Combined with {concerns}, your cardiovascular risk profile deserves attention. Consider discussing these markers with your doctor at your next visit."
+
+**Action**: "What lifestyle changes lower cardiovascular risk with family history?"
+
+---
+
+### #51 -- `family_cholesterol_ldl`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | cross |
+| **Severity** | attention |
+| **Data needed** | `ctx.profile.family_history` (High cholesterol), `ctx.metrics.bloodwork.ldl` |
+| **Goal filter** | None |
+
+**Detection logic**: Fires when family history includes "High cholesterol" AND current LDL > 100 mg/dL.
+
+**Headline**: "Elevated LDL with family cholesterol history"
+
+**Body**: "Your LDL of {ldl} mg/dL is above optimal, and your family ({members}) has a history of high cholesterol. Familial hypercholesterolemia affects ~1 in 250 people -- if your LDL stays elevated despite diet and exercise, discuss genetic screening with your doctor."
+
+**Research**: Familial hypercholesterolemia prevalence ~1 in 250.
+
+**Action**: "Should I be concerned about familial high cholesterol?"
+
+---
+
+## Protein Distribution
+
+### #52 -- `protein_distribution`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | nutrition |
+| **Severity** | attention |
+| **Data needed** | `ctx.meals` (today's meals, via `getMacrosFromMeal()`) |
+| **Goal filter** | `strength` or `weight` (via `goalIncludes()`) |
+
+**Detection logic**: Looks at today's meals (requires 2+ meals logged). Calculates protein per meal. Fires when >60% of total daily protein came from a single meal AND total protein >= 30g.
+
+**Headline**: "{pct}% of today's protein in one meal"
+
+**Body**: "{maxMeal}g of your {total}g protein came from a single meal. Research shows muscle protein synthesis maxes out at ~40-50g per meal -- spreading protein across 3-4 meals triggers more total synthesis than one large serving. Aim for 30-50g per meal."
+
+**Research**: Muscle protein synthesis maxes out at ~40-50g per meal; distributed intake triggers more total synthesis.
+
+**Action**: "How should I distribute protein across meals?"
+
+---
+
+## Strength Imbalances
+
+These detect asymmetries in the user's fitness test profile that may indicate injury risk or training gaps.
+
+### #53 -- `push_pull_imbalance`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | strength |
+| **Severity** | attention |
+| **Data needed** | `ctx.metrics.strengthData.tests` (bench_1rm or pushup AND pullup or dead_hang, with percentiles) |
+| **Goal filter** | None |
+
+**Detection logic**: Groups tests into push (bench_1rm or pushup) and pull (pullup or dead_hang). Compares their percentiles. Fires when the gap between push and pull percentiles is >= 25 points.
+
+**Headline**: "Push/pull strength imbalance"
+
+**Body**: "{strong lift} is at the {strongPctl}th percentile but {weak lift} is only {weakPctl}th. A {gap}-point gap between push and pull increases shoulder injury risk. Prioritize {weak lift} training to close the gap."
+
+**Action**: "How do I fix a push/pull strength imbalance?"
+
+---
+
+### #54 -- `cardio_strength_balance`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | cross |
+| **Severity** | neutral (base), dynamically set to `attention` via template |
+| **Data needed** | `ctx.metrics.vo2max`, `ctx.metrics.strengthData.avgPercentile` |
+| **Goal filter** | None |
+
+**Detection logic**: Scores VO2 max via `scoreVO2()` and reads strength average percentile. Fires when the gap between the two scores is >= 25 points.
+
+**Headline variants**:
+- *Cardio weak*: "Strong but aerobically underdeveloped"
+- *Strength weak*: "Good cardio but strength lagging"
+
+**Body (cardio weak)**: "Your strength is at the {strScore}th percentile but VO2 max is only {vo2Score}th -- a {gap}-point gap. VO2 max is the single strongest predictor of all-cause mortality. Adding 2-3 cardio sessions per week would dramatically improve your longevity profile without sacrificing strength."
+
+**Body (strength weak)**: "Your VO2 max is at the {vo2Score}th percentile but strength is only {strScore}th -- a {gap}-point gap. Muscle mass and strength independently predict longevity. Adding 2-3 resistance training sessions per week would balance your fitness profile."
+
+**Action (cardio weak)**: "How can I improve cardio without losing strength?"
+**Action (strength weak)**: "How can I build strength without losing cardio fitness?"
+
+---
+
+## Additional Micronutrient Rules
+
+These extend the nutrition correlations with additional micronutrient checks and absorption interactions. All require 5+ meals logged in the past 7 days.
+
+### #55 -- `b12_deficiency`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | nutrition |
+| **Severity** | attention |
+| **Data needed** | `ctx.meals` (7-day, micronutrients via `getMicroTotalsFromMeals()`) |
+| **Goal filter** | None |
+
+**Detection logic**: Calculates daily Vitamin B12 average from recent meals (requires 5+ meals in 7 days). Fires when daily B12 < 2.0 mcg (~83% of 2.4 mcg RDA).
+
+**Headline**: "Vitamin B12 intake is low"
+
+**Body**: "You're averaging {daily} mcg B12/day ({pctRda}% of RDA). B12 is essential for energy production, nerve function, and red blood cell formation. Deficiency causes fatigue, weakness, and cognitive issues. Found primarily in animal products -- vegetarians and vegans are especially at risk. Supplementation is cheap and effective."
+
+**Research**: B12 deficiency causes fatigue, weakness, and cognitive issues; vegetarians and vegans are at highest risk.
+
+**Action**: "Should I supplement vitamin B12?"
+
+---
+
+### #56 -- `iron_vitamin_c_synergy`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | nutrition |
+| **Severity** | neutral (base), dynamically set to `attention` via template |
+| **Data needed** | `ctx.meals` (7-day, micronutrients: Iron, Vitamin C), `ctx.profile.sex` |
+| **Goal filter** | None |
+
+**Detection logic**: Calculates daily iron and vitamin C averages. Uses sex-specific iron RDA (18mg female, 8mg male). Fires when iron < 70% of RDA AND vitamin C < 60mg.
+
+**Headline**: "Low iron + low vitamin C impairs absorption"
+
+**Body**: "You're averaging {iron}mg iron/day (RDA: {ironRda}mg) and only {vitC}mg vitamin C. Vitamin C increases non-heme iron absorption by 2-3x -- pairing iron-rich foods with citrus, peppers, or tomatoes is one of the simplest nutritional optimizations you can make."
+
+**Research**: Vitamin C increases non-heme iron absorption by 2-3x.
+
+**Action**: "How can I improve my iron absorption?"
+
+---
+
+### #57 -- `calcium_iron_conflict`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | nutrition |
+| **Severity** | neutral |
+| **Data needed** | `ctx.meals` (7-day, micronutrients: Iron, Calcium), `ctx.profile.sex` |
+| **Goal filter** | None |
+
+**Detection logic**: Calculates daily iron and calcium averages. Uses sex-specific iron RDA. Fires when iron < 60% of RDA AND calcium >= 800mg (suggesting calcium may be inhibiting iron absorption).
+
+**Headline**: "Calcium may be blocking iron absorption"
+
+**Body**: "Your iron intake is only {iron}mg/day (RDA: {ironRda}mg) while calcium is {calcium}mg/day. Calcium inhibits iron absorption when consumed together. Try separating calcium-rich foods (dairy, supplements) from iron-rich meals by 2+ hours."
+
+**Research**: Calcium inhibits non-heme iron absorption when consumed together.
+
+**Action**: "How do calcium and iron interact in my diet?"
+
+---
+
+## Doctor-Level Escalation Rules
+
+These fire at `alert` severity for combinations of markers that warrant medical evaluation. They are designed to surface serious patterns the user should discuss with a physician.
+
+### #58 -- `see_doctor_crp_weight_loss`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | cross |
+| **Severity** | alert |
+| **Data needed** | `ctx.metrics.bloodwork.crp`, `weightEntries` (global, 30-day trend via `computeMetricTrend()`), `ctx.profile.current_weight_kg`, `ctx.profile.primary_goal` |
+| **Goal filter** | Inverse: does NOT fire if goal includes `weight` (intentional weight loss is excluded) |
+
+**Detection logic**: Fires when CRP > 3 mg/L AND weight is trending down AND monthly weight loss exceeds 3% of body weight AND user does NOT have a weight loss goal.
+
+**Headline**: "Talk to your doctor: high inflammation + unexplained weight loss"
+
+**Body**: "Your CRP is {crp} mg/L (significantly elevated) and you've lost ~{monthlyLoss} kg ({pctLoss}%) this month without a weight loss goal. This combination warrants medical evaluation -- please discuss with your doctor."
+
+**Action**: "What could cause high CRP with unexplained weight loss?"
+
+---
+
+### #59 -- `see_doctor_glucose_spike`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | cross |
+| **Severity** | alert |
+| **Data needed** | `ctx.metrics.bloodwork.glucose`, `ctx.metrics.bloodwork.hba1c` |
+| **Goal filter** | None |
+
+**Detection logic**: Fires when fasting glucose >= 126 mg/dL OR HbA1c >= 6.5% (diabetic thresholds per ADA criteria).
+
+**Headline**: "Talk to your doctor: {marker} in diabetic range"
+
+**Body**: "Your {marker} of {value} is at or above {threshold}. This needs medical evaluation -- schedule an appointment with your doctor to discuss next steps."
+
+**Action**: "What does a diabetic-range blood sugar result mean?"
+
+---
+
+### #60 -- `see_doctor_rhr_extreme`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | heart |
+| **Severity** | alert |
+| **Data needed** | `ctx.metrics.hr`, `ctx.metrics.vo2max` (optional, used to exclude elite athletes from bradycardia flag) |
+| **Goal filter** | None |
+
+**Detection logic**: Two trigger conditions:
+- Tachycardia: resting HR >= 100 bpm
+- Bradycardia: resting HR <= 40 bpm AND VO2 max is NOT >= 50 (excludes elite athletes whose low HR is normal)
+
+**Headline**: "Talk to your doctor: {condition}"
+
+**Body**: "Your resting heart rate of {hr} bpm may indicate {condition}. While this can have benign causes, it warrants medical evaluation -- especially if you experience dizziness, fatigue, or shortness of breath."
+
+**Action**: "What causes an abnormal resting heart rate?"
+
+---
+
+## Strength-to-Bodyweight Ratios
+
+### #61 -- `strength_bodyweight_ratio`
+
+| Field | Value |
+|-------|-------|
+| **Domain** | strength |
+| **Severity** | positive (base), dynamically set to `neutral` via template |
+| **Data needed** | `ctx.metrics.strengthData.tests` (bench_1rm, squat_1rm, deadlift_1rm), `ctx.profile.current_weight_kg` |
+| **Goal filter** | `strength` (via `goalIncludes()`) |
+
+**Detection logic**: Converts body weight to lbs. For each available big-3 lift (bench, squat, deadlift), calculates the ratio of lift weight to body weight. Classifies each ratio against standard thresholds:
+
+| Lift | Beginner | Novice | Intermediate | Advanced |
+|------|----------|--------|--------------|----------|
+| Bench | < 0.75x | 0.75-1.0x | 1.0-1.25x | >= 1.5x |
+| Squat | < 1.0x | 1.0-1.25x | 1.25-1.5x | >= 2.0x |
+| Deadlift | < 1.0x | 1.0-1.5x | 1.5-2.0x | >= 2.5x |
+
+Fires when at least one lift has data.
+
+**Headline**: "Strength-to-bodyweight ratios at {weightLbs} lbs"
+
+**Body**: "{Bench: X lbs (Y.Yx bodyweight, level). Squat: ...}. These ratios are more meaningful than raw numbers -- they normalize for body size and are how strength standards are measured."
+
+**Action**: "What are good strength-to-bodyweight ratios for my level?"
+
+---
+
 ## Summary Table
 
 | # | Rule ID | Domain | Default Severity | Goal Filter | Key Data Sources |
@@ -1202,3 +1500,16 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 | 46 | `high_carb_glucose` | cross | attention | -- | Meals (carbs), glucose/HbA1c |
 | 47 | `calorie_weight_discrepancy` | cross | neutral | -- | Meals (calories), weight trend |
 | 48 | `calcium_bone_strength` | nutrition | attention | -- | Meals (Ca, vit D) |
+| 49 | `family_diabetes_glucose` | cross | attention | -- | Family history, glucose/HbA1c |
+| 50 | `family_heart_disease_risk` | cross | attention/alert | -- | Family history, LDL/HDL/trig/CRP/HR |
+| 51 | `family_cholesterol_ldl` | cross | attention | -- | Family history (cholesterol), LDL |
+| 52 | `protein_distribution` | nutrition | attention | strength, weight | Meals (per-meal protein) |
+| 53 | `push_pull_imbalance` | strength | attention | -- | Strength tests (push vs pull percentiles) |
+| 54 | `cardio_strength_balance` | cross | neutral/attention | -- | VO2 max score, strength percentile |
+| 55 | `b12_deficiency` | nutrition | attention | -- | Meals (Vitamin B12) |
+| 56 | `iron_vitamin_c_synergy` | nutrition | neutral/attention | -- | Meals (iron, Vitamin C), sex |
+| 57 | `calcium_iron_conflict` | nutrition | neutral | -- | Meals (iron, calcium), sex |
+| 58 | `see_doctor_crp_weight_loss` | cross | alert | NOT weight | CRP, weight trend, goal |
+| 59 | `see_doctor_glucose_spike` | cross | alert | -- | Glucose, HbA1c |
+| 60 | `see_doctor_rhr_extreme` | heart | alert | -- | HR, VO2 max (optional) |
+| 61 | `strength_bodyweight_ratio` | strength | positive/neutral | strength | Strength tests (big 3), body weight |
