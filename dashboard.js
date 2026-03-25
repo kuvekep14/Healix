@@ -254,7 +254,10 @@ function showPage(id, btn) {
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   if (btn) btn.classList.add('active');
-  if (currentUser) {
+  // Set page title — respect client view mode
+  if (_viewingUserId && _viewingUserName) {
+    document.getElementById('page-title').textContent = escapeHtml(_viewingUserName) + "'s Dashboard";
+  } else if (currentUser) {
     var profileFirst = window.userProfileData && window.userProfileData.first_name;
     var profileFull = window.userProfileData && window.userProfileData.full_name;
     var metaName = currentUser.user_metadata && currentUser.user_metadata.full_name;
@@ -6909,6 +6912,8 @@ async function switchToClientView(ownerId, name) {
   var backBtn = document.getElementById('back-to-my-dashboard');
   if (backBtn) backBtn.style.display = 'flex';
   document.getElementById('page-title').textContent = escapeHtml(name) + "'s Dashboard";
+  var eyebrow = document.getElementById('va-eyebrow');
+  if (eyebrow) eyebrow.textContent = escapeHtml(name).toUpperCase() + "'S VITALITY AGE";
 
   // Highlight the active client in sidebar
   var items = document.querySelectorAll('.client-nav-item');
@@ -6941,6 +6946,8 @@ function switchToOwnView() {
   document.body.classList.remove('shared-mode');
   var backBtn = document.getElementById('back-to-my-dashboard');
   if (backBtn) backBtn.style.display = 'none';
+  var eyebrow = document.getElementById('va-eyebrow');
+  if (eyebrow) eyebrow.textContent = 'YOUR VITALITY AGE';
 
   // Clear active state on client nav items
   var items = document.querySelectorAll('.client-nav-item');
