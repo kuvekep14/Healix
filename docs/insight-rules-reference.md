@@ -18,7 +18,7 @@ Complete reference for the `INSIGHT_RULES` engine in `dashboard.js`. These rules
 
 These fire when a metric crosses from one scoring tier to another (good/fair/low) or when hard thresholds are breached.
 
-### `hr_threshold_crossed`
+### #1 — `hr_threshold_crossed`
 
 | Field | Value |
 |-------|-------|
@@ -40,7 +40,7 @@ These fire when a metric crosses from one scoring tier to another (good/fair/low
 
 ---
 
-### `weight_threshold_crossed`
+### #2 — `weight_threshold_crossed`
 
 | Field | Value |
 |-------|-------|
@@ -61,7 +61,7 @@ These fire when a metric crosses from one scoring tier to another (good/fair/low
 
 ---
 
-### `bloodwork_flagged`
+### #3 — `bloodwork_flagged`
 
 | Field | Value |
 |-------|-------|
@@ -89,7 +89,7 @@ These fire when a metric crosses from one scoring tier to another (good/fair/low
 
 ---
 
-### `sleep_debt_high`
+### #4 — `sleep_debt_high`
 
 | Field | Value |
 |-------|-------|
@@ -121,7 +121,7 @@ These fire when a metric crosses from one scoring tier to another (good/fair/low
 
 These detect directional movement over 7-14 day windows.
 
-### `hr_trend`
+### #5 — `hr_trend`
 
 | Field | Value |
 |-------|-------|
@@ -146,7 +146,7 @@ These detect directional movement over 7-14 day windows.
 
 ---
 
-### `sleep_trend`
+### #6 — `sleep_trend`
 
 | Field | Value |
 |-------|-------|
@@ -169,7 +169,7 @@ These detect directional movement over 7-14 day windows.
 
 ---
 
-### `weight_trend`
+### #7 — `weight_trend`
 
 | Field | Value |
 |-------|-------|
@@ -192,7 +192,7 @@ These detect directional movement over 7-14 day windows.
 
 ---
 
-### `steps_trend`
+### #8 — `steps_trend`
 
 | Field | Value |
 |-------|-------|
@@ -219,7 +219,7 @@ These detect directional movement over 7-14 day windows.
 
 These only fire when the user's `primary_goal` matches specific keywords.
 
-### `protein_deficit`
+### #9 — `protein_deficit`
 
 | Field | Value |
 |-------|-------|
@@ -240,7 +240,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `protein_on_track`
+### #10 — `protein_on_track`
 
 | Field | Value |
 |-------|-------|
@@ -259,7 +259,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `lift_pr`
+### #11 — `lift_pr`
 
 | Field | Value |
 |-------|-------|
@@ -278,7 +278,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `lift_stall`
+### #12 — `lift_stall`
 
 | Field | Value |
 |-------|-------|
@@ -298,7 +298,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `recovery_readiness`
+### #13 — `recovery_readiness`
 
 | Field | Value |
 |-------|-------|
@@ -323,7 +323,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `domain_incomplete`
+### #14 — `domain_incomplete`
 
 | Field | Value |
 |-------|-------|
@@ -342,7 +342,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `training_stale`
+### #15 — `training_stale`
 
 | Field | Value |
 |-------|-------|
@@ -361,7 +361,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 ---
 
-### `calorie_surplus`
+### #16 — `calorie_surplus`
 
 | Field | Value |
 |-------|-------|
@@ -384,7 +384,7 @@ These only fire when the user's `primary_goal` matches specific keywords.
 
 These combine data from two or more domains and include citations from published research.
 
-### `vo2_deep_sleep`
+### #17 — `vo2_deep_sleep`
 
 | Field | Value |
 |-------|-------|
@@ -409,7 +409,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `sleep_rhr_correlation`
+### #18 — `sleep_rhr_correlation`
 
 | Field | Value |
 |-------|-------|
@@ -430,7 +430,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `steps_sleep_efficiency`
+### #19 — `steps_sleep_efficiency`
 
 | Field | Value |
 |-------|-------|
@@ -459,7 +459,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `grip_strength_longevity`
+### #20 — `grip_strength_longevity`
 
 | Field | Value |
 |-------|-------|
@@ -485,7 +485,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `pushup_cardiovascular`
+### #21 — `pushup_cardiovascular`
 
 | Field | Value |
 |-------|-------|
@@ -514,7 +514,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `vo2_rhr_consistency`
+### #22 — `vo2_rhr_consistency`
 
 | Field | Value |
 |-------|-------|
@@ -541,7 +541,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `sleep_glucose`
+### #23 — `sleep_glucose`
 
 | Field | Value |
 |-------|-------|
@@ -562,7 +562,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `sleep_weight_gain`
+### #24 — `sleep_weight_gain`
 
 | Field | Value |
 |-------|-------|
@@ -583,7 +583,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `activity_triglycerides`
+### #25 — `activity_triglycerides`
 
 | Field | Value |
 |-------|-------|
@@ -606,7 +606,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `vo2_hdl`
+### #26 — `vo2_hdl`
 
 | Field | Value |
 |-------|-------|
@@ -633,7 +633,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `strength_crp`
+### #27 — `strength_crp`
 
 | Field | Value |
 |-------|-------|
@@ -662,7 +662,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `weight_rhr`
+### #28 — `weight_rhr`
 
 | Field | Value |
 |-------|-------|
@@ -683,7 +683,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `protein_sleep_quality`
+### #29 — `protein_sleep_quality`
 
 | Field | Value |
 |-------|-------|
@@ -712,7 +712,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `activity_glucose`
+### #30 — `activity_glucose`
 
 | Field | Value |
 |-------|-------|
@@ -735,7 +735,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `overtraining_signal`
+### #31 — `overtraining_signal`
 
 | Field | Value |
 |-------|-------|
@@ -757,7 +757,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `sleep_strength_performance`
+### #32 — `sleep_strength_performance`
 
 | Field | Value |
 |-------|-------|
@@ -778,7 +778,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `weight_hba1c`
+### #33 — `weight_hba1c`
 
 | Field | Value |
 |-------|-------|
@@ -801,7 +801,7 @@ These combine data from two or more domains and include citations from published
 
 ---
 
-### `recovery_compound`
+### #34 — `recovery_compound`
 
 | Field | Value |
 |-------|-------|
@@ -837,7 +837,7 @@ Fires when 2+ pillars are in check.
 
 These cross-reference micronutrient intake from meal logs with sleep, bloodwork, and fitness data. All require 5+ meals logged in the past 7 days.
 
-### `magnesium_sleep`
+### #35 — `magnesium_sleep`
 
 | Field | Value |
 |-------|-------|
@@ -858,7 +858,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `fiber_cholesterol`
+### #36 — `fiber_cholesterol`
 
 | Field | Value |
 |-------|-------|
@@ -879,7 +879,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `omega3_triglycerides`
+### #37 — `omega3_triglycerides`
 
 | Field | Value |
 |-------|-------|
@@ -900,7 +900,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `omega3_inflammation`
+### #38 — `omega3_inflammation`
 
 | Field | Value |
 |-------|-------|
@@ -921,7 +921,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `saturated_fat_ldl`
+### #39 — `saturated_fat_ldl`
 
 | Field | Value |
 |-------|-------|
@@ -942,7 +942,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `vitamin_d_status`
+### #40 — `vitamin_d_status`
 
 | Field | Value |
 |-------|-------|
@@ -965,7 +965,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `iron_energy`
+### #41 — `iron_energy`
 
 | Field | Value |
 |-------|-------|
@@ -987,7 +987,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `zinc_recovery`
+### #42 — `zinc_recovery`
 
 | Field | Value |
 |-------|-------|
@@ -1008,7 +1008,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `sodium_potassium_ratio`
+### #43 — `sodium_potassium_ratio`
 
 | Field | Value |
 |-------|-------|
@@ -1029,7 +1029,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `leucine_muscle_synthesis`
+### #44 — `leucine_muscle_synthesis`
 
 | Field | Value |
 |-------|-------|
@@ -1058,7 +1058,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `late_eating_sleep`
+### #45 — `late_eating_sleep`
 
 | Field | Value |
 |-------|-------|
@@ -1081,7 +1081,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `high_carb_glucose`
+### #46 — `high_carb_glucose`
 
 | Field | Value |
 |-------|-------|
@@ -1102,7 +1102,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `calorie_weight_discrepancy`
+### #47 — `calorie_weight_discrepancy`
 
 | Field | Value |
 |-------|-------|
@@ -1127,7 +1127,7 @@ These cross-reference micronutrient intake from meal logs with sleep, bloodwork,
 
 ---
 
-### `calcium_bone_strength`
+### #48 — `calcium_bone_strength`
 
 | Field | Value |
 |-------|-------|
