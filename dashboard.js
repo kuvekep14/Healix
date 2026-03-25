@@ -1,6 +1,14 @@
 // ── SUPABASE ──
 // SUPABASE_URL and SUPABASE_ANON_KEY are set by config.js (loaded before this file)
 
+// ── SHARED MODE ──
+var _shareToken = new URLSearchParams(window.location.search).get('token');
+var _shareMode = !!_shareToken;
+
+if (_shareMode) {
+  document.body.classList.add('shared-mode');
+}
+
 var currentUser = null, currentSession = null, currentTimeframe = 7;
 var HEALTHBITE_APP_URL = 'https://apps.apple.com/app/healthbite/id6738970819';
 var _hbConnectPollInterval = null;
@@ -107,6 +115,34 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
   });
 }
 
+// ── SHARED MODE PROXY ──
+if (_shareMode) {
+  var _origSupabaseRequest = supabaseRequest;
+  supabaseRequest = function(endpoint, method) {
+    // Only proxy GET requests; block mutations in shared mode
+    if (method && method !== 'GET') {
+      return Promise.resolve(null);
+    }
+    return fetch(SUPABASE_URL + '/functions/v1/proxy-shared-data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ shareToken: _shareToken, endpoint: endpoint })
+    }).then(function(r) {
+      if (!r.ok) return null;
+      var ct = r.headers.get('content-type') || '';
+      if (ct.indexOf('json') === -1) return null;
+      return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
+    }).catch(function(e) {
+      console.error('[Share] Proxy error:', e);
+      return null;
+    });
+  };
+}
+
 // ── AUTH ──
 var _authRedirecting = false;
 function handleAuthFailure() {
@@ -136,6 +172,30 @@ async function ensureFreshToken() {
 }
 
 async function init() {
+  // ── Shared mode: skip auth, load via proxy ──
+  if (_shareMode) {
+    try {
+      // Fetch profile — proxy will inject the correct user_id
+      var profileData = await supabaseRequest(
+        '/rest/v1/profiles?auth_user_id=eq.SHARED&limit=1', 'GET'
+      );
+      if (profileData && Array.isArray(profileData) && profileData.length > 0) {
+        window.userProfileData = profileData[0];
+        currentUser = { id: 'shared' };
+        var sharedName = profileData[0].first_name || 'Someone';
+        document.getElementById('sb-name').textContent = 'Shared by ' + sharedName;
+        document.getElementById('sb-avatar').textContent = sharedName.charAt(0).toUpperCase();
+        document.getElementById('page-title').textContent = sharedName + "'s Dashboard";
+        var navCycle = document.getElementById('nav-cycle');
+        if (navCycle) navCycle.style.display = profileData[0].gender === 'female' ? '' : 'none';
+      }
+      loadDashboardData();
+    } catch(e) {
+      console.error('[Share] Init error:', e);
+    }
+    return;
+  }
+
   var session = await ensureFreshToken();
   if (!session || !session.access_token) { handleAuthFailure(); return; }
   currentSession = session;

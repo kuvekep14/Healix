@@ -1806,3 +1806,14 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 @media (max-width: 500px) {
   .vitality-drivers { grid-template-columns: 1fr; }
 }
+
+/* ── SHARED MODE (read-only) ── */
+.shared-mode .save-btn,
+.shared-mode .upload-btn,
+.shared-mode .weight-log-btn,
+.shared-mode .modal-btn-primary,
+.shared-mode .modal-btn-secondary,
+.shared-mode #page-profile,
+.shared-mode .sidebar-bottom,
+.shared-mode .topbar-right .tf-btn,
+.shared-mode .doc-upload-area { display: none !important; }
