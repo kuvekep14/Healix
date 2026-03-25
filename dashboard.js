@@ -10192,6 +10192,397 @@ var INSIGHT_RULES = [
         action: 'How much calcium do I need and what are the best sources?'
       };
     }
+  },
+
+  // ── Family History Integration ──
+
+  {
+    id: 'family_diabetes_glucose',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile || !ctx.profile.family_history) return null;
+      var fh;
+      try { fh = typeof ctx.profile.family_history === 'string' ? JSON.parse(ctx.profile.family_history) : ctx.profile.family_history; } catch(e) { return null; }
+      var hasDiabetes = (fh['Type 2 Diabetes'] && fh['Type 2 Diabetes'].length > 0) || (fh['Type 1 Diabetes'] && fh['Type 1 Diabetes'].length > 0);
+      if (!hasDiabetes) return null;
+      var glucose = ctx.metrics && ctx.metrics.bloodwork ? ctx.metrics.bloodwork.glucose : null;
+      var hba1c = ctx.metrics && ctx.metrics.bloodwork ? ctx.metrics.bloodwork.hba1c : null;
+      var borderline = (glucose && glucose > 90) || (hba1c && hba1c > 5.4);
+      if (!borderline) return null;
+      var members = fh['Type 2 Diabetes'] || fh['Type 1 Diabetes'] || [];
+      return { members: members.join(', '), glucose: glucose, hba1c: hba1c };
+    },
+    template: function(data) {
+      var markers = [];
+      if (data.glucose) markers.push('fasting glucose of ' + data.glucose + ' mg/dL');
+      if (data.hba1c) markers.push('HbA1c of ' + data.hba1c + '%');
+      return {
+        headline: 'Family diabetes history + borderline blood sugar',
+        body: 'You have family history of diabetes (' + data.members + ') and your ' + markers.join(' and ') + ' is approaching the pre-diabetic threshold. With genetic predisposition, maintaining healthy glucose is more important than for the general population. Focus on sleep (>7h), daily walking, and limiting refined carbs.',
+        action: 'What should I do about borderline blood sugar with family history of diabetes?'
+      };
+    }
+  },
+  {
+    id: 'family_heart_disease_risk',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile || !ctx.profile.family_history) return null;
+      var fh;
+      try { fh = typeof ctx.profile.family_history === 'string' ? JSON.parse(ctx.profile.family_history) : ctx.profile.family_history; } catch(e) { return null; }
+      var heartConditions = ['Heart disease', 'High blood pressure', 'High cholesterol', 'Stroke', 'Sudden cardiac death'];
+      var matches = [];
+      heartConditions.forEach(function(c) { if (fh[c] && fh[c].length > 0) matches.push(c); });
+      if (matches.length === 0) return null;
+      // Check if any cardiovascular markers are borderline
+      var bw = ctx.metrics && ctx.metrics.bloodwork || {};
+      var ldl = bw.ldl, hdl = bw.hdl, trig = bw.triglycerides, crp = bw.crp;
+      var hr = ctx.metrics ? ctx.metrics.hr : null;
+      var concerns = [];
+      if (ldl && ldl > 100) concerns.push('LDL ' + ldl + ' mg/dL');
+      if (hdl && hdl < 45) concerns.push('HDL ' + hdl + ' mg/dL');
+      if (trig && trig > 150) concerns.push('triglycerides ' + trig + ' mg/dL');
+      if (crp && crp > 1) concerns.push('CRP ' + crp + ' mg/L');
+      if (hr && hr > 75) concerns.push('resting HR ' + hr + ' bpm');
+      if (concerns.length === 0) return null;
+      return { conditions: matches, concerns: concerns };
+    },
+    template: function(data) {
+      return {
+        headline: 'Cardiovascular risk factors with family history',
+        body: 'Your family history includes ' + data.conditions.join(', ') + '. Combined with ' + data.concerns.join(', ') + ', your cardiovascular risk profile deserves attention. Consider discussing these markers with your doctor at your next visit.',
+        action: 'What lifestyle changes lower cardiovascular risk with family history?',
+        _severity: 'alert'
+      };
+    }
+  },
+  {
+    id: 'family_cholesterol_ldl',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile || !ctx.profile.family_history) return null;
+      var fh;
+      try { fh = typeof ctx.profile.family_history === 'string' ? JSON.parse(ctx.profile.family_history) : ctx.profile.family_history; } catch(e) { return null; }
+      if (!fh['High cholesterol'] || fh['High cholesterol'].length === 0) return null;
+      var ldl = ctx.metrics && ctx.metrics.bloodwork ? ctx.metrics.bloodwork.ldl : null;
+      if (!ldl || ldl <= 100) return null;
+      return { ldl: ldl, members: fh['High cholesterol'].join(', ') };
+    },
+    template: function(data) {
+      return {
+        headline: 'Elevated LDL with family cholesterol history',
+        body: 'Your LDL of ' + data.ldl + ' mg/dL is above optimal, and your family (' + data.members + ') has a history of high cholesterol. Familial hypercholesterolemia affects ~1 in 250 people — if your LDL stays elevated despite diet and exercise, discuss genetic screening with your doctor.',
+        action: 'Should I be concerned about familial high cholesterol?'
+      };
+    }
+  },
+
+  // ── Protein Distribution ──
+
+  {
+    id: 'protein_distribution',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('strength') && !goalIncludes('weight')) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var todayMeals = ctx.meals.filter(function(m) {
+        return localDateStr(new Date(m.meal_time || m.created_at)) === todayStr;
+      });
+      if (todayMeals.length < 2) return null;
+      var perMeal = todayMeals.map(function(m) {
+        var mac = getMacrosFromMeal(m);
+        return mac.prot || 0;
+      });
+      var maxMeal = Math.max.apply(null, perMeal);
+      var totalProt = perMeal.reduce(function(s, v) { return s + v; }, 0);
+      if (totalProt < 30) return null;
+      // Flag if >60% of protein came from a single meal
+      if (maxMeal / totalProt < 0.6) return null;
+      return { total: Math.round(totalProt), maxMeal: Math.round(maxMeal), meals: todayMeals.length, pct: Math.round((maxMeal / totalProt) * 100) };
+    },
+    template: function(data) {
+      return {
+        headline: data.pct + '% of today\'s protein in one meal',
+        body: data.maxMeal + 'g of your ' + data.total + 'g protein came from a single meal. Research shows muscle protein synthesis maxes out at ~40-50g per meal — spreading protein across 3-4 meals triggers more total synthesis than one large serving. Aim for 30-50g per meal.',
+        action: 'How should I distribute protein across meals?'
+      };
+    }
+  },
+
+  // ── Strength Imbalances ──
+
+  {
+    id: 'push_pull_imbalance',
+    domain: 'strength',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      var tests = ctx.metrics.strengthData.tests;
+      var byKey = {};
+      tests.forEach(function(t) { if (!byKey[t.test_key]) byKey[t.test_key] = t; });
+      var push = byKey['bench_1rm'] || byKey['pushup'];
+      var pull = byKey['pullup'] || byKey['dead_hang'];
+      if (!push || !pull) return null;
+      var pushPctl = push.percentile || 50;
+      var pullPctl = pull.percentile || 50;
+      var gap = Math.abs(pushPctl - pullPctl);
+      if (gap < 25) return null;
+      var pushLabel = push.test_key === 'bench_1rm' ? 'Bench Press' : 'Pushups';
+      var pullLabel = pull.test_key === 'pullup' ? 'Pull-ups' : 'Dead Hang';
+      return { pushLabel: pushLabel, pushPctl: pushPctl, pullLabel: pullLabel, pullPctl: pullPctl, gap: gap, pushDominant: pushPctl > pullPctl };
+    },
+    template: function(data) {
+      var strong = data.pushDominant ? data.pushLabel : data.pullLabel;
+      var weak = data.pushDominant ? data.pullLabel : data.pushLabel;
+      var strongPctl = data.pushDominant ? data.pushPctl : data.pullPctl;
+      var weakPctl = data.pushDominant ? data.pullPctl : data.pushPctl;
+      return {
+        headline: 'Push/pull strength imbalance',
+        body: strong + ' is at the ' + strongPctl + 'th percentile but ' + weak + ' is only ' + weakPctl + 'th. A ' + data.gap + '-point gap between push and pull increases shoulder injury risk. Prioritize ' + weak.toLowerCase() + ' training to close the gap.',
+        action: 'How do I fix a push/pull strength imbalance?'
+      };
+    }
+  },
+  {
+    id: 'cardio_strength_balance',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.metrics) return null;
+      var vo2 = ctx.metrics.vo2max;
+      var strength = ctx.metrics.strengthData;
+      if (vo2 === null || !strength) return null;
+      var vo2Score = typeof scoreVO2 === 'function' ? scoreVO2(vo2, ctx.profile) : null;
+      var strScore = strength.avgPercentile;
+      if (vo2Score === null || !strScore) return null;
+      var gap = Math.abs(vo2Score - strScore);
+      if (gap < 25) return null;
+      return { vo2Score: vo2Score, strScore: strScore, gap: gap, cardioWeak: vo2Score < strScore };
+    },
+    template: function(data) {
+      var sev = 'attention';
+      if (data.cardioWeak) {
+        return {
+          headline: 'Strong but aerobically underdeveloped',
+          body: 'Your strength is at the ' + data.strScore + 'th percentile but VO2 max is only ' + data.vo2Score + 'th — a ' + data.gap + '-point gap. VO2 max is the single strongest predictor of all-cause mortality. Adding 2-3 cardio sessions per week would dramatically improve your longevity profile without sacrificing strength.',
+          action: 'How can I improve cardio without losing strength?',
+          _severity: sev
+        };
+      }
+      return {
+        headline: 'Good cardio but strength lagging',
+        body: 'Your VO2 max is at the ' + data.vo2Score + 'th percentile but strength is only ' + data.strScore + 'th — a ' + data.gap + '-point gap. Muscle mass and strength independently predict longevity. Adding 2-3 resistance training sessions per week would balance your fitness profile.',
+        action: 'How can I build strength without losing cardio fitness?',
+        _severity: sev
+      };
+    }
+  },
+
+  // ── Additional Micronutrient Rules ──
+
+  {
+    id: 'b12_deficiency',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyB12 = (totals['Vitamin B12'] || 0) / days;
+      if (dailyB12 >= 2.0) return null; // ~83% of 2.4mcg RDA
+      return { daily: Math.round(dailyB12 * 10) / 10, pctRda: Math.round((dailyB12 / 2.4) * 100) };
+    },
+    template: function(data) {
+      return {
+        headline: 'Vitamin B12 intake is low',
+        body: 'You\'re averaging ' + data.daily + ' mcg B12/day (' + data.pctRda + '% of RDA). B12 is essential for energy production, nerve function, and red blood cell formation. Deficiency causes fatigue, weakness, and cognitive issues. Found primarily in animal products — vegetarians and vegans are especially at risk. Supplementation is cheap and effective.',
+        action: 'Should I supplement vitamin B12?'
+      };
+    }
+  },
+  {
+    id: 'iron_vitamin_c_synergy',
+    domain: 'nutrition',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyIron = (totals['Iron'] || 0) / days;
+      var dailyC = (totals['Vitamin C'] || 0) / days;
+      var sex = (ctx.profile && ctx.profile.sex) || 'male';
+      var ironRda = sex === 'female' ? 18 : 8;
+      // Only fire if iron is low AND vitamin C is also low
+      if (dailyIron >= ironRda * 0.7) return null;
+      if (dailyC >= 60) return null; // Getting enough C
+      return { iron: Math.round(dailyIron * 10) / 10, vitC: Math.round(dailyC), ironRda: ironRda };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low iron + low vitamin C impairs absorption',
+        body: 'You\'re averaging ' + data.iron + 'mg iron/day (RDA: ' + data.ironRda + 'mg) and only ' + data.vitC + 'mg vitamin C. Vitamin C increases non-heme iron absorption by 2-3x — pairing iron-rich foods with citrus, peppers, or tomatoes is one of the simplest nutritional optimizations you can make.',
+        action: 'How can I improve my iron absorption?',
+        _severity: 'attention'
+      };
+    }
+  },
+  {
+    id: 'calcium_iron_conflict',
+    domain: 'nutrition',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      // Check if user has both low iron and high calcium in same meals
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyIron = (totals['Iron'] || 0) / days;
+      var dailyCa = (totals['Calcium'] || 0) / days;
+      var sex = (ctx.profile && ctx.profile.sex) || 'male';
+      var ironRda = sex === 'female' ? 18 : 8;
+      // Fire if iron is low but calcium is adequate+ (suggests calcium may be blocking)
+      if (dailyIron >= ironRda * 0.6) return null;
+      if (dailyCa < 800) return null; // Not enough calcium to be blocking
+      return { iron: Math.round(dailyIron * 10) / 10, calcium: Math.round(dailyCa), ironRda: ironRda };
+    },
+    template: function(data) {
+      return {
+        headline: 'Calcium may be blocking iron absorption',
+        body: 'Your iron intake is only ' + data.iron + 'mg/day (RDA: ' + data.ironRda + 'mg) while calcium is ' + data.calcium + 'mg/day. Calcium inhibits iron absorption when consumed together. Try separating calcium-rich foods (dairy, supplements) from iron-rich meals by 2+ hours.',
+        action: 'How do calcium and iron interact in my diet?'
+      };
+    }
+  },
+
+  // ── Doctor-Level Escalation Rules ──
+
+  {
+    id: 'see_doctor_crp_weight_loss',
+    domain: 'cross',
+    severity: 'alert',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var crp = ctx.metrics.bloodwork.crp;
+      if (!crp || crp <= 3) return null;
+      // Check for unexplained weight loss
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var trend = computeMetricTrend(points, 30);
+      if (!trend || trend.direction !== 'down') return null;
+      var monthlyLoss = Math.abs(trend.slope * 30);
+      var pctLoss = ctx.profile && ctx.profile.current_weight_kg ? (monthlyLoss / ctx.profile.current_weight_kg) * 100 : 0;
+      // Flag if losing >3% body weight/month without a weight loss goal
+      if (pctLoss < 3) return null;
+      if (goalIncludes('weight')) return null; // Intentional weight loss
+      return { crp: crp, monthlyLoss: Math.round(monthlyLoss * 10) / 10, pctLoss: Math.round(pctLoss * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Talk to your doctor: high inflammation + unexplained weight loss',
+        body: 'Your CRP is ' + data.crp + ' mg/L (significantly elevated) and you\'ve lost ~' + data.monthlyLoss + ' kg (' + data.pctLoss + '%) this month without a weight loss goal. This combination warrants medical evaluation — please discuss with your doctor.',
+        action: 'What could cause high CRP with unexplained weight loss?'
+      };
+    }
+  },
+  {
+    id: 'see_doctor_glucose_spike',
+    domain: 'cross',
+    severity: 'alert',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var glucose = ctx.metrics.bloodwork.glucose;
+      var hba1c = ctx.metrics.bloodwork.hba1c;
+      if (glucose && glucose >= 126) return { marker: 'fasting glucose', value: glucose + ' mg/dL', threshold: '126 mg/dL (diabetic range)' };
+      if (hba1c && hba1c >= 6.5) return { marker: 'HbA1c', value: hba1c + '%', threshold: '6.5% (diabetic range)' };
+      return null;
+    },
+    template: function(data) {
+      return {
+        headline: 'Talk to your doctor: ' + data.marker + ' in diabetic range',
+        body: 'Your ' + data.marker + ' of ' + data.value + ' is at or above ' + data.threshold + '. This needs medical evaluation — schedule an appointment with your doctor to discuss next steps.',
+        action: 'What does a diabetic-range blood sugar result mean?'
+      };
+    }
+  },
+  {
+    id: 'see_doctor_rhr_extreme',
+    domain: 'heart',
+    severity: 'alert',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      var hr = ctx.metrics.hr;
+      if (hr >= 100) return { hr: hr, condition: 'tachycardia (resting HR above 100 bpm)' };
+      if (hr <= 40 && !(ctx.metrics.vo2max && ctx.metrics.vo2max >= 50)) return { hr: hr, condition: 'bradycardia (resting HR below 40 bpm)' };
+      return null;
+    },
+    template: function(data) {
+      return {
+        headline: 'Talk to your doctor: ' + data.condition,
+        body: 'Your resting heart rate of ' + data.hr + ' bpm may indicate ' + data.condition + '. While this can have benign causes, it warrants medical evaluation — especially if you experience dizziness, fatigue, or shortness of breath.',
+        action: 'What causes an abnormal resting heart rate?'
+      };
+    }
+  },
+
+  // ── Strength-to-Bodyweight Ratios ──
+
+  {
+    id: 'strength_bodyweight_ratio',
+    domain: 'strength',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      if (!ctx.profile || !ctx.profile.current_weight_kg) return null;
+      var weightLbs = Math.round(ctx.profile.current_weight_kg * 2.205);
+      var tests = ctx.metrics.strengthData.tests;
+      var byKey = {};
+      tests.forEach(function(t) { if (!byKey[t.test_key]) byKey[t.test_key] = t; });
+      var ratios = [];
+      var lifts = ['bench_1rm', 'squat_1rm', 'deadlift_1rm'];
+      var labels = { bench_1rm: 'Bench', squat_1rm: 'Squat', deadlift_1rm: 'Deadlift' };
+      var standards = { bench_1rm: [0.75, 1.0, 1.25, 1.5], squat_1rm: [1.0, 1.25, 1.5, 2.0], deadlift_1rm: [1.0, 1.5, 2.0, 2.5] };
+      for (var i = 0; i < lifts.length; i++) {
+        var k = lifts[i];
+        if (!byKey[k]) continue;
+        var raw = parseFloat(byKey[k].raw_value);
+        var ratio = Math.round((raw / weightLbs) * 100) / 100;
+        var std = standards[k];
+        var level = ratio >= std[3] ? 'advanced' : ratio >= std[2] ? 'intermediate' : ratio >= std[1] ? 'novice' : 'beginner';
+        ratios.push({ label: labels[k], raw: Math.round(raw), ratio: ratio, level: level });
+      }
+      if (ratios.length === 0) return null;
+      return { ratios: ratios, weightLbs: weightLbs };
+    },
+    template: function(data) {
+      var lines = data.ratios.map(function(r) { return r.label + ': ' + r.raw + ' lbs (' + r.ratio + 'x bodyweight, ' + r.level + ')'; });
+      var headline = 'Strength-to-bodyweight ratios at ' + data.weightLbs + ' lbs';
+      return {
+        headline: headline,
+        body: lines.join('. ') + '. These ratios are more meaningful than raw numbers — they normalize for body size and are how strength standards are measured.',
+        action: 'What are good strength-to-bodyweight ratios for my level?',
+        _severity: 'neutral'
+      };
+    }
   }
 ];
 
