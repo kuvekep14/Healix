@@ -55,6 +55,10 @@
         <span class="nav-icon">◎</span> AI Chat
       </a>
     </div>
+    <div class="nav-section" id="shared-with-me-section" style="display:none">
+      <span class="nav-section-label">Shared with Me</span>
+      <div id="shared-with-me-list"></div>
+    </div>
     <div class="nav-section">
       <span class="nav-section-label">Account</span>
       <button class="nav-item" onclick="showPage('profile', this)">
@@ -84,6 +88,10 @@
   <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-left">
+      <button class="back-to-dashboard-btn" id="back-to-my-dashboard" onclick="switchToOwnView()" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to My Dashboard
+      </button>
       <div class="topbar-title" id="page-title">Dashboard</div>
     </div>
     <div class="topbar-right">
@@ -841,18 +849,19 @@
           <button class="save-btn" onclick="saveMedicalProfile()" style="margin-top:16px">Save Allergies</button>
         </div>
 
-        <!-- Share with Coach -->
+        <!-- Dashboard Sharing -->
         <div class="card span-2">
-          <div class="profile-section-title">Share with <em>Coach</em></div>
-          <p style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;line-height:1.6">Give coaches or practitioners a live, read-only view of your dashboard. Each person gets their own link you can revoke at any time.</p>
+          <div class="profile-section-title">Dashboard <em>Sharing</em></div>
+          <p style="font-size:12px;color:var(--cream-dim);margin-bottom:16px;line-height:1.6">Give coaches or practitioners a live, read-only view of your dashboard. They must have a Healix account. You can revoke access at any time.</p>
 
-          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:20px">
+          <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
             <div style="flex:1">
-              <label class="modal-label">Name</label>
-              <input class="modal-input" id="share-person-name" type="text" placeholder='e.g. "My trainer", "Dr. Smith"'>
+              <label class="modal-label">Email address</label>
+              <input class="modal-input" id="share-email-input" type="email" placeholder="coach@example.com">
             </div>
-            <button class="save-btn" style="width:auto;padding:13px 24px;margin:0;flex-shrink:0" onclick="addSharePerson()">Share</button>
+            <button class="save-btn" style="width:auto;padding:13px 24px;margin:0;flex-shrink:0" onclick="grantShareAccess()">Grant Access</button>
           </div>
+          <div id="share-alert" style="display:none;font-size:11px;margin-bottom:16px;padding:0 2px"></div>
 
           <div id="share-people" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>

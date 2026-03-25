@@ -1,13 +1,10 @@
 // ── SUPABASE ──
 // SUPABASE_URL and SUPABASE_ANON_KEY are set by config.js (loaded before this file)
 
-// ── SHARED MODE ──
-var _shareToken = new URLSearchParams(window.location.search).get('token');
-var _shareMode = !!_shareToken;
-
-if (_shareMode) {
-  document.body.classList.add('shared-mode');
-}
+// ── CLIENT VIEW (account-based sharing) ──
+var _viewingUserId = null;   // set when a coach switches to a client's dashboard
+var _viewingUserName = null;
+var _origSupabaseRequest = null;
 
 var currentUser = null, currentSession = null, currentTimeframe = 7;
 var HEALTHBITE_APP_URL = 'https://apps.apple.com/app/healthbite/id6738970819';
@@ -115,33 +112,6 @@ function supabaseRequest(endpoint, method, body, token, extraHeaders) {
   });
 }
 
-// ── SHARED MODE PROXY ──
-if (_shareMode) {
-  var _origSupabaseRequest = supabaseRequest;
-  supabaseRequest = function(endpoint, method) {
-    // Only proxy GET requests; block mutations in shared mode
-    if (method && method !== 'GET') {
-      return Promise.resolve(null);
-    }
-    return fetch(SUPABASE_URL + '/functions/v1/proxy-shared-data', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
-      },
-      body: JSON.stringify({ shareToken: _shareToken, endpoint: endpoint })
-    }).then(function(r) {
-      if (!r.ok) return null;
-      var ct = r.headers.get('content-type') || '';
-      if (ct.indexOf('json') === -1) return null;
-      return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
-    }).catch(function(e) {
-      console.error('[Share] Proxy error:', e);
-      return null;
-    });
-  };
-}
 
 // ── AUTH ──
 var _authRedirecting = false;
@@ -172,30 +142,6 @@ async function ensureFreshToken() {
 }
 
 async function init() {
-  // ── Shared mode: skip auth, load via proxy ──
-  if (_shareMode) {
-    try {
-      // Fetch profile — proxy will inject the correct user_id
-      var profileData = await supabaseRequest(
-        '/rest/v1/profiles?auth_user_id=eq.SHARED&limit=1', 'GET'
-      );
-      if (profileData && Array.isArray(profileData) && profileData.length > 0) {
-        window.userProfileData = profileData[0];
-        currentUser = { id: 'shared' };
-        var sharedName = profileData[0].first_name || 'Someone';
-        document.getElementById('sb-name').textContent = 'Shared by ' + sharedName;
-        document.getElementById('sb-avatar').textContent = sharedName.charAt(0).toUpperCase();
-        document.getElementById('page-title').textContent = sharedName + "'s Dashboard";
-        var navCycle = document.getElementById('nav-cycle');
-        if (navCycle) navCycle.style.display = profileData[0].gender === 'female' ? '' : 'none';
-      }
-      loadDashboardData();
-    } catch(e) {
-      console.error('[Share] Init error:', e);
-    }
-    return;
-  }
-
   var session = await ensureFreshToken();
   if (!session || !session.access_token) { handleAuthFailure(); return; }
   currentSession = session;
@@ -225,7 +171,7 @@ async function init() {
         window.userProfileData = profileData[0];
         console.log('[Healix] profile loaded:', Object.keys(window.userProfileData), 'birth_date:', window.userProfileData.birth_date);
         populateProfileForm(profileData[0]);
-        loadShareState();
+        loadShareDetails();
         // Update sidebar and greeting with profile name
         // Try first_name, then full_name from profile, then full_name from auth metadata
         var profileFirst = profileData[0].first_name
@@ -6732,101 +6678,251 @@ function safeMarkdownDashboard(text) {
     .replace(/\n/g, '<br>');
 }
 
-// ── COACH SHARING ──
-// Each person gets their own token/link. Revoking a person kills their specific link.
+// ── ACCOUNT-BASED SHARING ──
+// Users grant access by email to coaches who have Healix accounts.
+// Coaches see a "Shared with Me" section in the sidebar to switch to client views.
 
-async function loadShareState() {
+var _shareDetails = { myShares: [], sharedWithMe: [] };
+
+async function loadShareDetails() {
   var session = getSession();
   if (!session || !session.access_token) return;
 
   try {
-    var shares = await supabaseRequest(
-      '/rest/v1/shared_dashboards?user_id=eq.' + session.user.id + '&is_active=eq.true&order=created_at.desc',
-      'GET', null, session.access_token
-    );
-    renderSharePeople(shares);
+    var res = await fetch(SUPABASE_URL + '/functions/v1/get-share-details', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + session.access_token
+      },
+      body: '{}'
+    });
+    if (!res.ok) return;
+    _shareDetails = await res.json();
+
+    renderSharePeople(_shareDetails.myShares);
+    renderSharedWithMe(_shareDetails.sharedWithMe);
   } catch (e) {
-    console.error('[Share] Error loading state:', e);
+    console.error('[Share] Error loading details:', e);
   }
 }
 
-async function addSharePerson() {
-  var input = document.getElementById('share-person-name');
-  var name = (input.value || '').trim();
-  if (!name) return;
+async function grantShareAccess() {
+  var input = document.getElementById('share-email-input');
+  var alertEl = document.getElementById('share-alert');
+  var email = (input.value || '').trim();
+  if (!email) return;
 
+  alertEl.style.display = 'none';
   var session = getSession();
   if (!session || !session.access_token) return;
 
-  var arr = new Uint8Array(16);
-  crypto.getRandomValues(arr);
-  var shareToken = Array.from(arr).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-
   try {
-    await supabaseRequest('/rest/v1/shared_dashboards', 'POST', {
-      user_id: session.user.id,
-      share_token: shareToken,
-      is_active: true,
-      label: name
-    }, session.access_token);
+    // 1. Look up user by email
+    var lookupRes = await fetch(SUPABASE_URL + '/functions/v1/lookup-user-by-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + session.access_token
+      },
+      body: JSON.stringify({ email: email })
+    });
+
+    if (!lookupRes.ok) {
+      var err = await lookupRes.json().catch(function() { return {}; });
+      if (err.error === 'not_found') {
+        showShareAlert('No Healix account found for this email.', 'error');
+      } else if (err.error === 'cannot_share_self') {
+        showShareAlert('You cannot share your dashboard with yourself.', 'error');
+      } else {
+        showShareAlert('Something went wrong. Please try again.', 'error');
+      }
+      return;
+    }
+
+    var target = await lookupRes.json();
+
+    // 2. Insert dashboard_permissions row via PostgREST
+    await supabaseRequest('/rest/v1/dashboard_permissions', 'POST', {
+      owner_id: session.user.id,
+      viewer_id: target.userId
+    }, session.access_token, { 'Prefer': 'return=minimal' });
 
     input.value = '';
-    loadShareState();
+    var name = [target.firstName, target.lastName].filter(Boolean).join(' ') || email;
+    showShareAlert('Access granted to ' + name + '.', 'success');
+    loadShareDetails();
   } catch (e) {
-    console.error('[Share] Error adding person:', e);
+    console.error('[Share] Error granting access:', e);
+    // Duplicate key means already shared
+    if (e.message && e.message.indexOf('409') !== -1) {
+      showShareAlert('This person already has access.', 'error');
+    } else {
+      showShareAlert('Something went wrong. Please try again.', 'error');
+    }
   }
 }
 
-async function revokeSharePerson(shareId) {
+function showShareAlert(msg, type) {
+  var alertEl = document.getElementById('share-alert');
+  if (!alertEl) return;
+  alertEl.textContent = msg;
+  alertEl.style.display = 'block';
+  alertEl.style.color = type === 'error' ? 'var(--down)' : 'var(--up)';
+}
+
+async function revokeShareAccess(permId) {
   var session = getSession();
   if (!session || !session.access_token) return;
 
   try {
     await supabaseRequest(
-      '/rest/v1/shared_dashboards?id=eq.' + shareId,
-      'PATCH', { is_active: false }, session.access_token
+      '/rest/v1/dashboard_permissions?id=eq.' + permId,
+      'DELETE', null, session.access_token
     );
-    loadShareState();
+    loadShareDetails();
   } catch (e) {
     console.error('[Share] Error revoking:', e);
   }
-}
-
-function copyPersonLink(token) {
-  var base = window.location.pathname.startsWith('/dev/') ? '/dev/' : '/';
-  var url = window.location.origin + base + 'dashboard.html?token=' + token;
-  navigator.clipboard.writeText(url).catch(function() {});
 }
 
 function renderSharePeople(shares) {
   var container = document.getElementById('share-people');
   if (!container) return;
 
-  if (!shares || !Array.isArray(shares) || shares.length === 0) {
+  if (!shares || shares.length === 0) {
     container.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">No one has access yet.</div>';
     return;
   }
 
   var html = '';
   shares.forEach(function(s) {
-    var name = s.label || 'Unnamed';
-    var dateStr = new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    var name = [s.firstName, s.lastName].filter(Boolean).join(' ') || s.email || 'Unknown';
+    var sub = s.email || '';
 
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--dark-3);border:1px solid var(--gold-border)">';
     html += '<div style="display:flex;align-items:center;gap:10px">';
     html += '<div style="width:28px;height:28px;border:1px solid var(--gold-border);display:grid;place-items:center;font-size:11px;color:var(--gold);font-family:var(--F)">' + escapeHtml(name.charAt(0).toUpperCase()) + '</div>';
     html += '<div>';
     html += '<div style="font-size:13px;color:var(--cream)">' + escapeHtml(name) + '</div>';
-    html += '<div style="font-size:10px;color:var(--muted);margin-top:2px">Shared ' + dateStr + '</div>';
+    if (sub) html += '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + escapeHtml(sub) + '</div>';
     html += '</div>';
     html += '</div>';
-    html += '<div style="display:flex;gap:8px;align-items:center">';
-    html += '<button onclick="copyPersonLink(\'' + s.share_token + '\')" style="background:none;border:1px solid var(--gold-border);color:var(--cream-dim);font-family:var(--B);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;cursor:pointer;transition:all .2s">Copy Link</button>';
-    html += '<button onclick="revokeSharePerson(\'' + s.id + '\')" style="background:none;border:1px solid var(--error-border);color:var(--down);font-family:var(--B);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;cursor:pointer;transition:all .2s">Revoke</button>';
-    html += '</div>';
+    html += '<button onclick="revokeShareAccess(\'' + s.id + '\')" style="background:none;border:1px solid var(--error-border);color:var(--down);font-family:var(--B);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;cursor:pointer;transition:all .2s">Revoke</button>';
     html += '</div>';
   });
   container.innerHTML = html;
+}
+
+// ── SHARED WITH ME (coach sidebar) ──
+
+function renderSharedWithMe(clients) {
+  var container = document.getElementById('shared-with-me-list');
+  var section = document.getElementById('shared-with-me-section');
+  if (!container || !section) return;
+
+  if (!clients || clients.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  var html = '';
+  clients.forEach(function(c) {
+    var name = [c.firstName, c.lastName].filter(Boolean).join(' ') || 'Client';
+    var initial = name.charAt(0).toUpperCase();
+    html += '<button class="nav-item client-nav-item" onclick="switchToClientView(\'' + c.ownerId + '\', \'' + escapeHtml(name).replace(/'/g, "\\'") + '\')">';
+    html += '<span class="client-avatar">' + escapeHtml(initial) + '</span> ' + escapeHtml(name);
+    html += '</button>';
+  });
+  container.innerHTML = html;
+}
+
+// ── CLIENT VIEW SWITCHER ──
+
+function switchToClientView(ownerId, name) {
+  var session = getSession();
+  if (!session || !session.access_token) return;
+
+  _viewingUserId = ownerId;
+  _viewingUserName = name;
+
+  // Override supabaseRequest to proxy through the edge function
+  if (!_origSupabaseRequest) {
+    _origSupabaseRequest = supabaseRequest;
+  }
+  supabaseRequest = function(endpoint, method, body, token, extraHeaders) {
+    // Block mutations in client view
+    if (method && method !== 'GET') {
+      return Promise.resolve(null);
+    }
+    var sess = getSession();
+    return fetch(SUPABASE_URL + '/functions/v1/proxy-shared-data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + (sess ? sess.access_token : SUPABASE_ANON_KEY)
+      },
+      body: JSON.stringify({ viewUserId: ownerId, endpoint: endpoint })
+    }).then(function(r) {
+      if (!r.ok) return null;
+      var ct = r.headers.get('content-type') || '';
+      if (ct.indexOf('json') === -1) return null;
+      return r.text().then(function(t) { return t ? JSON.parse(t) : null; });
+    }).catch(function(e) {
+      console.error('[Share] Proxy error:', e);
+      return null;
+    });
+  };
+
+  // Visual: add shared-mode class, show back button, update header
+  document.body.classList.add('shared-mode');
+  var backBtn = document.getElementById('back-to-my-dashboard');
+  if (backBtn) backBtn.style.display = 'flex';
+  document.getElementById('page-title').textContent = escapeHtml(name) + "'s Dashboard";
+
+  // Highlight the active client in sidebar
+  var items = document.querySelectorAll('.client-nav-item');
+  items.forEach(function(el) { el.classList.remove('active'); });
+  // Find matching button
+  items.forEach(function(el) {
+    if (el.textContent.trim().indexOf(name) !== -1) el.classList.add('active');
+  });
+
+  // Navigate to dashboard page and reload data
+  showPage('dashboard', document.querySelector('.nav-item'));
+  loadDashboardData();
+}
+
+function switchToOwnView() {
+  // Restore original supabaseRequest
+  if (_origSupabaseRequest) {
+    supabaseRequest = _origSupabaseRequest;
+    _origSupabaseRequest = null;
+  }
+
+  _viewingUserId = null;
+  _viewingUserName = null;
+
+  document.body.classList.remove('shared-mode');
+  var backBtn = document.getElementById('back-to-my-dashboard');
+  if (backBtn) backBtn.style.display = 'none';
+
+  // Clear active state on client nav items
+  var items = document.querySelectorAll('.client-nav-item');
+  items.forEach(function(el) { el.classList.remove('active'); });
+
+  // Restore own name in header
+  var profile = window.userProfileData;
+  var firstName = profile ? (profile.first_name || '') : '';
+  document.getElementById('page-title').textContent = greet() + ', ' + (firstName || 'there');
+
+  // Reload own data
+  showPage('dashboard', document.querySelector('.nav-item'));
+  loadDashboardData();
 }
 
 // ── SHARE/EXPORT ──
