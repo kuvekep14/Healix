@@ -342,7 +342,13 @@ async function loadUserProfile() {
     var userData = await supabaseRequest('/auth/v1/user', 'GET', null, session.access_token);
     if (userData && userData.id) {
       currentUser = userData;
-      var profile = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + userData.id + '&select=first_name,last_name&limit=1', 'GET', null, session.access_token);
+      var profile = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + userData.id + '&select=first_name,last_name,subscription_tier&limit=1', 'GET', null, session.access_token);
+      // Chat paywall: redirect free users to dashboard
+      var tier = (profile && profile[0] && profile[0].subscription_tier) || 'free';
+      if (tier !== 'premium' && tier !== 'clinical') {
+        window.location.href = 'dashboard.html?upgrade=1';
+        return;
+      }
       var profileFirst = profile && profile[0] && profile[0].first_name;
       if (profileFirst) {
         updateWelcomeName(profileFirst);

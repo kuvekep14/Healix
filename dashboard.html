@@ -51,7 +51,7 @@
     </div>
     <div class="nav-section">
       <span class="nav-section-label">Tools</span>
-      <a href="chat.html" class="nav-item">
+      <a href="#" class="nav-item" onclick="event.preventDefault();if(isChatAllowed()){window.location.href='chat.html'}else{showUpgradeModal()}">
         <span class="nav-icon">◎</span> AI Chat
       </a>
     </div>
@@ -111,6 +111,9 @@
           <div class="sync-banner-text" id="sync-banner-text">HealthBite hasn't synced recently. Open the app to refresh your data.</div>
           <span class="sync-banner-cta">Open HealthBite</span>
         </div>
+
+        <!-- Insight alert banner (severity=alert only) -->
+        <div id="insight-alert-banner" style="display:none"></div>
 
         <!-- Hero: Vitality Age -->
         <div class="vitality-hero">
@@ -258,6 +261,12 @@
 
         <!-- Boss insight (proactive AI) -->
         <div id="boss-insight-card" style="display:none"></div>
+
+        <!-- Insight feed ("What's Happening") -->
+        <div id="insight-feed-section" style="display:none">
+          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">What's Happening</div>
+          <div id="insight-feed-list"></div>
+        </div>
 
         <!-- Onboarding checklist -->
         <div id="onboarding-checklist" style="display:none"></div>
@@ -1346,6 +1355,18 @@
   <div class="cw-resize-handle cw-rh-nw" data-handle="nw"></div>
   <div class="cw-resize-handle cw-rh-se" data-handle="se"></div>
   <div class="cw-resize-handle cw-rh-sw" data-handle="sw"></div>
+</div>
+
+<!-- Upgrade Modal -->
+<div class="modal-overlay" id="upgrade-modal">
+  <div class="upgrade-modal-box">
+    <button class="upgrade-modal-close" onclick="closeUpgradeModal()">&times;</button>
+    <div class="upgrade-modal-icon">&#9670;</div>
+    <div class="upgrade-modal-title">Unlock AI Health Chat</div>
+    <div class="upgrade-modal-body">Get personalized answers about your health data from Healix AI. Ask follow-up questions, explore trends, and get actionable recommendations.</div>
+    <a href="#" class="upgrade-modal-btn" id="upgrade-cta-btn">Upgrade to Premium</a>
+    <button class="upgrade-modal-skip" onclick="closeUpgradeModal()">Maybe Later</button>
+  </div>
 </div>
 
 <script src="config.js"></script>

@@ -173,7 +173,18 @@
 
   // ── OPEN / CLOSE / TOGGLE ──
 
+  function checkChatTier() {
+    var tier = (window.userProfileData && window.userProfileData.subscription_tier) || 'free';
+    return tier === 'premium' || tier === 'clinical';
+  }
+
   function open(prefillQuestion) {
+    // Chat paywall: free users see upgrade modal
+    if (!checkChatTier()) {
+      if (typeof showUpgradeModal === 'function') showUpgradeModal();
+      return;
+    }
+
     state.isOpen = true;
     els.window.classList.remove('hidden');
     els.fab.classList.add('hidden');
@@ -248,6 +259,10 @@
   // ── OPEN WITH QUESTION ──
 
   function openWithQuestion(question) {
+    if (!checkChatTier()) {
+      if (typeof showUpgradeModal === 'function') showUpgradeModal();
+      return;
+    }
     open();
     startNewChat();
     els.textarea.value = question;
@@ -411,6 +426,11 @@
   async function sendMessage() {
     var text = els.textarea.value.trim();
     if (!text || state.isStreaming) return;
+    // Chat paywall check
+    if (!checkChatTier()) {
+      if (typeof showUpgradeModal === 'function') showUpgradeModal();
+      return;
+    }
     state.isStreaming = true;
     hideWelcome();
     addMessage('user', text);

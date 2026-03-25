@@ -186,6 +186,12 @@ async function init() {
         // Show Cycle nav for female users
         var navCycle = document.getElementById('nav-cycle');
         if (navCycle) navCycle.style.display = profileData[0].gender === 'female' ? '' : 'none';
+        // Dynamic plan label
+        var planEl = document.querySelector('.user-plan');
+        if (planEl) {
+          var tier = profileData[0].subscription_tier || 'free';
+          planEl.textContent = tier === 'premium' ? 'Premium' : tier === 'clinical' ? 'Clinical' : 'Free';
+        }
       } else {
         // No profile row — onboarding will handle creation
         window.userProfileData = null;
@@ -228,6 +234,15 @@ async function init() {
       renderMilestones();
       renderSmartEmptyStates(window._lastVitalityResult);
       loadBossInsight();
+      // Run deterministic insight engine
+      var insightCtx = buildInsightContext();
+      var insights = runInsightRules(insightCtx);
+      renderInsightFeed(insights);
+      // Show upgrade modal if redirected from chat.html
+      if (window.location.search.indexOf('upgrade=1') !== -1) {
+        showUpgradeModal();
+        history.replaceState(null, '', window.location.pathname);
+      }
     });
     initSectionIntros();
     loadFamilyHistoryForm();
@@ -729,9 +744,12 @@ function toggleDriverExplainer(key) {
   var show = el.style.display === 'none';
   // Close all other explainers
   document.querySelectorAll('.driver-explainer').forEach(function(e) { e.style.display = 'none'; });
-  if (show && DRIVER_EXPLAINERS[key]) {
-    el.textContent = DRIVER_EXPLAINERS[key];
-    el.style.display = 'block';
+  if (show) {
+    // Try dynamic explainer first, fall back to static
+    var ctx = buildInsightContext();
+    var dynamic = computeDriverExplainer(key, ctx);
+    el.textContent = dynamic || DRIVER_EXPLAINERS[key] || '';
+    if (el.textContent) el.style.display = 'block';
   }
 }
 
@@ -1650,6 +1668,7 @@ async function loadDashboardData() {
         if (!byType[r.metric_type]) byType[r.metric_type] = [];
         byType[r.metric_type].push(r);
       });
+      window._lastHealthByType = byType;
       console.log('[Healix] health metric types:', Object.keys(byType));
 
       // Sleep — session-based processing per CTO spec
@@ -7184,16 +7203,14 @@ function calcAge(birthDate) {
 }
 
 // ── PREMIUM GATES ──
-// TODO: When beta ends, integrate Stripe and update getUserTier() to check subscription status.
-// The renderPremiumGate() CTA currently links to profile page, which has no upgrade flow yet.
 function getUserTier() {
-  // For now, all users are premium during beta
   var profile = window.userProfileData || {};
-  return profile.tier || 'premium';
+  return profile.subscription_tier || 'free';
 }
 
 function isPremium() {
-  return getUserTier() === 'premium';
+  var tier = getUserTier();
+  return tier === 'premium' || tier === 'clinical';
 }
 
 function renderPremiumGate(containerId, featureName) {
@@ -8581,6 +8598,1812 @@ function showCycleEmpty(show) {
     var cards = page.querySelectorAll(':scope > .card');
     cards.forEach(function(c) { c.style.display = show ? 'none' : ''; });
   }
+}
+
+// ── GOAL HELPERS ──
+
+function getUserGoal() {
+  var g = (window.userProfileData && window.userProfileData.primary_goal) || '';
+  return g.toLowerCase().trim();
+}
+
+function goalIncludes(keyword) {
+  return getUserGoal().indexOf(keyword) !== -1;
+}
+
+// ── CHAT PAYWALL GATE ──
+
+function isChatAllowed() {
+  var tier = getUserTier();
+  return tier === 'premium' || tier === 'clinical';
+}
+
+function showUpgradeModal() {
+  var modal = document.getElementById('upgrade-modal');
+  if (modal) modal.classList.add('open');
+}
+
+function closeUpgradeModal() {
+  var modal = document.getElementById('upgrade-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+// ── INSIGHT ENGINE (DETERMINISTIC, NO LLM) ──
+
+function computeMetricTrend(samples, days) {
+  if (!samples || samples.length < 2) return null;
+  var now = Date.now();
+  var cutoff = now - days * 24 * 60 * 60 * 1000;
+  var points = [];
+  for (var i = 0; i < samples.length; i++) {
+    var ts = new Date(samples[i].recorded_at || samples[i].start_date).getTime();
+    var val = parseFloat(samples[i].value);
+    if (ts >= cutoff && !isNaN(val)) {
+      points.push({ t: ts, v: val });
+    }
+  }
+  if (points.length < 2) return null;
+  // Linear regression
+  var n = points.length;
+  var sumT = 0, sumV = 0, sumTV = 0, sumTT = 0;
+  for (var j = 0; j < n; j++) {
+    sumT += points[j].t; sumV += points[j].v;
+    sumTV += points[j].t * points[j].v;
+    sumTT += points[j].t * points[j].t;
+  }
+  var denom = n * sumTT - sumT * sumT;
+  if (denom === 0) return null;
+  var slope = (n * sumTV - sumT * sumV) / denom;
+  var avg = sumV / n;
+  // Normalize slope to per-day
+  var slopePerDay = slope * 86400000;
+  var direction = Math.abs(slopePerDay) < 0.01 * avg ? 'stable' : slopePerDay > 0 ? 'up' : 'down';
+  return { avg: Math.round(avg * 10) / 10, slope: slopePerDay, direction: direction, count: n };
+}
+
+var INSIGHT_RULES = [
+  // ── Tier 1: Threshold Crossings ──
+  {
+    id: 'hr_threshold_crossed',
+    domain: 'heart',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      var score = typeof scoreHR === 'function' ? scoreHR(ctx.metrics.hr) : null;
+      if (score === null) return null;
+      var tier = score >= 70 ? 'good' : score >= 40 ? 'fair' : 'low';
+      // Check previous VA history for tier change
+      var prevTier = null;
+      if (ctx.vaHistory && ctx.vaHistory.length > 1) {
+        var prev = ctx.vaHistory[1];
+        if (prev && prev.drivers && prev.drivers.heart !== undefined) {
+          prevTier = prev.drivers.heart >= 70 ? 'good' : prev.drivers.heart >= 40 ? 'fair' : 'low';
+        }
+      }
+      if (!prevTier || prevTier === tier) return null;
+      return { hr: ctx.metrics.hr, score: score, tier: tier, prevTier: prevTier };
+    },
+    template: function(data) {
+      var dir = data.tier === 'good' ? 'improved to' : 'dropped to';
+      return {
+        headline: 'Resting HR ' + dir + ' ' + data.tier,
+        body: 'Your resting heart rate of ' + data.hr + ' bpm moved from ' + data.prevTier + ' to ' + data.tier + ' zone.',
+        action: 'How can I improve my resting heart rate?'
+      };
+    }
+  },
+  {
+    id: 'weight_threshold_crossed',
+    domain: 'weight',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.weightScore === null || !ctx.metrics.weightScore) return null;
+      var score = ctx.metrics.weightScore;
+      var tier = score >= 70 ? 'good' : score >= 40 ? 'fair' : 'low';
+      var prevTier = null;
+      if (ctx.vaHistory && ctx.vaHistory.length > 1) {
+        var prev = ctx.vaHistory[1];
+        if (prev && prev.drivers && prev.drivers.weight !== undefined) {
+          prevTier = prev.drivers.weight >= 70 ? 'good' : prev.drivers.weight >= 40 ? 'fair' : 'low';
+        }
+      }
+      if (!prevTier || prevTier === tier) return null;
+      return { score: score, tier: tier, prevTier: prevTier };
+    },
+    template: function(data) {
+      var dir = data.tier === 'good' ? 'improved to' : 'dropped to';
+      return {
+        headline: 'Weight score ' + dir + ' ' + data.tier,
+        body: 'Your BMI-based weight score moved from ' + data.prevTier + ' to ' + data.tier + ' range.',
+        action: 'What should I do about my weight trend?'
+      };
+    }
+  },
+  {
+    id: 'bloodwork_flagged',
+    domain: 'bloodwork',
+    severity: 'alert',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var flagged = [];
+      var bw = ctx.metrics.bloodwork;
+      // Check individual biomarker scores
+      var OPTIMAL = {
+        glucose: { min: 70, max: 100, label: 'Glucose' },
+        hba1c: { min: 4.0, max: 5.6, label: 'HbA1c' },
+        ldl: { min: 0, max: 100, label: 'LDL' },
+        hdl: { min: 40, max: 999, label: 'HDL' },
+        triglycerides: { min: 0, max: 150, label: 'Triglycerides' },
+        crp: { min: 0, max: 1, label: 'hs-CRP' }
+      };
+      for (var key in bw) {
+        if (OPTIMAL[key]) {
+          var val = bw[key];
+          var opt = OPTIMAL[key];
+          // Simple out-of-range check
+          if (val < opt.min * 0.7 || val > opt.max * 1.5) {
+            flagged.push({ name: opt.label, value: val });
+          }
+        }
+      }
+      if (flagged.length === 0) return null;
+      return { flagged: flagged };
+    },
+    template: function(data) {
+      var names = data.flagged.map(function(f) { return f.name; }).join(', ');
+      return {
+        headline: data.flagged.length + ' biomarker' + (data.flagged.length > 1 ? 's' : '') + ' flagged',
+        body: names + ' ' + (data.flagged.length > 1 ? 'are' : 'is') + ' outside optimal range. Review your latest bloodwork results.',
+        action: 'Which of my blood biomarkers should I focus on?'
+      };
+    }
+  },
+  {
+    id: 'sleep_debt_high',
+    domain: 'sleep',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var debt = ctx.metrics.sleepData.debt;
+      if (debt === undefined || debt <= 7) return null;
+      var goal = (ctx.profile && ctx.profile.primary_goal || '').toLowerCase();
+      return { debt: debt, goal: goal };
+    },
+    template: function(data) {
+      var extra = '';
+      if (data.goal.indexOf('strength') !== -1) extra = ' Sleep debt impairs muscle recovery and strength gains.';
+      else if (data.goal.indexOf('weight') !== -1) extra = ' Poor sleep increases hunger hormones and makes fat loss harder.';
+      else if (data.goal.indexOf('sleep') !== -1) extra = ' This is your primary goal — prioritize consistent bedtimes.';
+      else if (data.goal.indexOf('cardio') !== -1) extra = ' Recovery suffers without sleep — your training quality will drop.';
+      return {
+        headline: 'Sleep debt is high',
+        body: 'You\'ve accumulated ' + data.debt + ' hours of sleep debt over the past week.' + extra,
+        action: 'How can I reduce my sleep debt?'
+      };
+    }
+  },
+
+  // ── Tier 2: Trends ──
+  {
+    id: 'hr_trend',
+    domain: 'heart',
+    severity: 'positive',
+    detect: function(ctx) {
+      var byType = ctx.healthData;
+      if (!byType) return null;
+      var hrSamples = byType['resting_heart_rate'] || byType['heart_rate'];
+      if (!hrSamples) return null;
+      var trend = computeMetricTrend(hrSamples, 7);
+      if (!trend || trend.direction === 'stable') return null;
+      // For HR, down is improving
+      var improving = trend.direction === 'down';
+      return { avg: trend.avg, slope: Math.abs(Math.round(trend.slope * 7 * 10) / 10), improving: improving, direction: trend.direction };
+    },
+    template: function(data) {
+      var sev = data.improving ? 'positive' : 'attention';
+      var word = data.improving ? 'down' : 'up';
+      return {
+        headline: 'Resting HR trending ' + word,
+        body: (data.improving ? 'Down' : 'Up') + ' ~' + data.slope + ' bpm over 7 days — ' + (data.improving ? 'a sign of improving cardiovascular recovery.' : 'elevated stress or reduced recovery may be contributing.'),
+        action: data.improving ? 'What\'s driving my heart rate improvement?' : 'Why is my resting heart rate going up?',
+        _severity: sev
+      };
+    }
+  },
+  {
+    id: 'sleep_trend',
+    domain: 'sleep',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.sleepData || !ctx.metrics.sleepData.trend) return null;
+      var trend = ctx.metrics.sleepData.trend;
+      if (trend.direction === 'stable') return null;
+      return { direction: trend.direction, thisWeek: trend.thisWeekAvg, lastWeek: trend.lastWeekAvg, delta: Math.abs(trend.deltaHours) };
+    },
+    template: function(data) {
+      var improving = data.direction === 'improving';
+      var sev = improving ? 'positive' : 'attention';
+      return {
+        headline: 'Sleep duration ' + (improving ? 'improving' : 'declining'),
+        body: 'Averaging ' + data.thisWeek + 'h this week vs ' + data.lastWeek + 'h last week (' + (improving ? '+' : '-') + data.delta + 'h).',
+        action: improving ? 'What\'s helping my sleep improve?' : 'Why is my sleep getting worse?',
+        _severity: sev
+      };
+    }
+  },
+  {
+    id: 'weight_trend',
+    domain: 'weight',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      var points = weightEntries.map(function(w) {
+        return { recorded_at: w.logged_at, value: w.weight_kg };
+      });
+      var trend = computeMetricTrend(points, 14);
+      if (!trend || trend.direction === 'stable') return null;
+      var weeklyChange = Math.abs(Math.round(trend.slope * 7 * 10) / 10);
+      if (weeklyChange < 0.2) return null;
+      return { avg: trend.avg, weeklyChange: weeklyChange, direction: trend.direction };
+    },
+    template: function(data) {
+      var dir = data.direction === 'down' ? 'down' : 'up';
+      return {
+        headline: 'Weight trending ' + dir,
+        body: (dir === 'down' ? 'Down' : 'Up') + ' ~' + data.weeklyChange + ' kg/week. Current average: ' + data.avg + ' kg.',
+        action: 'What\'s driving my weight ' + (dir === 'down' ? 'loss' : 'gain') + '?'
+      };
+    }
+  },
+  {
+    id: 'steps_trend',
+    domain: 'heart',
+    severity: 'positive',
+    detect: function(ctx) {
+      var byType = ctx.healthData;
+      if (!byType || !byType['step_count']) return null;
+      var steps = byType['step_count'];
+      var now = Date.now();
+      var msPerDay = 86400000;
+      var thisWeek = [], lastWeek = [];
+      for (var i = 0; i < steps.length; i++) {
+        var ts = new Date(steps[i].start_date || steps[i].recorded_at).getTime();
+        var val = parseFloat(steps[i].value || 0);
+        var daysAgo = (now - ts) / msPerDay;
+        if (daysAgo <= 7) thisWeek.push(val);
+        else if (daysAgo <= 14) lastWeek.push(val);
+      }
+      if (thisWeek.length === 0 || lastWeek.length === 0) return null;
+      var thisAvg = thisWeek.reduce(function(s, v) { return s + v; }, 0) / thisWeek.length;
+      var lastAvg = lastWeek.reduce(function(s, v) { return s + v; }, 0) / lastWeek.length;
+      if (lastAvg === 0) return null;
+      var pctChange = Math.round(((thisAvg - lastAvg) / lastAvg) * 100);
+      if (Math.abs(pctChange) < 10) return null;
+      return { thisAvg: Math.round(thisAvg), lastAvg: Math.round(lastAvg), pctChange: pctChange };
+    },
+    template: function(data) {
+      var improving = data.pctChange > 0;
+      var sev = improving ? 'positive' : 'attention';
+      return {
+        headline: 'Steps ' + (improving ? 'up' : 'down') + ' ' + Math.abs(data.pctChange) + '% vs last week',
+        body: 'Averaging ' + data.thisAvg.toLocaleString() + ' steps/day this week vs ' + data.lastAvg.toLocaleString() + ' last week.',
+        action: improving ? 'How does my step count affect my vitality age?' : 'How can I increase my daily step count?',
+        _severity: sev
+      };
+    }
+  },
+
+  // ── Goal-Aware Rules ──
+
+  {
+    id: 'protein_deficit',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      var goal = (ctx.profile && ctx.profile.primary_goal || '').toLowerCase();
+      if (goal.indexOf('strength') === -1 && goal.indexOf('weight') === -1) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      try {
+        var targets = getMacroTargets();
+        if (!targets || !targets.prot || targets.prot <= 0) return null;
+        var now = new Date();
+        var daysHit = 0;
+        var daysChecked = 0;
+        for (var d = 0; d < 7; d++) {
+          var checkDate = new Date(now);
+          checkDate.setDate(checkDate.getDate() - d);
+          var dateStr = localDateStr(checkDate);
+          var dayProt = 0;
+          ctx.meals.forEach(function(m) {
+            var mDate = localDateStr(new Date(m.meal_time || m.created_at));
+            if (mDate === dateStr) {
+              var mac = getMacrosFromMeal(m);
+              dayProt += mac.prot || 0;
+            }
+          });
+          if (dayProt > 0) { daysChecked++; if (dayProt >= targets.prot * 0.8) daysHit++; }
+        }
+        if (daysChecked < 3) return null;
+        if (daysHit >= daysChecked - 1) return null; // On track, skip deficit rule
+        return { daysHit: daysHit, daysChecked: daysChecked, target: targets.prot, goal: goal };
+      } catch(e) { return null; }
+    },
+    template: function(data) {
+      var goalFrame = data.goal.indexOf('strength') !== -1
+        ? 'Consistent protein intake is critical for strength gains and recovery.'
+        : 'Adequate protein preserves muscle mass during a calorie deficit.';
+      return {
+        headline: 'Protein target hit ' + data.daysHit + ' of ' + data.daysChecked + ' days',
+        body: goalFrame + ' Target: ' + data.target + 'g/day.',
+        action: 'How can I hit my protein goal more consistently?'
+      };
+    }
+  },
+  {
+    id: 'protein_on_track',
+    domain: 'nutrition',
+    severity: 'positive',
+    detect: function(ctx) {
+      var goal = (ctx.profile && ctx.profile.primary_goal || '').toLowerCase();
+      if (goal.indexOf('strength') === -1 && goal.indexOf('weight') === -1) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      try {
+        var targets = getMacroTargets();
+        if (!targets || !targets.prot || targets.prot <= 0) return null;
+        var now = new Date();
+        var daysHit = 0;
+        var daysChecked = 0;
+        for (var d = 0; d < 7; d++) {
+          var checkDate = new Date(now);
+          checkDate.setDate(checkDate.getDate() - d);
+          var dateStr = localDateStr(checkDate);
+          var dayProt = 0;
+          ctx.meals.forEach(function(m) {
+            var mDate = localDateStr(new Date(m.meal_time || m.created_at));
+            if (mDate === dateStr) {
+              var mac = getMacrosFromMeal(m);
+              dayProt += mac.prot || 0;
+            }
+          });
+          if (dayProt > 0) { daysChecked++; if (dayProt >= targets.prot * 0.8) daysHit++; }
+        }
+        if (daysChecked < 3 || daysHit < daysChecked - 1) return null;
+        return { daysHit: daysHit, daysChecked: daysChecked };
+      } catch(e) { return null; }
+    },
+    template: function(data) {
+      return {
+        headline: 'Protein on target ' + data.daysHit + ' of ' + data.daysChecked + ' days',
+        body: 'Keep it up — consistent protein fuels recovery and adaptation.',
+        action: 'What else can I do to optimize my nutrition?'
+      };
+    }
+  },
+  {
+    id: 'lift_pr',
+    domain: 'strength',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      var tests = ctx.metrics.strengthData.tests;
+      var byKey = {};
+      tests.forEach(function(t) {
+        if (!byKey[t.test_key]) byKey[t.test_key] = [];
+        byKey[t.test_key].push(t);
+      });
+      var prs = [];
+      var liftKeys = ['bench_1rm', 'squat_1rm', 'deadlift_1rm', 'pullup', 'pushup'];
+      for (var i = 0; i < liftKeys.length; i++) {
+        var k = liftKeys[i];
+        var history = byKey[k];
+        if (!history || history.length < 2) continue;
+        var latest = parseFloat(history[0].raw_value);
+        var previous = parseFloat(history[1].raw_value);
+        var norm = (typeof FITNESS_NORMS !== 'undefined' && FITNESS_NORMS[k]) || {};
+        var higher = norm.higherBetter !== false;
+        if (higher && latest > previous) {
+          var delta = Math.round((latest - previous) * 10) / 10;
+          var label = norm.label || k;
+          var unit = norm.unit || '';
+          prs.push({ key: k, label: label, latest: latest, delta: delta, unit: unit, pctl: history[0].percentile });
+        }
+      }
+      if (prs.length === 0) return null;
+      return { prs: prs };
+    },
+    template: function(data) {
+      var best = data.prs[0];
+      var headline = 'New PR: ' + best.label + ' ' + best.latest + ' ' + best.unit;
+      var body = 'Up ' + best.delta + ' ' + best.unit + ' from your previous test.';
+      if (best.pctl) body += ' ' + best.pctl + 'th percentile for your age group.';
+      if (data.prs.length > 1) body += ' Plus ' + (data.prs.length - 1) + ' other PR' + (data.prs.length > 2 ? 's' : '') + '.';
+      return {
+        headline: headline,
+        body: body,
+        action: 'How can I keep progressing on my lifts?'
+      };
+    }
+  },
+  {
+    id: 'lift_stall',
+    domain: 'strength',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      var tests = ctx.metrics.strengthData.tests;
+      var byKey = {};
+      tests.forEach(function(t) {
+        if (!byKey[t.test_key]) byKey[t.test_key] = [];
+        byKey[t.test_key].push(t);
+      });
+      var stalls = [];
+      var liftKeys = ['bench_1rm', 'squat_1rm', 'deadlift_1rm'];
+      for (var i = 0; i < liftKeys.length; i++) {
+        var k = liftKeys[i];
+        var history = byKey[k];
+        if (!history || history.length < 2) continue;
+        var latest = parseFloat(history[0].raw_value);
+        var previous = parseFloat(history[1].raw_value);
+        var daysBetween = (new Date(history[0].tested_at) - new Date(history[1].tested_at)) / 86400000;
+        if (latest <= previous && daysBetween >= 28) {
+          var norm = (typeof FITNESS_NORMS !== 'undefined' && FITNESS_NORMS[k]) || {};
+          stalls.push({ key: k, label: norm.label || k, latest: latest, unit: norm.unit || 'lbs', weeks: Math.round(daysBetween / 7) });
+        }
+      }
+      if (stalls.length === 0) return null;
+      // Check protein context
+      var proteinLow = false;
+      try {
+        var targets = getMacroTargets();
+        if (targets && targets.prot > 0 && ctx.meals && ctx.meals.length > 0) {
+          var now = new Date();
+          var daysHit = 0;
+          var daysChecked = 0;
+          for (var d = 0; d < 7; d++) {
+            var checkDate = new Date(now);
+            checkDate.setDate(checkDate.getDate() - d);
+            var dateStr = localDateStr(checkDate);
+            var dayProt = 0;
+            ctx.meals.forEach(function(m) {
+              var mDate = localDateStr(new Date(m.meal_time || m.created_at));
+              if (mDate === dateStr) { var mac = getMacrosFromMeal(m); dayProt += mac.prot || 0; }
+            });
+            if (dayProt > 0) { daysChecked++; if (dayProt >= targets.prot * 0.8) daysHit++; }
+          }
+          if (daysChecked >= 3 && daysHit < daysChecked * 0.5) proteinLow = true;
+        }
+      } catch(e) {}
+      return { stalls: stalls, proteinLow: proteinLow };
+    },
+    template: function(data) {
+      var s = data.stalls[0];
+      var body = s.label + ' has been flat at ' + s.latest + ' ' + s.unit + ' for ' + s.weeks + '+ weeks.';
+      if (data.proteinLow) body += ' Your protein intake has been under target — that may be limiting recovery.';
+      return {
+        headline: s.label + ' hasn\'t improved in ' + s.weeks + '+ weeks',
+        body: body,
+        action: 'Why are my lifts stalling and how do I break through?'
+      };
+    }
+  },
+  {
+    id: 'recovery_readiness',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      var goal = (ctx.profile && ctx.profile.primary_goal || '').toLowerCase();
+      if (goal.indexOf('strength') === -1 && goal.indexOf('cardio') === -1) return null;
+      var sleepBad = false, hrBad = false, sleepGood = false, hrGood = false;
+      if (ctx.metrics && ctx.metrics.sleepData) {
+        var debt = ctx.metrics.sleepData.debt || 0;
+        if (debt > 7) sleepBad = true;
+        if (debt <= 3) sleepGood = true;
+      }
+      if (ctx.healthData) {
+        var hrSamples = ctx.healthData['resting_heart_rate'] || ctx.healthData['heart_rate'];
+        if (hrSamples) {
+          var trend = computeMetricTrend(hrSamples, 7);
+          if (trend && trend.direction === 'up') hrBad = true;
+          if (trend && trend.direction === 'down') hrGood = true;
+        }
+      }
+      if (!sleepBad && !hrBad && !sleepGood && !hrGood) return null;
+      var bad = sleepBad || hrBad;
+      var good = sleepGood || hrGood;
+      if (!bad && !good) return null;
+      return { sleepBad: sleepBad, hrBad: hrBad, sleepGood: sleepGood, hrGood: hrGood, bad: bad && !good, good: good && !bad };
+    },
+    template: function(data) {
+      if (data.bad) {
+        var reasons = [];
+        if (data.sleepBad) reasons.push('sleep debt is high');
+        if (data.hrBad) reasons.push('resting HR is trending up');
+        return {
+          headline: 'Recovery may be compromised',
+          body: 'Your ' + reasons.join(' and ') + '. Consider a lighter session or active recovery today.',
+          action: 'How does recovery affect my training performance?',
+          _severity: 'attention'
+        };
+      }
+      var signals = [];
+      if (data.sleepGood) signals.push('sleep debt is low');
+      if (data.hrGood) signals.push('resting HR is trending down');
+      return {
+        headline: 'Recovery looks solid',
+        body: 'Your ' + signals.join(' and ') + '. Good day to push hard.',
+        action: 'How can I maximize my training when recovery is good?',
+        _severity: 'positive'
+      };
+    }
+  },
+  {
+    id: 'domain_incomplete',
+    domain: 'strength',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.metrics || !ctx.metrics.strengthData) return null;
+      var domains = getCompletedDomains(ctx.metrics.strengthData);
+      if (domains.missing.length === 0) return null;
+      if (domains.completed.length === 0) return null; // Don't nag if they haven't started
+      return { completed: domains.completed.length, missing: domains.missing.map(function(d) { return d.label; }) };
+    },
+    template: function(data) {
+      return {
+        headline: data.completed + ' of 5 strength domains tested',
+        body: 'Complete ' + data.missing.join(' and ') + ' for a confirmed fitness score.',
+        action: 'Which fitness tests should I do next?'
+      };
+    }
+  },
+  {
+    id: 'training_stale',
+    domain: 'strength',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.timestamps || !ctx.timestamps.strength) return null;
+      var daysSince = (Date.now() - new Date(ctx.timestamps.strength).getTime()) / 86400000;
+      if (daysSince < 21) return null;
+      return { weeks: Math.round(daysSince / 7) };
+    },
+    template: function(data) {
+      return {
+        headline: 'No fitness tests logged in ' + data.weeks + '+ weeks',
+        body: 'Track a session to keep your strength progress visible.',
+        action: 'What should I test to track my strength progress?'
+      };
+    }
+  },
+  {
+    id: 'calorie_surplus',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('weight')) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      try {
+        var targets = getMacroTargets();
+        if (!targets || !targets.cal || targets.cal <= 0) return null;
+        var now = new Date();
+        var daysOver = 0;
+        var daysChecked = 0;
+        for (var d = 0; d < 7; d++) {
+          var checkDate = new Date(now);
+          checkDate.setDate(checkDate.getDate() - d);
+          var dateStr = localDateStr(checkDate);
+          var dayCal = 0;
+          ctx.meals.forEach(function(m) {
+            var mDate = localDateStr(new Date(m.meal_time || m.created_at));
+            if (mDate === dateStr) { var mac = getMacrosFromMeal(m); dayCal += mac.cal || 0; }
+          });
+          if (dayCal > 0) { daysChecked++; if (dayCal > targets.cal * 1.1) daysOver++; }
+        }
+        if (daysChecked < 3 || daysOver < 3) return null;
+        return { daysOver: daysOver, daysChecked: daysChecked, target: targets.cal };
+      } catch(e) { return null; }
+    },
+    template: function(data) {
+      return {
+        headline: 'Calories over target ' + data.daysOver + ' of ' + data.daysChecked + ' days',
+        body: 'Your calorie target is ' + data.target + ' kcal/day for weight loss. Consistent surplus will slow progress.',
+        action: 'How can I manage my calorie intake better?'
+      };
+    }
+  },
+
+  // ── Cross-Domain Correlations (Research-Backed) ──
+
+  {
+    id: 'vo2_deep_sleep',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.vo2max === null) return null;
+      if (!ctx.metrics.sleepData || !ctx.metrics.sleepData.stages) return null;
+      var stages = ctx.metrics.sleepData.stages;
+      var deepPct = stages.deep ? stages.deep.pct : null;
+      if (deepPct === null) return null;
+      return { vo2: Math.round(ctx.metrics.vo2max * 10) / 10, deepPct: deepPct, good: deepPct >= 15 };
+    },
+    template: function(data) {
+      if (data.good) {
+        return {
+          headline: 'Aerobic fitness supporting deep sleep',
+          body: 'Your VO2 max of ' + data.vo2 + ' ml/kg/min and ' + data.deepPct + '% deep sleep are consistent with research showing higher aerobic fitness is one of the strongest predictors of deep sleep quality.',
+          action: 'How does VO2 max affect my sleep quality?',
+          _severity: 'positive'
+        };
+      }
+      return {
+        headline: 'Deep sleep below target',
+        body: 'Your deep sleep is ' + data.deepPct + '% (target: 15-20%). Research shows aerobic fitness is the strongest behavioral predictor of deep sleep. Your VO2 max of ' + data.vo2 + ' — improving it through cardio could directly boost deep sleep.',
+        action: 'How can I increase my deep sleep percentage?',
+        _severity: 'attention'
+      };
+    }
+  },
+  {
+    id: 'sleep_rhr_correlation',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      if (!ctx.metrics.sleepData) return null;
+      var avgSleep = ctx.metrics.sleepData.avg || ctx.metrics.sleepData.latest;
+      if (!avgSleep) return null;
+      var shortSleep = avgSleep < 6;
+      var elevatedHr = ctx.metrics.hr > 72;
+      if (!shortSleep || !elevatedHr) return null;
+      return { hr: ctx.metrics.hr, sleep: Math.round(avgSleep * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Short sleep is elevating your heart rate',
+        body: 'You\'re averaging ' + data.sleep + 'h of sleep and your resting HR is ' + data.hr + ' bpm. Research shows sleeping under 6 hours raises resting HR by 4-8 bpm through sympathetic nervous system activation. Improving sleep to 7+ hours could directly lower your resting HR.',
+        action: 'How does sleep affect my resting heart rate?'
+      };
+    }
+  },
+  {
+    id: 'steps_sleep_efficiency',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.steps) return null;
+      if (!ctx.metrics.sleepData || !ctx.metrics.sleepData.efficiency) return null;
+      var steps = ctx.metrics.steps;
+      var eff = ctx.metrics.sleepData.efficiency;
+      if (steps < 4000 && eff < 82) return { steps: steps, efficiency: eff, low: true };
+      if (steps >= 7000 && eff >= 88) return { steps: steps, efficiency: eff, low: false };
+      return null;
+    },
+    template: function(data) {
+      if (data.low) {
+        return {
+          headline: 'Low activity may be hurting sleep quality',
+          body: 'You logged ' + data.steps.toLocaleString() + ' steps today and your sleep efficiency is ' + data.efficiency + '%. Research shows people hitting 7,000+ steps sleep significantly more efficiently. More daytime movement could improve how well you sleep.',
+          action: 'How does physical activity affect my sleep?',
+          _severity: 'attention'
+        };
+      }
+      return {
+        headline: 'Activity level supporting sleep quality',
+        body: 'Your ' + data.steps.toLocaleString() + ' daily steps and ' + data.efficiency + '% sleep efficiency are consistent with research linking 7,000+ steps to better sleep quality.',
+        action: 'What else can I do to optimize my sleep?',
+        _severity: 'positive'
+      };
+    }
+  },
+  {
+    id: 'grip_strength_longevity',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      var tests = ctx.metrics.strengthData.tests;
+      var grip = null;
+      for (var i = 0; i < tests.length; i++) {
+        if (tests[i].test_key === 'grip_strength') { grip = tests[i]; break; }
+      }
+      if (!grip) return null;
+      var pctl = grip.percentile || 50;
+      return { value: Math.round(parseFloat(grip.raw_value)), pctl: pctl, unit: 'lbs' };
+    },
+    template: function(data) {
+      var sev = data.pctl >= 50 ? 'positive' : 'attention';
+      var body = data.pctl >= 50
+        ? 'Your grip strength of ' + data.value + ' ' + data.unit + ' (' + data.pctl + 'th percentile) is a powerful longevity signal. A Lancet study of 140,000 people found grip strength predicts cardiovascular death better than blood pressure.'
+        : 'Your grip strength of ' + data.value + ' ' + data.unit + ' (' + data.pctl + 'th percentile) has room to improve. A Lancet study of 140,000 people found each 5 kg decrease in grip strength increases cardiovascular mortality by 17%. Dead hangs and farmer\'s walks are high-ROI exercises.';
+      return { headline: 'Grip strength: ' + (data.pctl >= 50 ? 'strong longevity signal' : 'worth improving'), body: body, action: 'Why is grip strength important for longevity?', _severity: sev };
+    }
+  },
+  {
+    id: 'pushup_cardiovascular',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      var tests = ctx.metrics.strengthData.tests;
+      var pushup = null;
+      for (var i = 0; i < tests.length; i++) {
+        if (tests[i].test_key === 'pushup') { pushup = tests[i]; break; }
+      }
+      if (!pushup) return null;
+      var reps = Math.round(parseFloat(pushup.raw_value));
+      return { reps: reps };
+    },
+    template: function(data) {
+      var sev, body;
+      if (data.reps >= 40) {
+        sev = 'positive';
+        body = 'You logged ' + data.reps + ' pushups. A Harvard-affiliated study found that men completing 40+ pushups had a 96% lower risk of heart events over 10 years. You\'re in the protective zone.';
+      } else if (data.reps >= 10) {
+        sev = 'neutral';
+        body = 'You logged ' + data.reps + ' pushups. Research shows 40+ pushups is associated with 96% lower cardiovascular event risk. Building toward that threshold is a meaningful heart health goal.';
+      } else {
+        sev = 'attention';
+        body = 'You logged ' + data.reps + ' pushups. Research links low pushup capacity (<10) to significantly higher cardiovascular risk. This is one of the simplest, most predictive fitness tests — worth building up.';
+      }
+      return { headline: 'Pushups: cardiovascular risk indicator', body: body, action: 'How do pushups relate to heart health?', _severity: sev };
+    }
+  },
+  {
+    id: 'vo2_rhr_consistency',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.vo2max === null || ctx.metrics.hr === null) return null;
+      var vo2 = ctx.metrics.vo2max;
+      var rhr = ctx.metrics.hr;
+      // High VO2 should correlate with low RHR; flag inconsistency
+      var highFit = vo2 >= 40;
+      var highHr = rhr > 72;
+      var lowFit = vo2 < 30;
+      var lowHr = rhr < 60;
+      if (highFit && highHr) return { vo2: Math.round(vo2 * 10) / 10, rhr: rhr, inconsistent: true };
+      if (lowFit && lowHr) return { vo2: Math.round(vo2 * 10) / 10, rhr: rhr, inconsistent: true };
+      if (highFit && lowHr) return { vo2: Math.round(vo2 * 10) / 10, rhr: rhr, inconsistent: false };
+      return null;
+    },
+    template: function(data) {
+      if (data.inconsistent) {
+        return {
+          headline: 'VO2 max and resting HR are misaligned',
+          body: 'Your VO2 max of ' + data.vo2 + ' ml/kg/min and resting HR of ' + data.rhr + ' bpm don\'t match typical patterns. Research shows each 1-point VO2 increase lowers resting HR by ~0.5 bpm. A mismatch may indicate stress, dehydration, or overtraining.',
+          action: 'Why is my resting heart rate higher than expected for my fitness level?',
+          _severity: 'attention'
+        };
+      }
+      return {
+        headline: 'Fitness and heart rate well aligned',
+        body: 'Your VO2 max of ' + data.vo2 + ' ml/kg/min and resting HR of ' + data.rhr + ' bpm are consistent. Research shows each 1-point VO2 increase lowers resting HR by ~0.5 bpm — your cardiovascular system is adapting to your fitness level.',
+        action: 'How can I continue improving my cardiovascular fitness?',
+        _severity: 'positive'
+      };
+    }
+  },
+  {
+    id: 'sleep_glucose',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.sleepData || !ctx.metrics.bloodwork) return null;
+      var avgSleep = ctx.metrics.sleepData.avg || ctx.metrics.sleepData.latest;
+      if (!avgSleep) return null;
+      var bw = ctx.metrics.bloodwork;
+      var glucose = bw.glucose || null;
+      var hba1c = bw.hba1c || null;
+      if (!glucose && !hba1c) return null;
+      var shortSleep = avgSleep < 6.5;
+      var elevatedGlucose = (glucose && glucose > 100) || (hba1c && hba1c > 5.6);
+      if (!shortSleep || !elevatedGlucose) return null;
+      return { sleep: Math.round(avgSleep * 10) / 10, glucose: glucose, hba1c: hba1c };
+    },
+    template: function(data) {
+      var markers = [];
+      if (data.glucose) markers.push('fasting glucose of ' + data.glucose + ' mg/dL');
+      if (data.hba1c) markers.push('HbA1c of ' + data.hba1c + '%');
+      return {
+        headline: 'Short sleep may be affecting blood sugar',
+        body: 'You\'re averaging ' + data.sleep + 'h of sleep with ' + markers.join(' and ') + '. Research shows sleeping under 6 hours reduces insulin sensitivity by up to 30%. Improving sleep to 7+ hours could be as impactful as dietary changes for glucose management.',
+        action: 'How does sleep affect my blood sugar levels?'
+      };
+    }
+  },
+  {
+    id: 'sleep_weight_gain',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var avgSleep = ctx.metrics.sleepData.avg || ctx.metrics.sleepData.latest;
+      if (!avgSleep || avgSleep >= 6.5) return null;
+      // Check weight trend
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var trend = computeMetricTrend(points, 14);
+      if (!trend || trend.direction !== 'up') return null;
+      var weeklyGain = Math.round(trend.slope * 7 * 10) / 10;
+      if (weeklyGain < 0.2) return null;
+      return { sleep: Math.round(avgSleep * 10) / 10, weeklyGain: weeklyGain };
+    },
+    template: function(data) {
+      return {
+        headline: 'Short sleep linked to weight gain pattern',
+        body: 'You\'re averaging ' + data.sleep + 'h of sleep and your weight is trending up ~' + data.weeklyGain + ' kg/week. Research shows sleeping under 6 hours increases hunger hormones and drives 200-500 extra calories of intake per day. Fixing sleep is one of the most underrated weight management strategies.',
+        action: 'How does sleep affect my weight?'
+      };
+    }
+  },
+  {
+    id: 'activity_triglycerides',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.steps || !ctx.metrics.bloodwork) return null;
+      var trig = ctx.metrics.bloodwork.triglycerides;
+      if (!trig || trig <= 150) return null;
+      var steps = ctx.metrics.steps;
+      return { steps: steps, trig: trig, lowActivity: steps < 6000 };
+    },
+    template: function(data) {
+      var body = 'Your triglycerides are ' + data.trig + ' mg/dL (above the 150 optimal threshold) and you\'re averaging ' + data.steps.toLocaleString() + ' steps/day.';
+      if (data.lowActivity) {
+        body += ' Exercise is one of the most potent triglyceride-lowering interventions — research shows regular activity reduces them by 10-20%. Increasing to 8,000+ steps could meaningfully impact this at your next blood draw.';
+      } else {
+        body += ' While your activity level is reasonable, research shows exercise reduces triglycerides by 10-20%. Higher-intensity sessions or longer walks may provide additional benefit.';
+      }
+      return { headline: 'Activity level and triglycerides', body: body, action: 'How can I lower my triglycerides through exercise?' };
+    }
+  },
+  {
+    id: 'vo2_hdl',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.vo2max === null || !ctx.metrics.bloodwork) return null;
+      var hdl = ctx.metrics.bloodwork.hdl;
+      if (!hdl) return null;
+      return { vo2: Math.round(ctx.metrics.vo2max * 10) / 10, hdl: hdl, lowHdl: hdl < 40 };
+    },
+    template: function(data) {
+      if (data.lowHdl) {
+        return {
+          headline: 'Low HDL — aerobic fitness can help',
+          body: 'Your HDL is ' + data.hdl + ' mg/dL (below the 40 mg/dL threshold) with a VO2 max of ' + data.vo2 + '. Research shows each 1-point VO2 increase raises HDL by ~0.4 mg/dL. Aerobic exercise is the most effective non-pharmaceutical HDL intervention.',
+          action: 'How can I raise my HDL cholesterol?',
+          _severity: 'attention'
+        };
+      }
+      return {
+        headline: 'Aerobic fitness supporting HDL levels',
+        body: 'Your VO2 max of ' + data.vo2 + ' and HDL of ' + data.hdl + ' mg/dL are consistent with research showing aerobic fitness is the strongest behavioral predictor of HDL. Each 1-point VO2 increase corresponds to ~0.4 mg/dL higher HDL.',
+        action: 'What else affects my HDL cholesterol?',
+        _severity: 'positive'
+      };
+    }
+  },
+  {
+    id: 'strength_crp',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.bloodwork) return null;
+      var crp = ctx.metrics.bloodwork.crp;
+      if (!crp) return null;
+      var pctl = ctx.metrics.strengthData.avgPercentile;
+      if (!pctl) return null;
+      return { pctl: pctl, crp: crp };
+    },
+    template: function(data) {
+      var sev = data.crp <= 1 ? 'positive' : 'attention';
+      var body;
+      if (data.crp > 1 && data.pctl < 50) {
+        body = 'Your CRP is ' + data.crp + ' mg/L (elevated) and your strength is at the ' + data.pctl + 'th percentile. Research shows people in the top third of strength have 32% lower CRP — muscle secretes anti-inflammatory molecules (myokines) when it contracts. Consistent training may help bring inflammation down.';
+      } else if (data.crp <= 1 && data.pctl >= 50) {
+        body = 'Your CRP of ' + data.crp + ' mg/L (low inflammation) and ' + data.pctl + 'th percentile strength are aligned. Muscle acts as an anti-inflammatory organ — research shows stronger individuals have 32% lower CRP.';
+      } else {
+        body = 'Your CRP is ' + data.crp + ' mg/L and strength is at the ' + data.pctl + 'th percentile. Research links higher muscular strength to 32% lower chronic inflammation through anti-inflammatory myokine release during muscle contraction.';
+      }
+      return { headline: 'Strength and inflammation', body: body, action: 'How does strength training affect inflammation?', _severity: sev };
+    }
+  },
+  {
+    id: 'weight_rhr',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      var profile = ctx.profile;
+      if (!profile || !profile.current_weight_kg || !profile.height_cm) return null;
+      var bmi = profile.current_weight_kg / Math.pow(profile.height_cm / 100, 2);
+      if (bmi < 25 || ctx.metrics.hr <= 72) return null;
+      return { bmi: Math.round(bmi * 10) / 10, rhr: ctx.metrics.hr };
+    },
+    template: function(data) {
+      return {
+        headline: 'Elevated BMI contributing to higher heart rate',
+        body: 'Your BMI of ' + data.bmi + ' and resting HR of ' + data.rhr + ' bpm are connected. Research shows each 1-point BMI increase raises resting HR by ~1.3 bpm. A 5-point BMI reduction typically corresponds to a 6-7 bpm drop in resting heart rate.',
+        action: 'How does my weight affect my heart health?'
+      };
+    }
+  },
+  {
+    id: 'protein_sleep_quality',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData || !ctx.metrics.sleepData.stages) return null;
+      var deepPct = ctx.metrics.sleepData.stages.deep ? ctx.metrics.sleepData.stages.deep.pct : null;
+      if (deepPct === null) return null;
+      var profile = ctx.profile;
+      var weightKg = profile && profile.current_weight_kg;
+      if (!weightKg) return null;
+      // Calculate recent avg protein per kg
+      var now = new Date();
+      var totalProt = 0, mealDays = 0;
+      var daysSeen = {};
+      ctx.meals.forEach(function(m) {
+        var mDate = localDateStr(new Date(m.meal_time || m.created_at));
+        var mac = getMacrosFromMeal(m);
+        if (mac.prot > 0) {
+          totalProt += mac.prot;
+          daysSeen[mDate] = true;
+        }
+      });
+      mealDays = Object.keys(daysSeen).length;
+      if (mealDays < 3) return null;
+      var dailyAvg = totalProt / mealDays;
+      var perKg = Math.round((dailyAvg / weightKg) * 10) / 10;
+      if (perKg >= 1.2 && deepPct >= 15) return { perKg: perKg, deepPct: deepPct, good: true };
+      if (perKg < 1.0 && deepPct < 15) return { perKg: perKg, deepPct: deepPct, good: false };
+      return null;
+    },
+    template: function(data) {
+      if (data.good) {
+        return {
+          headline: 'Protein intake supporting sleep quality',
+          body: 'Your ' + data.perKg + ' g/kg daily protein and ' + data.deepPct + '% deep sleep align with research showing higher protein intake (>1.2 g/kg) improves deep sleep through tryptophan pathways.',
+          action: 'How does protein affect my sleep quality?',
+          _severity: 'positive'
+        };
+      }
+      return {
+        headline: 'Low protein may be affecting deep sleep',
+        body: 'Your protein intake of ' + data.perKg + ' g/kg and ' + data.deepPct + '% deep sleep (target: 15-20%) are both below ideal. Research shows protein above 1.2 g/kg/day supports better sleep quality through tryptophan — a serotonin/melatonin precursor.',
+        action: 'Can increasing protein improve my sleep?',
+        _severity: 'attention'
+      };
+    }
+  },
+  {
+    id: 'activity_glucose',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.steps || !ctx.metrics.bloodwork) return null;
+      var glucose = ctx.metrics.bloodwork.glucose;
+      if (!glucose || glucose <= 100) return null;
+      return { steps: ctx.metrics.steps, glucose: glucose, lowActivity: ctx.metrics.steps < 6000 };
+    },
+    template: function(data) {
+      var body = 'Your fasting glucose is ' + data.glucose + ' mg/dL (above optimal) and you\'re averaging ' + data.steps.toLocaleString() + ' steps/day.';
+      if (data.lowActivity) {
+        body += ' Research shows each additional 2,000 steps/day lowers fasting glucose by about 1.5 mg/dL. Even a 10-15 minute walk after meals reduces glucose spikes by 20-30%.';
+      } else {
+        body += ' While your activity level is decent, post-meal walking (even 10-15 minutes) can reduce glucose spikes by 20-30% — one of the most underrated glucose management tools.';
+      }
+      return { headline: 'Activity and blood sugar', body: body, action: 'How does walking after meals affect my blood sugar?' };
+    }
+  },
+  {
+    id: 'overtraining_signal',
+    domain: 'cross',
+    severity: 'alert',
+    detect: function(ctx) {
+      if (!ctx.healthData || !ctx.metrics) return null;
+      // Check: RHR trending up + high activity + poor sleep = overtraining
+      var hrUp = false, highActivity = false, poorSleep = false;
+      var byType = ctx.healthData;
+      if (byType) {
+        var hrSamples = byType['resting_heart_rate'] || byType['heart_rate'];
+        if (hrSamples) {
+          var trend = computeMetricTrend(hrSamples, 7);
+          if (trend && trend.direction === 'up' && Math.abs(trend.slope * 7) >= 3) hrUp = true;
+        }
+      }
+      if (ctx.metrics.steps && ctx.metrics.steps > 10000) highActivity = true;
+      if (ctx.metrics.sleepData && ctx.metrics.sleepData.avg && ctx.metrics.sleepData.avg < 6) poorSleep = true;
+      // Need at least 2 of 3 signals
+      var signals = (hrUp ? 1 : 0) + (highActivity ? 1 : 0) + (poorSleep ? 1 : 0);
+      if (signals < 2) return null;
+      return { hrUp: hrUp, highActivity: highActivity, poorSleep: poorSleep };
+    },
+    template: function(data) {
+      var reasons = [];
+      if (data.hrUp) reasons.push('resting HR is trending up');
+      if (data.poorSleep) reasons.push('sleep is under 6 hours');
+      if (data.highActivity) reasons.push('activity load is high');
+      return {
+        headline: 'Overtraining warning',
+        body: 'Multiple recovery signals are flagged: ' + reasons.join(', ') + '. This pattern is an early indicator of overtraining — your body isn\'t recovering as fast as you\'re training. Consider 2-3 days of active recovery or deload.',
+        action: 'How do I know if I\'m overtraining and what should I do?'
+      };
+    }
+  },
+  {
+    id: 'sleep_strength_performance',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData || !ctx.metrics.strengthData) return null;
+      var avgSleep = ctx.metrics.sleepData.avg || ctx.metrics.sleepData.latest;
+      if (!avgSleep || avgSleep >= 6.5) return null;
+      // Check if strength is stalling or declining
+      var tests = ctx.metrics.strengthData.tests;
+      if (!tests || tests.length < 2) return null;
+      var byKey = {};
+      tests.forEach(function(t) { if (!byKey[t.test_key]) byKey[t.test_key] = []; byKey[t.test_key].push(t); });
+      var stalling = false;
+      ['bench_1rm', 'squat_1rm', 'deadlift_1rm'].forEach(function(k) {
+        var h = byKey[k];
+        if (h && h.length >= 2 && parseFloat(h[0].raw_value) <= parseFloat(h[1].raw_value)) stalling = true;
+      });
+      if (!stalling) return null;
+      return { sleep: Math.round(avgSleep * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Sleep may be limiting your strength gains',
+        body: 'You\'re averaging ' + data.sleep + 'h of sleep and your lifts have stalled. Research shows sleeping under 6 hours reduces maximal strength by 5-10% — and testosterone, which drives strength adaptation, is produced primarily during deep sleep. Prioritizing 7+ hours could break the plateau without changing your training.',
+        action: 'How does sleep affect my strength and muscle growth?'
+      };
+    }
+  },
+  {
+    id: 'weight_hba1c',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var hba1c = ctx.metrics.bloodwork.hba1c;
+      if (!hba1c || hba1c <= 5.6) return null;
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var trend = computeMetricTrend(points, 30);
+      if (!trend) return null;
+      return { hba1c: hba1c, direction: trend.direction, weeklyChange: Math.round(Math.abs(trend.slope * 7) * 10) / 10 };
+    },
+    template: function(data) {
+      var body = 'Your HbA1c of ' + data.hba1c + '% is above the optimal 5.6% threshold.';
+      if (data.direction === 'up') {
+        body += ' Your weight is also trending up. The Diabetes Prevention Program — one of the most replicated studies in medicine — showed that losing just 5-7% of body weight reduces diabetes risk by 58% and HbA1c by up to 1 full point.';
+      } else if (data.direction === 'down') {
+        body += ' The good news: your weight is trending down (~' + data.weeklyChange + ' kg/week), which should improve HbA1c at your next blood draw. Losing 5-7% of body weight can reduce HbA1c by up to 1 point.';
+      }
+      return { headline: 'Weight and blood sugar are connected', body: body, action: 'How does weight loss affect my HbA1c?' };
+    }
+  },
+  {
+    id: 'recovery_compound',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics) return null;
+      var sleepOk = ctx.metrics.sleepData && ctx.metrics.sleepData.efficiency && ctx.metrics.sleepData.efficiency >= 85;
+      var hrOk = ctx.metrics.hr !== null && ctx.metrics.hr <= 65;
+      // Protein check
+      var protOk = false;
+      try {
+        var targets = getMacroTargets();
+        if (targets && targets.prot > 0 && ctx.meals && ctx.meals.length > 0) {
+          var now = new Date();
+          var todayStr = localDateStr(now);
+          var todayProt = 0;
+          ctx.meals.forEach(function(m) {
+            if (localDateStr(new Date(m.meal_time || m.created_at)) === todayStr) {
+              var mac = getMacrosFromMeal(m);
+              todayProt += mac.prot || 0;
+            }
+          });
+          if (todayProt >= targets.prot * 0.8) protOk = true;
+        }
+      } catch(e) {}
+      var pillars = (sleepOk ? 1 : 0) + (hrOk ? 1 : 0) + (protOk ? 1 : 0);
+      if (pillars < 2) return null;
+      return { sleepOk: sleepOk, hrOk: hrOk, protOk: protOk, allGood: pillars === 3 };
+    },
+    template: function(data) {
+      if (data.allGood) {
+        return {
+          headline: 'All three recovery pillars in check',
+          body: 'Sleep efficiency, resting heart rate, and protein intake are all in good shape. Research from the International Olympic Committee identifies these as the three pillars of recovery — you\'re covering all of them.',
+          action: 'How can I maximize my training when recovery is dialed in?',
+          _severity: 'positive'
+        };
+      }
+      var weak = [];
+      if (!data.sleepOk) weak.push('sleep efficiency');
+      if (!data.hrOk) weak.push('resting heart rate');
+      if (!data.protOk) weak.push('protein intake');
+      return {
+        headline: 'Recovery: 2 of 3 pillars in check',
+        body: 'Your ' + weak.join(' and ') + ' could use attention. IOC research shows recovery is only as strong as its weakest pillar — focus on ' + weak[0] + ' this week.',
+        action: 'What are the three pillars of recovery?',
+        _severity: 'neutral'
+      };
+    }
+  },
+
+  // ── Nutrition Correlations ──
+
+  {
+    id: 'magnesium_sleep',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.sleepData) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        var d = localDateStr(new Date(m.meal_time || m.created_at));
+        return (new Date(todayStr) - new Date(d)) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyMg = (totals['Magnesium'] || 0) / days;
+      var rda = 400;
+      if (dailyMg >= rda * 0.7) return null;
+      var sleepIssue = ctx.metrics.sleepData.efficiency < 85 || (ctx.metrics.sleepData.avg && ctx.metrics.sleepData.avg < 6.5);
+      if (!sleepIssue) return null;
+      return { dailyMg: Math.round(dailyMg), rda: rda, pctRda: Math.round((dailyMg / rda) * 100) };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low magnesium may be affecting sleep',
+        body: 'You\'re averaging ' + data.dailyMg + 'mg magnesium/day (' + data.pctRda + '% of RDA) and your sleep quality is below target. Magnesium regulates GABA receptors and melatonin production — a 2012 study in the Journal of Research in Medical Sciences found supplementing 500mg improved sleep quality, onset latency, and duration in elderly adults.',
+        action: 'Should I take magnesium for sleep?'
+      };
+    }
+  },
+  {
+    id: 'fiber_cholesterol',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var ldl = ctx.metrics.bloodwork.ldl;
+      if (!ldl || ldl <= 100) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyFiber = (totals['Fiber'] || 0) / days;
+      if (dailyFiber >= 25) return null;
+      return { fiber: Math.round(dailyFiber), ldl: ldl };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low fiber linked to elevated LDL',
+        body: 'You\'re averaging ' + data.fiber + 'g fiber/day (target: 25-30g) with LDL at ' + data.ldl + ' mg/dL. Soluble fiber binds bile acids and directly lowers LDL — a meta-analysis in the American Journal of Clinical Nutrition found each 5-10g increase reduces LDL by 5-10 mg/dL.',
+        action: 'What foods should I eat to lower my LDL cholesterol?'
+      };
+    }
+  },
+  {
+    id: 'omega3_triglycerides',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var trig = ctx.metrics.bloodwork.triglycerides;
+      if (!trig || trig <= 150) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyOmega = (totals['Omega-3'] || 0) / days;
+      if (dailyOmega >= 1.5) return null;
+      return { omega3: Math.round(dailyOmega * 10) / 10, trig: trig };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low omega-3 with elevated triglycerides',
+        body: 'Your triglycerides are ' + data.trig + ' mg/dL and you\'re averaging only ' + data.omega3 + 'g omega-3/day. EPA and DHA from fish oil reduce triglycerides by 15-30% at therapeutic doses (2-4g/day). Even 2-3 servings of fatty fish per week can meaningfully lower triglycerides.',
+        action: 'How do omega-3s affect my triglycerides?'
+      };
+    }
+  },
+  {
+    id: 'omega3_inflammation',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var crp = ctx.metrics.bloodwork.crp;
+      if (!crp || crp <= 1) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyOmega = (totals['Omega-3'] || 0) / days;
+      if (dailyOmega >= 1.5) return null;
+      return { omega3: Math.round(dailyOmega * 10) / 10, crp: crp };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low omega-3 with elevated inflammation',
+        body: 'Your CRP is ' + data.crp + ' mg/L (elevated) and omega-3 intake is ' + data.omega3 + 'g/day. Omega-3 fatty acids are among the most potent dietary anti-inflammatories — a 2017 meta-analysis showed they reduce CRP by 0.2-0.5 mg/L. Fatty fish, walnuts, and flaxseed are the best food sources.',
+        action: 'What anti-inflammatory foods should I eat?'
+      };
+    }
+  },
+  {
+    id: 'saturated_fat_ldl',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var ldl = ctx.metrics.bloodwork.ldl;
+      if (!ldl || ldl <= 100) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailySatFat = (totals['Saturated Fat'] || 0) / days;
+      if (dailySatFat <= 15) return null; // Under 15g is reasonable
+      return { satFat: Math.round(dailySatFat), ldl: ldl };
+    },
+    template: function(data) {
+      return {
+        headline: 'High saturated fat linked to elevated LDL',
+        body: 'You\'re averaging ' + data.satFat + 'g saturated fat/day (target: under 15-20g) with LDL at ' + data.ldl + ' mg/dL. A Cochrane review found that replacing saturated fat with unsaturated sources (olive oil, nuts, avocado) reduces cardiovascular events by 17%.',
+        action: 'How should I adjust my fat intake to lower LDL?'
+      };
+    }
+  },
+  {
+    id: 'vitamin_d_status',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyD = (totals['Vitamin D'] || 0) / days;
+      if (dailyD >= 15) return null; // 15mcg = 600 IU, getting enough
+      var goal = (ctx.profile && ctx.profile.primary_goal || '').toLowerCase();
+      var hasStrengthData = ctx.metrics && ctx.metrics.strengthData;
+      return { dailyD: Math.round(dailyD * 10) / 10, pctRda: Math.round((dailyD / 20) * 100), goal: goal, hasStrength: !!hasStrengthData };
+    },
+    template: function(data) {
+      var body = 'You\'re averaging ' + data.dailyD + ' mcg vitamin D/day (' + data.pctRda + '% of RDA). Most people are deficient — vitamin D is critical for bone density, immune function, and muscle strength.';
+      if (data.goal.indexOf('strength') !== -1) body += ' Low vitamin D is linked to 15-20% lower testosterone and impaired muscle protein synthesis.';
+      body += ' Consider supplementing 1000-2000 IU/day, especially in winter months.';
+      return {
+        headline: 'Vitamin D intake is low',
+        body: body,
+        action: 'Should I supplement vitamin D?',
+        _severity: 'attention'
+      };
+    }
+  },
+  {
+    id: 'iron_energy',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyIron = (totals['Iron'] || 0) / days;
+      var sex = (ctx.profile && ctx.profile.sex) || 'male';
+      var rda = sex === 'female' ? 18 : 8;
+      if (dailyIron >= rda * 0.6) return null;
+      // Check if VO2 or aerobic performance is low
+      var lowAerobic = ctx.metrics && ctx.metrics.vo2max !== null && ctx.metrics.vo2max < 35;
+      return { dailyIron: Math.round(dailyIron * 10) / 10, rda: rda, pctRda: Math.round((dailyIron / rda) * 100), lowAerobic: lowAerobic };
+    },
+    template: function(data) {
+      var body = 'You\'re averaging ' + data.dailyIron + 'mg iron/day (' + data.pctRda + '% of your ' + data.rda + 'mg RDA). Iron carries oxygen to muscles — deficiency is the most common nutritional deficiency worldwide and directly impairs exercise capacity.';
+      if (data.lowAerobic) body += ' Your VO2 max is also below average — iron supplementation or iron-rich foods (red meat, spinach, lentils) could help both.';
+      return {
+        headline: 'Iron intake below target',
+        body: body,
+        action: 'How does iron affect my energy and exercise performance?'
+      };
+    }
+  },
+  {
+    id: 'zinc_recovery',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyZinc = (totals['Zinc'] || 0) / days;
+      if (dailyZinc >= 8) return null;
+      return { dailyZinc: Math.round(dailyZinc * 10) / 10, pctRda: Math.round((dailyZinc / 11) * 100) };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low zinc may limit strength recovery',
+        body: 'You\'re averaging ' + data.dailyZinc + 'mg zinc/day (' + data.pctRda + '% of RDA). Zinc is essential for testosterone production and muscle protein synthesis — a 1996 Wayne State study found zinc deficiency reduced testosterone by 75% in young men. Red meat, oysters, pumpkin seeds, and legumes are rich sources.',
+        action: 'How does zinc affect testosterone and recovery?'
+      };
+    }
+  },
+  {
+    id: 'sodium_potassium_ratio',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailySodium = (totals['Sodium'] || 0) / days;
+      var dailyPotassium = (totals['Potassium'] || 0) / days;
+      if (dailySodium < 2500 || dailyPotassium >= 3500) return null;
+      if (dailyPotassium <= 0) return null;
+      var ratio = Math.round((dailySodium / dailyPotassium) * 10) / 10;
+      if (ratio < 1.5) return null;
+      return { sodium: Math.round(dailySodium), potassium: Math.round(dailyPotassium), ratio: ratio };
+    },
+    template: function(data) {
+      return {
+        headline: 'Sodium-to-potassium ratio is off',
+        body: 'You\'re averaging ' + data.sodium + 'mg sodium vs ' + data.potassium + 'mg potassium/day (ratio: ' + data.ratio + ':1). A 2014 WHO meta-analysis found that improving the sodium:potassium ratio is more predictive of cardiovascular outcomes than reducing sodium alone. Bananas, potatoes, spinach, and avocado are potassium-dense.',
+        action: 'How should I balance sodium and potassium in my diet?'
+      };
+    }
+  },
+  {
+    id: 'leucine_muscle_synthesis',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyLeucine = (totals['Leucine'] || 0) / days;
+      if (dailyLeucine <= 0) return null; // No leucine data in meals
+      if (dailyLeucine >= 2.5) return { dailyLeucine: Math.round(dailyLeucine * 10) / 10, adequate: true };
+      return { dailyLeucine: Math.round(dailyLeucine * 10) / 10, adequate: false };
+    },
+    template: function(data) {
+      if (data.adequate) {
+        return {
+          headline: 'Leucine intake supporting muscle growth',
+          body: 'You\'re averaging ' + data.dailyLeucine + 'g leucine/day. Research shows 2.5g+ per meal triggers maximal muscle protein synthesis — the "leucine threshold." You\'re hitting it.',
+          action: 'What else optimizes muscle protein synthesis?',
+          _severity: 'positive'
+        };
+      }
+      return {
+        headline: 'Leucine may be below the anabolic threshold',
+        body: 'You\'re averaging ' + data.dailyLeucine + 'g leucine/day. The "leucine threshold" — the minimum needed to trigger muscle protein synthesis — is about 2.5g per meal. Whey protein, eggs, chicken, and beef are the richest sources.',
+        action: 'What is the leucine threshold and why does it matter?',
+        _severity: 'attention'
+      };
+    }
+  },
+  {
+    id: 'late_eating_sleep',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.sleepData) return null;
+      var bedtime = ctx.metrics.sleepData.bedtime;
+      if (!bedtime) return null;
+      // Count meals within 2 hours of bedtime in last 7 days
+      var lateMealDays = 0;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      // Parse bedtime to get approximate hour
+      var bedHour = null;
+      try {
+        var parts = bedtime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (parts) {
+          bedHour = parseInt(parts[1]);
+          if (parts[3].toUpperCase() === 'PM' && bedHour !== 12) bedHour += 12;
+          if (parts[3].toUpperCase() === 'AM' && bedHour === 12) bedHour = 0;
+        }
+      } catch(e) {}
+      if (bedHour === null) return null;
+      var cutoffHour = bedHour - 2;
+      if (cutoffHour < 0) cutoffHour += 24;
+      recentMeals.forEach(function(m) {
+        var mealTime = new Date(m.meal_time || m.created_at);
+        var mealHour = mealTime.getHours();
+        if (mealHour >= cutoffHour || (cutoffHour > 20 && mealHour < 4)) lateMealDays++;
+      });
+      if (lateMealDays < 3) return null;
+      var eff = ctx.metrics.sleepData.efficiency;
+      return { count: lateMealDays, efficiency: eff };
+    },
+    template: function(data) {
+      var body = 'You ate within 2 hours of bedtime on ' + data.count + ' occasions this week.';
+      if (data.efficiency && data.efficiency < 85) {
+        body += ' Your sleep efficiency of ' + data.efficiency + '% is below the 85% target.';
+      }
+      body += ' A British Journal of Nutrition study found late meals reduce sleep efficiency by 4-8% and deep sleep by 10-15 minutes due to elevated core body temperature. Try finishing your last meal 3+ hours before bed.';
+      return {
+        headline: 'Late eating affecting sleep quality',
+        body: body,
+        action: 'How does meal timing affect my sleep?'
+      };
+    }
+  },
+  {
+    id: 'high_carb_glucose',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0 || !ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var glucose = ctx.metrics.bloodwork.glucose;
+      var hba1c = ctx.metrics.bloodwork.hba1c;
+      if ((!glucose || glucose <= 100) && (!hba1c || hba1c <= 5.6)) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totalCarbs = 0;
+      recentMeals.forEach(function(m) { var mac = getMacrosFromMeal(m); totalCarbs += mac.carb || 0; });
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyCarbs = totalCarbs / days;
+      if (dailyCarbs < 250) return null; // Not particularly high
+      return { carbs: Math.round(dailyCarbs), glucose: glucose, hba1c: hba1c };
+    },
+    template: function(data) {
+      var markers = [];
+      if (data.glucose) markers.push('fasting glucose of ' + data.glucose + ' mg/dL');
+      if (data.hba1c) markers.push('HbA1c of ' + data.hba1c + '%');
+      return {
+        headline: 'High carb intake with elevated blood sugar',
+        body: 'You\'re averaging ' + data.carbs + 'g carbs/day with ' + markers.join(' and ') + '. A BMJ meta-analysis showed reducing refined carbs by 20-30% can lower HbA1c by 0.3-0.5%. Focus on swapping refined carbs for complex sources — whole grains, vegetables, legumes.',
+        action: 'Which carbs should I eat and which should I avoid?'
+      };
+    }
+  },
+  {
+    id: 'calorie_weight_discrepancy',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      try {
+        var targets = getMacroTargets();
+        if (!targets || !targets.cal) return null;
+        var todayStr = localDateStr(new Date());
+        var recentMeals = ctx.meals.filter(function(m) {
+          return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 14;
+        });
+        if (recentMeals.length < 10) return null;
+        var totalCal = 0;
+        recentMeals.forEach(function(m) { var mac = getMacrosFromMeal(m); totalCal += mac.cal || 0; });
+        var days = new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size;
+        var dailyCal = totalCal / days;
+        var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+        var trend = computeMetricTrend(points, 14);
+        if (!trend) return null;
+        var weeklyKg = trend.slope * 7;
+        // Predict: 500 cal/day deficit ≈ 0.45 kg/week loss
+        var calorieBalance = dailyCal - targets.cal; // positive = surplus
+        var predictedWeeklyKg = calorieBalance / 1100; // ~1100 cal per 0.1kg
+        var actualWeeklyKg = weeklyKg;
+        var discrepancy = Math.abs(predictedWeeklyKg - actualWeeklyKg);
+        if (discrepancy < 0.3) return null;
+        var gainingOnDeficit = calorieBalance < -200 && actualWeeklyKg > 0.1;
+        var losingOnSurplus = calorieBalance > 200 && actualWeeklyKg < -0.1;
+        if (!gainingOnDeficit && !losingOnSurplus) return null;
+        return { dailyCal: Math.round(dailyCal), target: targets.cal, gaining: gainingOnDeficit };
+      } catch(e) { return null; }
+    },
+    template: function(data) {
+      var body;
+      if (data.gaining) {
+        body = 'You\'re logging ' + data.dailyCal + ' kcal/day (under your ' + data.target + ' target) but your weight is still trending up. Research shows people underreport intake by 20-40% on average. Some meals may not be logged, or portion estimates may be off. Try logging everything for one strict week to calibrate.';
+      } else {
+        body = 'You\'re logging ' + data.dailyCal + ' kcal/day (above your ' + data.target + ' target) but losing weight. You may be more active than your calorie target accounts for, or some high-calorie items in your logs may be overestimated. Either way, your body is in a deficit.';
+      }
+      return {
+        headline: 'Logged calories don\'t match weight trend',
+        body: body,
+        action: 'Why is my weight not matching my calorie intake?'
+      };
+    }
+  },
+  {
+    id: 'calcium_bone_strength',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailyCa = (totals['Calcium'] || 0) / days;
+      if (dailyCa >= 800) return null;
+      // Also check vitamin D
+      var dailyD = (totals['Vitamin D'] || 0) / days;
+      var bothLow = dailyD < 15;
+      return { calcium: Math.round(dailyCa), pctRda: Math.round((dailyCa / 1000) * 100), bothLow: bothLow };
+    },
+    template: function(data) {
+      var body = 'You\'re averaging ' + data.calcium + 'mg calcium/day (' + data.pctRda + '% of RDA). Calcium is essential for bone density and muscle contraction.';
+      if (data.bothLow) body += ' Combined with low vitamin D, calcium absorption is further impaired — vitamin D is required to absorb calcium from the gut.';
+      body += ' Dairy, fortified plant milks, sardines, and leafy greens are calcium-rich.';
+      return {
+        headline: 'Calcium intake below target',
+        body: body,
+        action: 'How much calcium do I need and what are the best sources?'
+      };
+    }
+  }
+];
+
+function buildInsightContext() {
+  var vaHistory = [];
+  try {
+    var key = 'healix_va_history_' + (currentUser ? currentUser.id : '');
+    var raw = localStorage.getItem(key);
+    if (raw) vaHistory = JSON.parse(raw);
+  } catch(e) {}
+
+  return {
+    metrics: window._lastDashboardMetrics || {},
+    result: window._lastVitalityResult || null,
+    timestamps: window._lastDashboardTimestamps || {},
+    vaHistory: vaHistory,
+    healthData: window._lastHealthByType || null,
+    meals: window._lastDashboardMeals || [],
+    profile: window.userProfileData || null
+  };
+}
+
+function runInsightRules(ctx) {
+  var insights = [];
+  for (var i = 0; i < INSIGHT_RULES.length; i++) {
+    var rule = INSIGHT_RULES[i];
+    try {
+      var data = rule.detect(ctx);
+      if (data) {
+        var tpl = rule.template(data);
+        insights.push({
+          id: rule.id,
+          domain: rule.domain,
+          severity: tpl._severity || rule.severity,
+          headline: tpl.headline,
+          body: tpl.body,
+          action: tpl.action
+        });
+      }
+    } catch(e) {
+      console.warn('[Insight] Rule ' + rule.id + ' error:', e);
+    }
+  }
+  // Sort by severity: alert > attention > positive > neutral
+  var order = { alert: 0, attention: 1, positive: 2, neutral: 3 };
+  insights.sort(function(a, b) { return (order[a.severity] || 3) - (order[b.severity] || 3); });
+  return insights.slice(0, 4);
+}
+
+function renderInsightFeed(insights) {
+  var section = document.getElementById('insight-feed-section');
+  var list = document.getElementById('insight-feed-list');
+  var banner = document.getElementById('insight-alert-banner');
+  if (!section || !list) return;
+
+  if (!insights || insights.length === 0) {
+    section.style.display = 'none';
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+
+  // Alert banner for severity=alert
+  if (banner) {
+    var alerts = insights.filter(function(ins) { return ins.severity === 'alert'; });
+    if (alerts.length > 0) {
+      banner.innerHTML = '<div class="insight-alert-inner"><span class="insight-alert-icon">!</span> ' + escapeHtml(alerts[0].headline) + ' — ' + escapeHtml(alerts[0].body) + '</div>';
+      banner.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  var html = '';
+  for (var i = 0; i < insights.length; i++) {
+    var ins = insights[i];
+    var badgeCls = ins.severity;
+    var badgeText = ins.severity === 'positive' ? 'Positive' : ins.severity === 'attention' ? 'Attention' : ins.severity === 'alert' ? 'Alert' : 'Neutral';
+    html += '<div class="insight-card">';
+    html += '<div class="insight-badge ' + badgeCls + '">' + badgeText + '</div>';
+    html += '<div class="insight-headline">' + escapeHtml(ins.headline) + '</div>';
+    html += '<div class="insight-body">' + escapeHtml(ins.body) + '</div>';
+    if (ins.action) {
+      html += '<a href="#" class="insight-discuss" onclick="event.preventDefault();openInsightChat(\'' + escapeHtml(ins.action).replace(/'/g, "\\'") + '\')">';
+      html += 'Discuss with Healix \u2192</a>';
+    }
+    html += '</div>';
+  }
+  list.innerHTML = html;
+  section.style.display = 'block';
+}
+
+function openInsightChat(question) {
+  if (!isChatAllowed()) {
+    showUpgradeModal();
+    return;
+  }
+  if (typeof HealixChat !== 'undefined' && HealixChat.openWithQuestion) {
+    HealixChat.openWithQuestion(question);
+  }
+}
+
+// ── DYNAMIC DRIVER EXPLAINERS ──
+
+function computeDriverExplainer(key, ctx) {
+  if (!ctx || !ctx.metrics) return null;
+  var m = ctx.metrics;
+  var byType = ctx.healthData;
+  var goal = (ctx.profile && ctx.profile.primary_goal || '').toLowerCase();
+
+  if (key === 'heart') {
+    if (m.hr === null) return null;
+    var hrScore = typeof scoreHR === 'function' ? scoreHR(m.hr) : null;
+    var zone = hrScore >= 70 ? 'optimal zone' : hrScore >= 40 ? 'average range' : 'elevated range';
+    var text = 'Resting HR of ' + m.hr + ' bpm (' + zone + ').';
+    if (byType) {
+      var hrSamples = byType['resting_heart_rate'] || byType['heart_rate'];
+      if (hrSamples) {
+        var trend = computeMetricTrend(hrSamples, 7);
+        if (trend && trend.direction !== 'stable') {
+          var delta = Math.abs(Math.round(trend.slope * 7 * 10) / 10);
+          text += ' ' + (trend.direction === 'down' ? 'Down' : 'Up') + ' ' + delta + ' bpm this week.';
+        }
+      }
+    }
+    if (byType && byType['step_count']) {
+      var now = Date.now();
+      var thisWeek = [], lastWeek = [];
+      var steps = byType['step_count'];
+      for (var i = 0; i < steps.length; i++) {
+        var ts = new Date(steps[i].start_date || steps[i].recorded_at).getTime();
+        var daysAgo = (now - ts) / 86400000;
+        if (daysAgo <= 7) thisWeek.push(parseFloat(steps[i].value || 0));
+        else if (daysAgo <= 14) lastWeek.push(parseFloat(steps[i].value || 0));
+      }
+      if (thisWeek.length > 0 && lastWeek.length > 0) {
+        var thisAvg = thisWeek.reduce(function(s, v) { return s + v; }, 0) / thisWeek.length;
+        var lastAvg = lastWeek.reduce(function(s, v) { return s + v; }, 0) / lastWeek.length;
+        if (lastAvg > 0) {
+          var stepPct = Math.round(((thisAvg - lastAvg) / lastAvg) * 100);
+          if (Math.abs(stepPct) >= 10) {
+            text += ' Your step count is ' + (stepPct > 0 ? 'up' : 'down') + ' ' + Math.abs(stepPct) + '% vs last week.';
+          }
+        }
+      }
+    }
+    // Goal-aware framing
+    if (goal.indexOf('strength') !== -1) text += ' Lower resting HR signals better recovery between training sessions.';
+    else if (goal.indexOf('cardio') !== -1) text += ' Cardiovascular improvements show up here first.';
+    else text += ' Worth 30% of your score.';
+    return text;
+  }
+
+  if (key === 'weight') {
+    if (!m.weightScore || !m.weightVal) return null;
+    var zone = m.weightScore >= 70 ? 'optimal' : m.weightScore >= 40 ? 'moderate' : 'needs attention';
+    var text = 'Weight score: ' + zone + '.';
+    if (typeof weightEntries !== 'undefined' && weightEntries && weightEntries.length >= 2) {
+      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var trend = computeMetricTrend(points, 14);
+      if (trend && trend.direction !== 'stable') {
+        var weeklyKg = Math.abs(Math.round(trend.slope * 7 * 10) / 10);
+        if (weeklyKg >= 0.2) {
+          text += ' Trending ' + (trend.direction === 'down' ? 'down' : 'up') + ' ~' + weeklyKg + ' kg/week.';
+        }
+      }
+    }
+    if (goal.indexOf('weight') !== -1) text += ' You\'re working toward a weight goal — keep tracking consistently.';
+    else if (goal.indexOf('strength') !== -1) text += ' Body composition supports strength — maintaining a healthy weight aids performance.';
+    else text += ' Worth 20% of your score.';
+    return text;
+  }
+
+  if (key === 'strength') {
+    if (!m.strengthData) return null;
+    var pctl = m.strengthData.avgPercentile;
+    var zone = pctl >= 70 ? 'above average' : pctl >= 40 ? 'average' : 'below average';
+    var text = pctl + 'th percentile overall (' + zone + ') across ' + m.strengthData.uniqueTestTypes + ' test types.';
+    if (goal.indexOf('strength') !== -1) {
+      var domains = getCompletedDomains(m.strengthData);
+      if (domains.missing.length > 0) {
+        text += ' Complete ' + domains.missing.map(function(d) { return d.label; }).join(', ') + ' for a confirmed score.';
+      } else {
+        text += ' All 5 domains tested — keep logging to track progression.';
+      }
+    } else {
+      text += ' Worth 10% of your score.';
+    }
+    return text;
+  }
+
+  if (key === 'aerobic') {
+    if (m.vo2max === null) return null;
+    var text = 'VO2 max of ' + Math.round(m.vo2max * 10) / 10 + ' mL/kg/min.';
+    if (goal.indexOf('cardio') !== -1) text += ' This is your core metric — the best measure of cardiovascular fitness.';
+    else if (goal.indexOf('strength') !== -1) text += ' Aerobic base supports recovery between heavy sets.';
+    else text += ' The single strongest predictor of all-cause mortality. Worth 5% of your score.';
+    return text;
+  }
+
+  if (key === 'bloodwork') {
+    if (!m.bloodwork) return null;
+    var count = Object.keys(m.bloodwork).length;
+    var bwScore = typeof scoreBloodwork === 'function' ? scoreBloodwork(m.bloodwork) : null;
+    var zone = bwScore !== null ? (bwScore >= 70 ? 'good' : bwScore >= 40 ? 'fair' : 'needs attention') : 'scored';
+    var text = count + ' biomarkers tracked — overall ' + zone + '.';
+    if (goal.indexOf('strength') !== -1) text += ' Key markers like testosterone, iron, and vitamin D directly affect strength and recovery.';
+    else if (goal.indexOf('weight') !== -1) text += ' Metabolic markers like glucose and thyroid function influence weight management.';
+    else text += ' Worth 35% of your score.';
+    return text;
+  }
+
+  return null;
 }
 
 // ── BOSS INSIGHT (PROACTIVE AI) ──
