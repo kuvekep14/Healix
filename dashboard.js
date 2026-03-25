@@ -6850,7 +6850,7 @@ function renderSharedWithMe(clients) {
   clients.forEach(function(c) {
     var name = [c.firstName, c.lastName].filter(Boolean).join(' ') || 'Client';
     var initial = name.charAt(0).toUpperCase();
-    html += '<button class="nav-item client-nav-item" onclick="switchToClientView(\'' + c.ownerId + '\', \'' + escapeHtml(name).replace(/'/g, "\\'") + '\')">';
+    html += '<button class="nav-item client-nav-item" data-owner-id="' + escapeHtml(c.ownerId) + '" onclick="switchToClientView(\'' + c.ownerId + '\', \'' + escapeHtml(name).replace(/'/g, "\\'") + '\')">';
     html += '<span class="client-avatar">' + escapeHtml(initial) + '</span> ' + escapeHtml(name);
     html += '</button>';
   });
@@ -6861,9 +6861,14 @@ function renderSharedWithMe(clients) {
 
 var _ownProfileData = null; // stash viewer's own profile when switching to client
 
+var _clientSwitchId = 0; // incremented on each switch to cancel stale loads
+
 async function switchToClientView(ownerId, name) {
   var session = getSession();
   if (!session || !session.access_token) return;
+
+  // Cancel any in-flight client load from a previous switch
+  var switchId = ++_clientSwitchId;
 
   _viewingUserId = ownerId;
   _viewingUserName = name;
@@ -6936,8 +6941,11 @@ async function switchToClientView(ownerId, name) {
   var items = document.querySelectorAll('.client-nav-item');
   items.forEach(function(el) { el.classList.remove('active'); });
   items.forEach(function(el) {
-    if (el.textContent.trim().indexOf(name) !== -1) el.classList.add('active');
+    if (el.getAttribute('data-owner-id') === ownerId) el.classList.add('active');
   });
+
+  // Bail if user already clicked a different client while profile was loading
+  if (switchId !== _clientSwitchId) return;
 
   // Navigate to dashboard page and reload data with client's profile
   showPage('dashboard', document.querySelector('.nav-item'));
@@ -8606,7 +8614,7 @@ async function loadBossInsight() {
     var data = await response.json();
 
     if (data && data.insight) {
-      try { localStorage.setItem(cacheKey, JSON.stringify({ insight: data.insight, cachedAt: Date.now() })); } catch(e) {}
+      if (!_viewingUserId) { try { localStorage.setItem(cacheKey, JSON.stringify({ insight: data.insight, cachedAt: Date.now() })); } catch(e) {} }
       renderBossInsight(data.insight);
     } else {
       container.style.display = 'none';

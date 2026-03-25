@@ -1856,6 +1856,9 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 .shared-mode .drv-cta,
 .shared-mode .smart-empty-cta,
 .shared-mode .section-intro-cta,
-.shared-mode .ghost-cta-link,
-.shared-mode .driver-card-ghost { pointer-events: none; }
+.shared-mode .add-meal-btn,
+.shared-mode .add-supplement-btn,
+.shared-mode .log-test-btn,
+.shared-mode .cycle-log-btn,
 .shared-mode .ghost-cta-link { display: none !important; }
+.shared-mode .driver-card-ghost { pointer-events: none; }

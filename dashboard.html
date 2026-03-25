@@ -857,7 +857,7 @@
           <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
             <div style="flex:1">
               <label class="modal-label">Email address</label>
-              <input class="modal-input" id="share-email-input" type="email" placeholder="coach@example.com">
+              <input class="modal-input" id="share-email-input" type="email" placeholder="coach@example.com" onkeydown="if(event.key==='Enter')grantShareAccess()">
             </div>
             <button class="save-btn" style="width:auto;padding:13px 24px;margin:0;flex-shrink:0" onclick="grantShareAccess()">Grant Access</button>
           </div>
