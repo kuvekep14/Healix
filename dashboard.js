@@ -8,6 +8,16 @@ var _origSupabaseRequest = null;
 
 var currentUser = null, currentSession = null, currentTimeframe = 7;
 var HEALTHBITE_APP_URL = 'https://apps.apple.com/app/healthbite/id6738970819';
+var _storageQuotaWarned = false;
+function safeLSSet(key, val) {
+  try { localStorage.setItem(key, val); }
+  catch(e) {
+    if (!_storageQuotaWarned) {
+      _storageQuotaWarned = true;
+      console.warn('[Healix] localStorage quota exceeded — some data will not persist across sessions.');
+    }
+  }
+}
 var _hbConnectPollInterval = null;
 var _hbConnected = false;
 
@@ -882,7 +892,7 @@ function saveVitalityHistory(result, realAge) {
   // Keep last 365 days
   history.sort(function(a, b) { return a.date < b.date ? -1 : 1; });
   if (history.length > 365) history = history.slice(-365);
-  try { localStorage.setItem('healix_va_history_' + currentUser.id, JSON.stringify(history)); } catch(e) {}
+  safeLSSet('healix_va_history_' + currentUser.id, JSON.stringify(history));
 }
 
 function renderVitalityChangeCard(result) {
@@ -1522,6 +1532,28 @@ function renderSleepPageData() {
   if (scoreEl && sleepScore !== null) scoreEl.style.color = sleepScore >= 70 ? 'var(--up)' : sleepScore >= 50 ? 'var(--gold)' : 'var(--down)';
   safeSet('slp-score-sub', 'out of 100');
 
+  // HRV card — show if we have HRV data
+  var hrvCard = document.getElementById('slp-hrv-card');
+  if (hrvCard) {
+    var byType = window._lastHealthByType || {};
+    var hrvRows = byType['heart_rate_variability_sdnn'] || [];
+    if (hrvRows.length > 0) {
+      var latestHrv = Math.round(parseFloat(hrvRows[0].value));
+      hrvCard.style.display = '';
+      safeSet('slp-hrv', latestHrv);
+      // 7-day average for context
+      var recentHrv = hrvRows.slice(0, 7);
+      var hrvAvg = Math.round(recentHrv.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / Math.max(recentHrv.length, 1));
+      var hrvDelta = latestHrv - hrvAvg;
+      var hrvEl = document.getElementById('slp-hrv');
+      if (hrvEl) hrvEl.style.color = latestHrv >= 50 ? 'var(--up)' : latestHrv >= 30 ? 'var(--gold)' : 'var(--down)';
+      safeSet('slp-hrv-sub', 'ms SDNN' + (recentHrv.length > 1 ? ' · avg ' + hrvAvg + 'ms' : ''));
+      // Update sleep-scores grid to 5 columns
+      var grid = document.getElementById('sleep-scores');
+      if (grid) grid.style.gridTemplateColumns = 'repeat(5, 1fr)';
+    }
+  }
+
   // Stage breakdown chart — stacked bars
   renderSleepStageChart(sessionData);
 
@@ -1542,8 +1574,8 @@ function renderSleepStageChart(sessionData) {
   var data = sessionData.slice(0, maxBars).reverse();
 
   // Find max total for scaling
-  var maxMinutes = Math.max.apply(null, data.map(function(d) { return d.totalMinutes; }));
-  if (maxMinutes === 0) maxMinutes = 480;
+  var maxMinutes = data.length > 0 ? Math.max.apply(null, data.map(function(d) { return d.totalMinutes; })) : 0;
+  if (maxMinutes <= 0) maxMinutes = 480;
 
   var html = '<div style="display:flex;gap:3px;align-items:flex-end;height:140px">';
   data.forEach(function(d) {
@@ -1649,7 +1681,7 @@ async function loadDashboardData() {
   console.log('[Healix] Dashboard loading — realAge:', realAge, 'profile:', window.userProfileData ? Object.keys(window.userProfileData) : 'null');
 
   var sex = (window.userProfileData && window.userProfileData.sex) || 'male';
-  var metrics = { hr: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
+  var metrics = { hr: null, hrv: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
   var timestamps = {};
 
   // 1. Health data (last 14 days for context)
@@ -1721,6 +1753,13 @@ async function loadDashboardData() {
       if (hrRows.length > 0) {
         metrics.hr = Math.round(parseFloat(hrRows[0].value));
         timestamps.heart_rate = hrRows[0].recorded_at;
+      }
+
+      // HRV — SDNN from Apple Watch (ms)
+      var hrvRows = byType['heart_rate_variability_sdnn'] || [];
+      if (hrvRows.length > 0) {
+        metrics.hrv = Math.round(parseFloat(hrvRows[0].value));
+        timestamps.hrv = hrvRows[0].recorded_at;
       }
 
       // Timestamps for sleep and steps
@@ -1954,11 +1993,9 @@ async function loadDashboardData() {
   // Cache dashboard data in localStorage for instant render on next visit
   // Skip caching when viewing a client's dashboard (don't corrupt the coach's own cache)
   if (!_viewingUserId) {
-    try {
-      localStorage.setItem('healix_dashboard_cache', JSON.stringify({
-        metrics: metrics, timestamps: timestamps, result: result, realAge: realAge, cachedAt: Date.now()
-      }));
-    } catch(e) { /* localStorage full or unavailable */ }
+    safeLSSet('healix_dashboard_cache', JSON.stringify({
+      metrics: metrics, timestamps: timestamps, result: result, realAge: realAge, cachedAt: Date.now()
+    }));
   }
 }
 
@@ -2001,7 +2038,7 @@ function renderHealthStats(byType, today) {
   hrKeys.forEach(function(k) { if (byType[k]) hrData = hrData.concat(byType[k]); });
   if (hrData.length > 0) {
     var hr = Math.round(parseFloat(hrData[0].value));
-    var hrAvg = Math.round(hrData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / hrData.length);
+    var hrAvg = Math.round(hrData.reduce(function(s, r) { return s + parseFloat(r.value || 0); }, 0) / Math.max(hrData.length, 1));
     setHTML('d-hr', hr + '<span class="stat-item-unit">bpm</span>');
     var hd = hr - hrAvg;
     setEl('d-hr-d', Math.abs(hd) <= 2 ? '— avg ' + hrAvg : hd > 0 ? '↑ +' + hd + ' vs avg' : '↓ ' + hd + ' vs avg');
@@ -2037,7 +2074,7 @@ function updateMiniChart(id, data, today) {
   });
   var days = Object.keys(dayMap).sort().slice(-7);
   var vals = days.map(function(d) { return dayMap[d]; });
-  var maxV = Math.max.apply(null, vals) || 1;
+  var maxV = vals.length > 0 ? (Math.max.apply(null, vals) || 1) : 1;
   var bars = document.querySelectorAll('#' + id + ' .mini-bar');
   bars.forEach(function(bar, i) {
     bar.style.height = Math.max(8, Math.round((vals[i] || 0) / maxV * 100)) + '%';
@@ -2231,6 +2268,8 @@ var MICRO_DEFS = {
     // OtherCompounds category
     { key: 'Cholesterol',    aliases: ['Cholesterol'],                            rda: 300, unit: 'mg', display: 'Cholesterol'    },
     { key: 'Omega-3',        aliases: ['Omega-3','Omega 3','ALA'],                rda: 1.6, unit: 'g',  display: 'Omega-3'        },
+    { key: 'Caffeine',       aliases: ['Caffeine'],                               rda: 400, unit: 'mg', display: 'Caffeine'       },
+    { key: 'Alcohol',        aliases: ['Alcohol','Ethanol'],                      rda: 14,  unit: 'g',  display: 'Alcohol'        },
   ]
 };
 
@@ -4525,11 +4564,9 @@ var profileHeightUnit = 'imperial'; // 'imperial' or 'metric'
 var profileWeightUnit = 'lbs';      // 'lbs' or 'kg'
 var PROFILE_GOAL_OPTIONS = [
   { val: 'lose_weight', label: 'Lose weight' },
-  { val: 'improve_cardio', label: 'Improve cardio' },
   { val: 'gain_strength', label: 'Gain strength' },
   { val: 'sleep_better', label: 'Sleep better' },
-  { val: 'feel_better', label: 'Feel better' },
-  { val: 'healthier_diet', label: 'Healthier diet' }
+  { val: 'feel_better', label: 'Feel better' }
 ];
 var profileSelectedGoals = [];
 
@@ -6208,7 +6245,6 @@ var goalKeyMap = {
   sleep_better: 'sleep',
   weight: 'weight',
   lose_weight: 'weight',
-  healthier_diet: 'longevity',
   focus: 'focus'
 };
 
@@ -8819,7 +8855,7 @@ var INSIGHT_RULES = [
       if (data.goal.indexOf('strength') !== -1) extra = ' Sleep debt impairs muscle recovery and strength gains.';
       else if (data.goal.indexOf('weight') !== -1) extra = ' Poor sleep increases hunger hormones and makes fat loss harder.';
       else if (data.goal.indexOf('sleep') !== -1) extra = ' This is your primary goal — prioritize consistent bedtimes.';
-      else if (data.goal.indexOf('cardio') !== -1) extra = ' Recovery suffers without sleep — your training quality will drop.';
+      else if (data.goal.indexOf('feel') !== -1) extra = ' Sleep debt directly impacts energy, mood, and how you feel day-to-day.';
       return {
         headline: 'Sleep debt is high',
         body: 'You\'ve accumulated ' + data.debt + ' hours of sleep debt over the past week.' + extra,
@@ -8856,6 +8892,57 @@ var INSIGHT_RULES = [
     }
   },
   {
+    id: 'hrv_trend',
+    domain: 'heart',
+    severity: 'positive',
+    detect: function(ctx) {
+      var byType = ctx.healthData;
+      if (!byType) return null;
+      var hrvSamples = byType['heart_rate_variability_sdnn'];
+      if (!hrvSamples || hrvSamples.length < 3) return null;
+      var trend = computeMetricTrend(hrvSamples, 7);
+      if (!trend || trend.direction === 'stable') return null;
+      // For HRV, up is improving (more variability = better recovery)
+      var improving = trend.direction === 'up';
+      return { avg: Math.round(trend.avg), slope: Math.abs(Math.round(trend.slope * 7 * 10) / 10), improving: improving };
+    },
+    template: function(data) {
+      var sev = data.improving ? 'positive' : 'attention';
+      var word = data.improving ? 'up' : 'down';
+      return {
+        headline: 'HRV trending ' + word,
+        body: 'HRV averaging ' + data.avg + 'ms, ' + (data.improving ? 'up' : 'down') + ' ~' + data.slope + 'ms over 7 days. ' + (data.improving ? 'Rising HRV signals improving autonomic recovery \u2014 your body is adapting well to its current stress load.' : 'Declining HRV can signal overtraining, poor sleep, illness onset, or accumulated stress. Consider reducing training intensity or prioritizing recovery.'),
+        action: data.improving ? 'What\'s driving my HRV improvement?' : 'Why is my HRV declining and what should I do?',
+        _severity: sev
+      };
+    }
+  },
+  {
+    id: 'hrv_low_baseline',
+    domain: 'heart',
+    severity: 'attention',
+    detect: function(ctx) {
+      var byType = ctx.healthData;
+      if (!byType) return null;
+      var hrvSamples = byType['heart_rate_variability_sdnn'];
+      if (!hrvSamples || hrvSamples.length < 5) return null;
+      var sum = 0;
+      var count = Math.min(hrvSamples.length, 7);
+      for (var i = 0; i < count; i++) sum += parseFloat(hrvSamples[i].value || 0);
+      var avg = sum / count;
+      if (avg >= 30) return null; // Only flag if consistently low
+      var age = ctx.metrics && ctx.metrics.realAge || 40;
+      return { avg: Math.round(avg), age: age };
+    },
+    template: function(data) {
+      return {
+        headline: 'HRV is consistently low',
+        body: 'Your 7-day HRV average is ' + data.avg + 'ms. While HRV is individual and age-dependent, a sustained low baseline often reflects chronic stress, poor sleep quality, or deconditioning. The most effective levers: consistent sleep schedule, regular aerobic exercise, and stress management.',
+        action: 'What can I do to improve my HRV?'
+      };
+    }
+  },
+  {
     id: 'sleep_trend',
     domain: 'sleep',
     severity: 'positive',
@@ -8868,9 +8955,13 @@ var INSIGHT_RULES = [
     template: function(data) {
       var improving = data.direction === 'improving';
       var sev = improving ? 'positive' : 'attention';
+      var extra = '';
+      if (goalIncludes('sleep')) {
+        extra = improving ? ' Sleep duration is your primary goal metric — this improvement is encouraging.' : ' Sleep duration is your primary goal metric — this decline is concerning.';
+      }
       return {
         headline: 'Sleep duration ' + (improving ? 'improving' : 'declining'),
-        body: 'Averaging ' + data.thisWeek + 'h this week vs ' + data.lastWeek + 'h last week (' + (improving ? '+' : '-') + data.delta + 'h).',
+        body: 'Averaging ' + data.thisWeek + 'h this week vs ' + data.lastWeek + 'h last week (' + (improving ? '+' : '-') + data.delta + 'h).' + extra,
         action: improving ? 'What\'s helping my sleep improve?' : 'Why is my sleep getting worse?',
         _severity: sev
       };
@@ -9282,9 +9373,10 @@ var INSIGHT_RULES = [
           _severity: 'positive'
         };
       }
+      var extra = goalIncludes('sleep') ? ' Since sleep is your goal, improving aerobic fitness may be one of the most impactful things you can do for deep sleep.' : '';
       return {
         headline: 'Deep sleep below target',
-        body: 'Your deep sleep is ' + data.deepPct + '% (target: 15-20%). Research shows aerobic fitness is the strongest behavioral predictor of deep sleep. Your VO2 max of ' + data.vo2 + ' — improving it through cardio could directly boost deep sleep.',
+        body: 'Your deep sleep is ' + data.deepPct + '% (target: 15-20%). Research shows aerobic fitness is the strongest behavioral predictor of deep sleep. Your VO2 max of ' + data.vo2 + ' — improving it through cardio could directly boost deep sleep.' + extra,
         action: 'How can I increase my deep sleep percentage?',
         _severity: 'attention'
       };
@@ -9617,9 +9709,10 @@ var INSIGHT_RULES = [
           _severity: 'positive'
         };
       }
+      var extra = goalIncludes('sleep') ? ' Protein affects sleep through tryptophan — especially important for your sleep goal.' : '';
       return {
         headline: 'Low protein may be affecting deep sleep',
-        body: 'Your protein intake of ' + data.perKg + ' g/kg and ' + data.deepPct + '% deep sleep (target: 15-20%) are both below ideal. Research shows protein above 1.2 g/kg/day supports better sleep quality through tryptophan — a serotonin/melatonin precursor.',
+        body: 'Your protein intake of ' + data.perKg + ' g/kg and ' + data.deepPct + '% deep sleep (target: 15-20%) are both below ideal. Research shows protein above 1.2 g/kg/day supports better sleep quality through tryptophan — a serotonin/melatonin precursor.' + extra,
         action: 'Can increasing protein improve my sleep?',
         _severity: 'attention'
       };
@@ -9804,8 +9897,11 @@ var INSIGHT_RULES = [
       var dailyMg = (totals['Magnesium'] || 0) / days;
       var rda = 400;
       if (dailyMg >= rda * 0.7) return null;
-      var sleepIssue = ctx.metrics.sleepData.efficiency < 85 || (ctx.metrics.sleepData.avg && ctx.metrics.sleepData.avg < 6.5);
-      if (!sleepIssue) return null;
+      var isSleepGoal = goalIncludes('sleep');
+      if (!isSleepGoal) {
+        var sleepIssue = ctx.metrics.sleepData.efficiency < 85 || (ctx.metrics.sleepData.avg && ctx.metrics.sleepData.avg < 6.5);
+        if (!sleepIssue) return null;
+      }
       return { dailyMg: Math.round(dailyMg), rda: rda, pctRda: Math.round((dailyMg / rda) * 100) };
     },
     template: function(data) {
@@ -10110,7 +10206,8 @@ var INSIGHT_RULES = [
         if (mealHour >= cutoffHour || (cutoffHour > 20 && mealHour < 4)) lateDays[localDateStr(mealTime)] = true;
       });
       var lateMealDays = Object.keys(lateDays).length;
-      if (lateMealDays < 3) return null;
+      var threshold = goalIncludes('sleep') ? 2 : 3;
+      if (lateMealDays < threshold) return null;
       var eff = ctx.metrics.sleepData.efficiency;
       return { count: lateMealDays, efficiency: eff };
     },
@@ -10802,6 +10899,78 @@ var INSIGHT_RULES = [
     }
   },
 
+  // ── Additional Win Rules ──
+
+  {
+    id: 'win_meal_logging_consistency',
+    domain: 'nutrition',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var now = new Date();
+      var daysLogged = {};
+      ctx.meals.forEach(function(m) {
+        var d = localDateStr(new Date(m.meal_time || m.created_at));
+        var age = (now - new Date(d)) / 86400000;
+        if (age <= 7) daysLogged[d] = (daysLogged[d] || 0) + 1;
+      });
+      var count = Object.keys(daysLogged).length;
+      if (count < 5) return null;
+      var totalMeals = Object.values(daysLogged).reduce(function(s, v) { return s + v; }, 0);
+      return { days: count, meals: totalMeals };
+    },
+    template: function(data) {
+      return {
+        headline: 'Logged meals ' + data.days + ' of 7 days',
+        body: data.meals + ' meals tracked this week. Consistent logging is the foundation \u2014 you can\'t optimize what you don\'t measure. This data feeds every nutrition insight Healix generates.',
+        action: 'How does meal tracking help my health goals?'
+      };
+    }
+  },
+  {
+    id: 'win_sleep_efficiency_high',
+    domain: 'sleep',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var eff = ctx.metrics.sleepData.efficiency;
+      if (eff === undefined || eff < 85) return null;
+      var avg = ctx.metrics.sleepData.avg;
+      if (!avg || avg < 7) return null;
+      return { efficiency: eff, avg: Math.round(avg * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Sleep quality is strong',
+        body: data.efficiency + '% efficiency with ' + data.avg + 'h average. You\'re above the 85% clinical threshold for good sleep quality. Sleep is the single most impactful recovery lever \u2014 maintaining this protects everything else.',
+        action: 'What else can I do to maintain great sleep?'
+      };
+    }
+  },
+  {
+    id: 'win_vitality_improving',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.vaHistory || ctx.vaHistory.length < 5) return null;
+      var sorted = ctx.vaHistory.slice().sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
+      var recent = sorted.slice(-7);
+      if (recent.length < 3) return null;
+      var first = recent[0].age;
+      var last = recent[recent.length - 1].age;
+      var delta = Math.round((first - last) * 10) / 10;
+      if (delta < 0.5) return null; // Need at least 0.5 year improvement
+      return { delta: delta, days: recent.length };
+    },
+    template: function(data) {
+      return {
+        headline: 'Vitality Age improving',
+        body: 'Your Vitality Age has dropped ' + data.delta + ' years over the past week. Every fraction of a year younger reflects real physiological improvement. Whatever you\'re doing \u2014 keep doing it.',
+        action: 'What\'s driving my vitality improvement?'
+      };
+    }
+  },
+
   // ── Unlock Teasers (fire when data is missing) ──
 
   {
@@ -11073,6 +11242,489 @@ var INSIGHT_RULES = [
         action: 'How many calories do I need to build strength?'
       };
     }
+  },
+
+  // ── Sleep Better Goal Rules ──
+
+  {
+    id: 'sleep_efficiency_focus',
+    domain: 'sleep',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var eff = ctx.metrics.sleepData.efficiency;
+      if (eff === undefined || eff === null || eff >= 85) return null;
+      var totalMin = ctx.metrics.sleepData.totalMinutes || 0;
+      var awakeMin = totalMin > 0 ? Math.round(totalMin * (1 - eff / 100)) : 0;
+      return { efficiency: eff, awakeMin: awakeMin };
+    },
+    template: function(data) {
+      return {
+        headline: 'Sleep efficiency below target',
+        body: 'Sleep efficiency of ' + data.efficiency + '% means ' + data.awakeMin + ' minutes in bed awake. Two biggest levers: consistent bed/wake times (\u00b130 min) and getting out of bed if awake >20 min. This is the core of CBT-I \u2014 more effective than medication long-term.',
+        action: 'What is CBT-I and how can it improve my sleep efficiency?'
+      };
+    }
+  },
+  {
+    id: 'sleep_deep_pct_low',
+    domain: 'sleep',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData || !ctx.metrics.sleepData.stages) return null;
+      var deep = ctx.metrics.sleepData.stages.deep;
+      if (!deep || deep.pct >= 13) return null;
+      return { deepPct: deep.pct };
+    },
+    template: function(data) {
+      return {
+        headline: 'Deep sleep is low',
+        body: 'Deep sleep is ' + data.deepPct + '% (target: 15\u201320%). This is when growth hormone peaks, tissue repairs, and memories consolidate. Top evidence-based boosters: regular exercise earlier in the day, avoiding alcohol, keeping room cool (65\u201368\u00b0F).',
+        action: 'How can I increase my deep sleep percentage?'
+      };
+    }
+  },
+  {
+    id: 'sleep_rem_pct_low',
+    domain: 'sleep',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData || !ctx.metrics.sleepData.stages) return null;
+      var rem = ctx.metrics.sleepData.stages.rem;
+      if (!rem || rem.pct >= 18) return null;
+      return { remPct: rem.pct };
+    },
+    template: function(data) {
+      return {
+        headline: 'REM sleep is low',
+        body: 'REM is ' + data.remPct + '% (target: 20\u201325%). Critical for emotional regulation and motor learning. Alcohol is the #1 REM suppressant \u2014 even 1\u20132 drinks reduces REM by 20\u201330%. REM concentrates in the last 2 hours of sleep, so cutting sleep short disproportionately kills REM.',
+        action: 'How can I increase my REM sleep?'
+      };
+    }
+  },
+  {
+    id: 'sleep_bedtime_consistency',
+    domain: 'sleep',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.healthData) return null;
+      var sleepRows = ctx.healthData['sleep_analysis'];
+      if (!sleepRows || sleepRows.length === 0) return null;
+      var sessions = identifySleepSessions(sleepRows);
+      if (sessions.length < 3) return null;
+      // Use up to 7 most recent sessions
+      var recent = sessions.slice(0, 7);
+      var bedtimeMinutes = recent.map(function(sess) {
+        var d = new Date(sess.startTime);
+        var mins = d.getHours() * 60 + d.getMinutes();
+        // Normalize: shift times before noon to +24h (next-day)
+        if (mins < 720) mins += 1440;
+        return mins;
+      });
+      var mean = bedtimeMinutes.reduce(function(s, v) { return s + v; }, 0) / bedtimeMinutes.length;
+      var variance = bedtimeMinutes.reduce(function(s, v) { return s + Math.pow(v - mean, 2); }, 0) / bedtimeMinutes.length;
+      var stdDev = Math.round(Math.sqrt(variance));
+      if (stdDev < 60) return null;
+      return { stdDevMin: stdDev, nights: recent.length };
+    },
+    template: function(data) {
+      return {
+        headline: 'Bedtime is inconsistent',
+        body: 'Bedtime varied by ~' + data.stdDevMin + ' minutes over ' + data.nights + ' nights. A 2020 Sleep study found >90 min variability reduces overnight recovery by 15%. Tightening by even 30 minutes makes a measurable difference. Your circadian clock can\'t optimize what changes every night.',
+        action: 'How does bedtime consistency affect sleep quality?'
+      };
+    }
+  },
+  {
+    id: 'sleep_caffeine_proxy',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      if (ctx.metrics.sleepData.efficiency >= 85) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        var d = localDateStr(new Date(m.meal_time || m.created_at));
+        return (new Date(todayStr) - new Date(d)) / 86400000 <= 7;
+      });
+      if (recentMeals.length === 0) return null;
+
+      // Check if any recent meal has structured Caffeine data
+      var hasStructured = false;
+      recentMeals.forEach(function(m) {
+        var data = null;
+        try { data = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) {}
+        if (!data || !data.total_nutrition) return;
+        var cats = Object.values(data.total_nutrition);
+        for (var i = 0; i < cats.length; i++) {
+          if (!Array.isArray(cats[i])) continue;
+          for (var j = 0; j < cats[i].length; j++) {
+            if (MICRO_ALIAS_MAP[cats[i][j].name] && MICRO_ALIAS_MAP[cats[i][j].name].key === 'Caffeine') {
+              hasStructured = true; return;
+            }
+          }
+        }
+      });
+
+      if (hasStructured) {
+        // Use structured data: sum caffeine from afternoon meals
+        var afternoonMeals = recentMeals.filter(function(m) {
+          return new Date(m.meal_time || m.created_at).getHours() >= 14;
+        });
+        var totalMg = 0;
+        var caffeineDays = {};
+        afternoonMeals.forEach(function(m) {
+          var mData = null;
+          try { mData = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) {}
+          if (!mData || !mData.total_nutrition) return;
+          var cats = Object.values(mData.total_nutrition);
+          for (var i = 0; i < cats.length; i++) {
+            if (!Array.isArray(cats[i])) continue;
+            for (var j = 0; j < cats[i].length; j++) {
+              var def = MICRO_ALIAS_MAP[cats[i][j].name];
+              if (def && def.key === 'Caffeine') {
+                var val = parseFloat(cats[i][j].value || 0);
+                if (val > 0) {
+                  totalMg += val;
+                  caffeineDays[localDateStr(new Date(m.meal_time || m.created_at))] = true;
+                }
+              }
+            }
+          }
+        });
+        var count = Object.keys(caffeineDays).length;
+        if (count === 0) return null;
+        return { days: count, efficiency: ctx.metrics.sleepData.efficiency, mg: Math.round(totalMg) };
+      } else {
+        // Fallback: keyword matching for old meals without structured data
+        var caffeineWords = /\b(coffee|espresso|caffeine|energy drink|pre-workout|latte|cappuccino|cold brew|matcha)\b/i;
+        var caffeineDaysKw = {};
+        recentMeals.forEach(function(m) {
+          var mealHour = new Date(m.meal_time || m.created_at).getHours();
+          if (mealHour < 14) return;
+          var desc = (m.description || '').toLowerCase();
+          if (caffeineWords.test(desc)) caffeineDaysKw[localDateStr(new Date(m.meal_time || m.created_at))] = true;
+        });
+        var countKw = Object.keys(caffeineDaysKw).length;
+        if (countKw === 0) return null;
+        return { days: countKw, efficiency: ctx.metrics.sleepData.efficiency, mg: null };
+      }
+    },
+    template: function(data) {
+      var mgNote = data.mg ? ' (~' + data.mg + 'mg total after 2 PM)' : '';
+      return {
+        headline: 'Afternoon caffeine may be hurting sleep',
+        body: 'You logged caffeine in the afternoon/evening on ' + data.days + ' day' + (data.days > 1 ? 's' : '') + ' this week' + mgNote + '. Caffeine has a 6-hour half-life \u2014 a 2 PM coffee is still 50% active at 8 PM. Try cutting caffeine by noon for two weeks and track the effect on your sleep efficiency.',
+        action: 'How does caffeine timing affect my sleep?'
+      };
+    }
+  },
+  {
+    id: 'sleep_activity_connection',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.metrics || !ctx.metrics.steps || !ctx.metrics.sleepData) return null;
+      if (ctx.metrics.steps >= 5000) return null;
+      var poorSleep = ctx.metrics.sleepData.efficiency < 85 || (ctx.metrics.sleepData.avg && ctx.metrics.sleepData.avg < 6.5);
+      if (!poorSleep) return null;
+      return { steps: ctx.metrics.steps, efficiency: ctx.metrics.sleepData.efficiency || 0 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Low activity may be affecting sleep',
+        body: 'Averaging ' + data.steps + ' steps/day with ' + data.efficiency + '% sleep efficiency. Research consistently shows moderate daily activity (7,000+ steps) improves sleep quality. For your sleep goal, a daily walk is the single most accessible intervention \u2014 and it costs nothing.',
+        action: 'How does exercise affect sleep quality?'
+      };
+    }
+  },
+  {
+    id: 'sleep_alcohol_proxy',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('sleep')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var stages = ctx.metrics.sleepData.stages;
+      var remPct = stages && stages.rem ? stages.rem.pct : null;
+      var eff = ctx.metrics.sleepData.efficiency;
+      var poorSleep = (remPct !== null && remPct < 18) || (eff !== undefined && eff < 85);
+      if (!poorSleep) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        var d = localDateStr(new Date(m.meal_time || m.created_at));
+        return (new Date(todayStr) - new Date(d)) / 86400000 <= 7;
+      });
+      if (recentMeals.length === 0) return null;
+
+      // Check if any recent meal has structured Alcohol data
+      var hasStructured = false;
+      recentMeals.forEach(function(m) {
+        var data = null;
+        try { data = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) {}
+        if (!data || !data.total_nutrition) return;
+        var cats = Object.values(data.total_nutrition);
+        for (var i = 0; i < cats.length; i++) {
+          if (!Array.isArray(cats[i])) continue;
+          for (var j = 0; j < cats[i].length; j++) {
+            if (MICRO_ALIAS_MAP[cats[i][j].name] && MICRO_ALIAS_MAP[cats[i][j].name].key === 'Alcohol') {
+              hasStructured = true; return;
+            }
+          }
+        }
+      });
+
+      if (hasStructured) {
+        // Use structured data: sum alcohol per day
+        var alcoholDays = {};
+        var totalGrams = 0;
+        recentMeals.forEach(function(m) {
+          var mData = null;
+          try { mData = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) {}
+          if (!mData || !mData.total_nutrition) return;
+          var cats = Object.values(mData.total_nutrition);
+          for (var i = 0; i < cats.length; i++) {
+            if (!Array.isArray(cats[i])) continue;
+            for (var j = 0; j < cats[i].length; j++) {
+              var def = MICRO_ALIAS_MAP[cats[i][j].name];
+              if (def && def.key === 'Alcohol') {
+                var val = parseFloat(cats[i][j].value || 0);
+                if (val > 0) {
+                  totalGrams += val;
+                  alcoholDays[localDateStr(new Date(m.meal_time || m.created_at))] = true;
+                }
+              }
+            }
+          }
+        });
+        var count = Object.keys(alcoholDays).length;
+        if (count === 0) return null;
+        var drinks = Math.round(totalGrams / 14 * 10) / 10;
+        return { days: count, remPct: remPct, efficiency: eff, grams: Math.round(totalGrams), drinks: drinks };
+      } else {
+        // Fallback: keyword matching for old meals without structured data
+        var alcoholWords = /\b(beer|wine|cocktail|alcohol|bourbon|whiskey|whisky|vodka|rum|margarita|ipa|miller|sake|champagne|mimosa|sangria|tequila|gin|seltzer)\b/i;
+        var alcoholDaysKw = {};
+        recentMeals.forEach(function(m) {
+          var desc = (m.description || '').toLowerCase();
+          if (alcoholWords.test(desc)) alcoholDaysKw[localDateStr(new Date(m.meal_time || m.created_at))] = true;
+        });
+        var countKw = Object.keys(alcoholDaysKw).length;
+        if (countKw === 0) return null;
+        return { days: countKw, remPct: remPct, efficiency: eff, grams: null, drinks: null };
+      }
+    },
+    template: function(data) {
+      var details = '';
+      if (data.remPct !== null) details += ' Your REM of ' + data.remPct + '%';
+      if (data.efficiency !== undefined) details += (details ? ' and' : ' Your') + ' efficiency of ' + data.efficiency + '%';
+      details += ' may be directly impacted.';
+      var quantityNote = data.grams ? ' (~' + data.grams + 'g ethanol / ' + data.drinks + ' standard drinks)' : '';
+      return {
+        headline: 'Alcohol may be fragmenting sleep',
+        body: 'You logged alcohol on ' + data.days + ' day' + (data.days > 1 ? 's' : '') + ' this week' + quantityNote + '. Even moderate alcohol (1\u20132 drinks) suppresses REM sleep by 20\u201330% and fragments sleep architecture.' + details + ' Consider tracking alcohol-free nights vs nights with drinks to see the difference in your own data.',
+        action: 'How does alcohol affect my sleep stages?'
+      };
+    }
+  },
+
+  // ── Feel Better Goal Rules ──
+
+  {
+    id: 'wellness_vitality_trend',
+    domain: 'cross',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.vaHistory || ctx.vaHistory.length < 7) return null;
+      // Sort by date ascending
+      var sorted = ctx.vaHistory.slice().sort(function(a, b) { return new Date(a.date) - new Date(b.date); });
+      var recent = sorted.slice(-7);
+      var first = recent[0].age;
+      var last = recent[recent.length - 1].age;
+      var delta = Math.round((first - last) * 10) / 10; // Positive = improvement (younger)
+      if (Math.abs(delta) < 0.3) return null;
+      return { delta: Math.abs(delta), improving: delta > 0, entries: ctx.vaHistory.length };
+    },
+    template: function(data) {
+      if (data.improving) {
+        return {
+          headline: 'Vitality Age improving',
+          body: 'Vitality Age improved ' + data.delta + ' years over the past month \u2014 overall health trajectory is positive.',
+          action: 'What\'s driving my vitality improvement?',
+          _severity: 'positive'
+        };
+      }
+      return {
+        headline: 'Vitality Age declining',
+        body: 'Vitality Age has been flat or declining. The three highest-ROI interventions: consistent sleep (7\u20138h), daily movement (8,000 steps), adequate protein (0.8g/lb).',
+        action: 'What can I do to improve my vitality age?',
+        _severity: 'attention'
+      };
+    }
+  },
+  {
+    id: 'energy_deficiency_triad',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.meals || ctx.meals.length < 5) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      if (days === 0) return null;
+      var checks = [
+        { name: 'Iron', daily: (totals['Iron'] || 0) / days, rda: 18 },
+        { name: 'Vitamin B12', daily: (totals['Vitamin B12'] || totals['B12'] || 0) / days, rda: 0.0024 },
+        { name: 'Vitamin D', daily: (totals['Vitamin D'] || 0) / days, rda: 20 }
+      ];
+      var low = checks.filter(function(c) { return c.daily < c.rda * 0.6; });
+      if (low.length < 2) return null;
+      return { low: low.map(function(c) { return c.name; }) };
+    },
+    template: function(data) {
+      return {
+        headline: 'Possible nutritional causes of fatigue',
+        body: 'You\'re low on ' + data.low.join(' and ') + ' \u2014 the most common nutritional causes of fatigue. These three (iron, B12, vitamin D) account for the majority of diet-related low energy. This is the first thing a doctor checks when someone says \'I\'m always tired.\' Get bloodwork to confirm, then address the gaps.',
+        action: 'How do iron, B12, and vitamin D affect energy levels?'
+      };
+    }
+  },
+  {
+    id: 'wellness_inflammation',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.metrics || !ctx.metrics.bloodwork) return null;
+      var crp = ctx.metrics.bloodwork.crp;
+      if (!crp || crp <= 1.5) return null;
+      var flags = [];
+      if (ctx.metrics.sleepData && ctx.metrics.sleepData.avg && ctx.metrics.sleepData.avg < 6.5) flags.push('poor sleep');
+      if (ctx.metrics.steps && ctx.metrics.steps < 5000) flags.push('low activity');
+      var weightKg = ctx.profile && ctx.profile.current_weight_kg;
+      var heightCm = ctx.profile && ctx.profile.height_cm;
+      if (weightKg && heightCm) {
+        var bmi = weightKg / Math.pow(heightCm / 100, 2);
+        if (bmi > 28) flags.push('elevated BMI');
+      }
+      if (flags.length === 0) return null;
+      return { crp: crp, flags: flags };
+    },
+    template: function(data) {
+      return {
+        headline: 'Inflammation elevated with lifestyle factors',
+        body: 'CRP of ' + data.crp + ' mg/L indicates low-grade inflammation, paired with ' + data.flags.join(' and ') + '. Chronic inflammation drives fatigue, brain fog, and poor recovery. Each lifestyle factor independently reduces CRP by 20\u201330% \u2014 fix the biggest gap first.',
+        action: 'How can I reduce my CRP and inflammation?'
+      };
+    }
+  },
+  {
+    id: 'wellness_activity_baseline',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.metrics || !ctx.metrics.steps) return null;
+      if (ctx.metrics.steps >= 5000) return null;
+      return { steps: ctx.metrics.steps };
+    },
+    template: function(data) {
+      return {
+        headline: 'Daily activity is low',
+        body: 'Averaging ' + data.steps + ' steps/day. A 2023 JAMA meta-analysis found each additional 1,000 steps reduced all-cause mortality by 15%. Getting from ' + data.steps + ' to 7,000 is the single highest-ROI change for general wellness \u2014 it affects energy, mood, sleep, and metabolic health simultaneously.',
+        action: 'How does walking affect overall health?'
+      };
+    }
+  },
+  {
+    id: 'wellness_sleep_foundation',
+    domain: 'sleep',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var avg = ctx.metrics.sleepData.avg;
+      if (!avg || avg >= 6.5) return null;
+      return { avg: avg };
+    },
+    template: function(data) {
+      return {
+        headline: 'Sleep is undermining how you feel',
+        body: 'Averaging ' + data.avg + 'h of sleep. For feeling better, sleep is the foundation \u2014 it affects mood, energy, immune function, weight, and cognitive performance. Sleep deprivation impairs glucose tolerance, increases hunger, elevates inflammation, and reduces emotional resilience within days. Prioritize 7+ hours before optimizing anything else.',
+        action: 'How does sleep affect energy and mood?'
+      };
+    }
+  },
+  {
+    id: 'wellness_nutrition_completeness',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.meals || ctx.meals.length < 5) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 5) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      if (days === 0) return null;
+      var nutrients = [
+        { name: 'Iron', daily: (totals['Iron'] || 0) / days, rda: 18, food: 'red meat, spinach, lentils' },
+        { name: 'Vitamin B12', daily: (totals['Vitamin B12'] || totals['B12'] || 0) / days, rda: 0.0024, food: 'meat, fish, eggs, dairy' },
+        { name: 'Vitamin D', daily: (totals['Vitamin D'] || 0) / days, rda: 20, food: 'fatty fish, egg yolks, fortified foods' },
+        { name: 'Magnesium', daily: (totals['Magnesium'] || 0) / days, rda: 400, food: 'nuts, seeds, leafy greens' },
+        { name: 'Zinc', daily: (totals['Zinc'] || 0) / days, rda: 11, food: 'meat, shellfish, legumes' },
+        { name: 'Calcium', daily: (totals['Calcium'] || 0) / days, rda: 1000, food: 'dairy, sardines, broccoli' },
+        { name: 'Omega-3', daily: (totals['Omega-3'] || totals['Omega-3 Fatty Acids'] || totals['DHA'] || totals['EPA'] || 0) / days, rda: 1.6, food: 'fatty fish, walnuts, flaxseed' }
+      ];
+      var low = nutrients.filter(function(n) { return n.daily < n.rda * 0.6; });
+      if (low.length < 3) return null;
+      return { count: low.length, gaps: low };
+    },
+    template: function(data) {
+      var gapList = data.gaps.map(function(g) { return g.name + ' (try ' + g.food + ')'; }).join('; ');
+      return {
+        headline: 'Multiple micronutrient gaps detected',
+        body: data.count + ' of 7 key micronutrients are below target this week. Subclinical deficiencies are invisible but drain energy, mood, and recovery. Your gaps: ' + gapList + '. Even small dietary shifts \u2014 adding leafy greens, fatty fish, or nuts \u2014 can move multiple nutrients at once.',
+        action: 'Which micronutrients matter most for energy and mood?'
+      };
+    }
+  },
+  {
+    id: 'wellness_rhr_elevated',
+    domain: 'heart',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('feel')) return null;
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      if (ctx.metrics.hr <= 75) return null;
+      // Exclude if high activity (probably exercising)
+      if (ctx.metrics.steps && ctx.metrics.steps > 12000) return null;
+      return { hr: ctx.metrics.hr };
+    },
+    template: function(data) {
+      return {
+        headline: 'Resting heart rate is elevated',
+        body: 'Resting HR of ' + data.hr + ' bpm is elevated. Outside of exercise, an elevated resting HR can signal stress, dehydration, poor sleep, or deconditioning. Each 10 bpm above 60 increases mortality risk by ~9%. The most effective interventions: consistent aerobic activity, better sleep, and stress management.',
+        action: 'Why is my resting heart rate high and how can I lower it?'
+      };
+    }
   }
 ];
 
@@ -11128,13 +11780,29 @@ function runInsightRules(ctx) {
   var now = Date.now();
   var DAY_MS = 86400000;
 
-  // Score each insight: severity base + freshness bonus
+  // Score each insight: severity base + freshness bonus + data-staleness penalty
+  var timestamps = ctx.timestamps || {};
   all.forEach(function(ins) {
     var base = (4 - (order[ins.severity] || 3)) * 100; // alert=400, attention=300, positive=200, neutral=100
     var lastSeen = seen[ins.id] || 0;
     var daysSince = (now - lastSeen) / DAY_MS;
     var freshBonus = lastSeen === 0 ? 50 : Math.min(50, daysSince * 10); // Never-seen gets max bonus
-    ins._score = base + freshBonus;
+    // Data-staleness penalty: insights based on old data score lower
+    var stalePenalty = 0;
+    var domainTs = ins.domain === 'heart' ? timestamps.heart_rate
+      : ins.domain === 'sleep' ? timestamps.sleep
+      : ins.domain === 'bloodwork' ? timestamps.bloodwork
+      : ins.domain === 'nutrition' ? null  // meals are always recent
+      : null;
+    if (domainTs) {
+      var dataAgeDays = (now - new Date(domainTs).getTime()) / DAY_MS;
+      if (dataAgeDays > 30) stalePenalty = 80;
+      else if (dataAgeDays > 14) stalePenalty = 40;
+      else if (dataAgeDays > 7) stalePenalty = 15;
+    }
+    // Positive insights (wins) get a boost to ensure they surface
+    var winBoost = ins.severity === 'positive' ? 30 : 0;
+    ins._score = base + freshBonus + winBoost - stalePenalty;
   });
 
   all.sort(function(a, b) { return b._score - a._score; });
@@ -11143,14 +11811,14 @@ function runInsightRules(ctx) {
   var picked = [];
   var domainCount = {};
   var unlockCount = 0;
-  for (var j = 0; j < all.length && picked.length < 4; j++) {
+  for (var j = 0; j < all.length && picked.length < 8; j++) {
     var ins = all[j];
     var dom = ins.domain;
     if (dom === 'unlock') {
       if (unlockCount >= 1) continue;
       unlockCount++;
     } else {
-      if ((domainCount[dom] || 0) >= 2) continue;
+      if ((domainCount[dom] || 0) >= 3) continue;
       domainCount[dom] = (domainCount[dom] || 0) + 1;
     }
     picked.push(ins);
@@ -11160,10 +11828,14 @@ function runInsightRules(ctx) {
   picked.forEach(function(ins) { seen[ins.id] = now; });
   // Prune seen entries older than 30 days
   Object.keys(seen).forEach(function(k) { if (now - seen[k] > 30 * DAY_MS) delete seen[k]; });
-  try { localStorage.setItem(seenKey, JSON.stringify(seen)); } catch(e) {}
+  safeLSSet(seenKey, JSON.stringify(seen));
 
   return picked;
 }
+
+var _insightFeedData = [];
+var _insightPage = 0;
+var INSIGHTS_PER_PAGE = 2;
 
 function renderInsightFeed(insights) {
   var section = document.getElementById('insight-feed-section');
@@ -11188,23 +11860,64 @@ function renderInsightFeed(insights) {
     }
   }
 
+  _insightFeedData = insights;
+  _insightPage = 0;
+  renderInsightPage();
+  section.style.display = 'block';
+}
+
+function renderInsightPage() {
+  var list = document.getElementById('insight-feed-list');
+  var nav = document.getElementById('insight-feed-nav');
+  var dotsEl = document.getElementById('insight-dots');
+  if (!list) return;
+
+  var totalPages = Math.ceil(_insightFeedData.length / INSIGHTS_PER_PAGE);
+  var start = _insightPage * INSIGHTS_PER_PAGE;
+  var pageItems = _insightFeedData.slice(start, start + INSIGHTS_PER_PAGE);
+
   var html = '';
-  for (var i = 0; i < insights.length; i++) {
-    var ins = insights[i];
+  for (var i = 0; i < pageItems.length; i++) {
+    var ins = pageItems[i];
     var badgeCls = ins.severity;
-    var badgeText = ins.severity === 'positive' ? 'Positive' : ins.severity === 'attention' ? 'Attention' : ins.severity === 'alert' ? 'Alert' : 'Neutral';
-    html += '<div class="insight-card">';
+    var badgeText = ins.severity === 'positive' ? 'Win' : ins.severity === 'attention' ? 'Attention' : ins.severity === 'alert' ? 'Alert' : 'Insight';
+    html += '<div class="insight-feed-card severity-' + badgeCls + '">';
+    html += '<div class="insight-feed-card-top">';
     html += '<div class="insight-badge ' + badgeCls + '">' + badgeText + '</div>';
     html += '<div class="insight-headline">' + escapeHtml(ins.headline) + '</div>';
+    html += '</div>';
     html += '<div class="insight-body">' + escapeHtml(ins.body) + '</div>';
     if (ins.action) {
+      html += '<div class="insight-feed-card-footer">';
       html += '<a href="#" class="insight-discuss" onclick="event.preventDefault();openInsightChat(\'' + escapeHtml(ins.action).replace(/'/g, "\\'") + '\')">';
       html += 'Discuss with Healix \u2192</a>';
+      html += '</div>';
     }
     html += '</div>';
   }
   list.innerHTML = html;
-  section.style.display = 'block';
+
+  // Navigation dots
+  if (nav && dotsEl) {
+    if (totalPages > 1) {
+      nav.style.display = 'flex';
+      var dots = '';
+      for (var p = 0; p < totalPages; p++) {
+        dots += '<div class="insight-nav-dot' + (p === _insightPage ? ' active' : '') + '"></div>';
+      }
+      dotsEl.innerHTML = dots;
+      document.getElementById('insight-prev').disabled = _insightPage === 0;
+      document.getElementById('insight-next').disabled = _insightPage >= totalPages - 1;
+    } else {
+      nav.style.display = 'none';
+    }
+  }
+}
+
+function pageInsights(dir) {
+  var totalPages = Math.ceil(_insightFeedData.length / INSIGHTS_PER_PAGE);
+  _insightPage = Math.max(0, Math.min(totalPages - 1, _insightPage + dir));
+  renderInsightPage();
 }
 
 function openInsightChat(question) {

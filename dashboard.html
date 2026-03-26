@@ -264,7 +264,14 @@
 
         <!-- Insight feed ("What's Happening") -->
         <div id="insight-feed-section" style="display:none">
-          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:10px">What's Happening</div>
+          <div class="insight-feed-header">
+            <div class="insight-feed-title">What's Happening</div>
+            <div class="insight-feed-nav" id="insight-feed-nav" style="display:none">
+              <button class="insight-nav-btn" id="insight-prev" onclick="pageInsights(-1)">&#8249;</button>
+              <span class="insight-nav-dots" id="insight-dots"></span>
+              <button class="insight-nav-btn" id="insight-next" onclick="pageInsights(1)">&#8250;</button>
+            </div>
+          </div>
           <div id="insight-feed-list"></div>
         </div>
 
@@ -554,6 +561,11 @@
           <div class="card-label">Sleep Score</div>
           <div class="stat-item-val" id="slp-score" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
           <div class="stat-item-delta delta-neutral" id="slp-score-sub">out of 100</div>
+        </div>
+        <div class="card" id="slp-hrv-card" style="display:none">
+          <div class="card-label">HRV</div>
+          <div class="stat-item-val" id="slp-hrv" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
+          <div class="stat-item-delta delta-neutral" id="slp-hrv-sub">ms SDNN</div>
         </div>
       </div>
 
@@ -1216,6 +1228,40 @@
     <div class="modal-actions">
       <button class="modal-btn-secondary" onclick="closeModal('supplement-modal')">Cancel</button>
       <button class="modal-btn-primary" id="supp-save-btn" onclick="saveSupplement()">Add Supplement</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── WEIGHT LOG MODAL ── -->
+<div class="modal-overlay" id="weight-modal" onclick="closeModalOutside(event,'weight-modal')">
+  <div class="modal" style="position:relative">
+    <button class="modal-close" onclick="closeModal('weight-modal')">&#10005;</button>
+    <div class="modal-title">Log <em>Weight</em></div>
+    <div class="modal-sub">Track your weight over time. Consistency matters more than any single entry.</div>
+    <div class="modal-row">
+      <div class="modal-field" style="flex:2">
+        <label class="modal-label">Weight</label>
+        <input class="modal-input" id="w-value" type="number" step="0.1" placeholder="e.g. 165">
+      </div>
+      <div class="modal-field" style="flex:1">
+        <label class="modal-label">Unit</label>
+        <select class="modal-input" id="w-unit" style="cursor:pointer">
+          <option value="lbs">lbs</option>
+          <option value="kg">kg</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Date</label>
+      <input class="modal-input" id="w-date" type="date">
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Notes <span style="color:var(--muted);font-size:9px;letter-spacing:.1em">(optional)</span></label>
+      <input class="modal-input" id="w-notes" type="text" placeholder="e.g. Morning, fasted">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-secondary" onclick="closeModal('weight-modal')">Cancel</button>
+      <button class="modal-btn-primary" onclick="saveWeight()">Log Weight</button>
     </div>
   </div>
 </div>
