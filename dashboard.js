@@ -8611,6 +8611,70 @@ function goalIncludes(keyword) {
   return getUserGoal().indexOf(keyword) !== -1;
 }
 
+// ── ENERGY BALANCE ──
+
+function computeEnergyBalance(ctx, days) {
+  if (!ctx.meals || ctx.meals.length === 0) return null;
+  var byType = ctx.healthData;
+  if (!byType) return null;
+  var activeRows = byType['active_energy_burned'] || [];
+  var basalRows = byType['basal_energy_burned'] || [];
+  if (activeRows.length === 0 && basalRows.length === 0) return null;
+
+  var now = new Date();
+  var results = [];
+
+  for (var d = 0; d < days; d++) {
+    var checkDate = new Date(now);
+    checkDate.setDate(checkDate.getDate() - d);
+    var dateStr = localDateStr(checkDate);
+
+    // Calories in (from meals)
+    var calIn = 0;
+    ctx.meals.forEach(function(m) {
+      if (localDateStr(new Date(m.meal_time || m.created_at)) === dateStr) {
+        var mac = getMacrosFromMeal(m);
+        calIn += mac.cal || 0;
+      }
+    });
+
+    // Calories out (from HealthKit)
+    var active = 0, basal = 0;
+    activeRows.forEach(function(r) {
+      if (r.start_date && r.start_date.startsWith(dateStr)) active += parseFloat(r.value || 0);
+    });
+    basalRows.forEach(function(r) {
+      if (r.start_date && r.start_date.startsWith(dateStr)) basal += parseFloat(r.value || 0);
+    });
+
+    var calOut = Math.round(active + basal);
+    if (calIn > 0 && calOut > 0) {
+      results.push({ date: dateStr, calIn: Math.round(calIn), calOut: calOut, active: Math.round(active), basal: Math.round(basal), balance: Math.round(calIn - calOut) });
+    }
+  }
+
+  if (results.length === 0) return null;
+
+  var avgBalance = Math.round(results.reduce(function(s, r) { return s + r.balance; }, 0) / results.length);
+  var avgIn = Math.round(results.reduce(function(s, r) { return s + r.calIn; }, 0) / results.length);
+  var avgOut = Math.round(results.reduce(function(s, r) { return s + r.calOut; }, 0) / results.length);
+  var avgActive = Math.round(results.reduce(function(s, r) { return s + r.active; }, 0) / results.length);
+  // Predict weekly weight change: ~7700 cal = 1 kg
+  var predictedWeeklyKg = Math.round((avgBalance * 7 / 7700) * 10) / 10;
+
+  return {
+    days: results,
+    daysTracked: results.length,
+    avgBalance: avgBalance,
+    avgIn: avgIn,
+    avgOut: avgOut,
+    avgActive: avgActive,
+    predictedWeeklyKg: predictedWeeklyKg,
+    inDeficit: avgBalance < -100,
+    inSurplus: avgBalance > 100
+  };
+}
+
 // ── CHAT PAYWALL GATE ──
 
 function isChatAllowed() {
@@ -10697,6 +10761,164 @@ var INSIGHT_RULES = [
         headline: 'Add family history for personalized risk signals',
         body: 'Family history of diabetes, heart disease, or high cholesterol changes how your blood markers should be interpreted. Adding it unlocks insights that flag elevated risk before standard thresholds would.',
         action: 'Why does family history matter for my health data?'
+      };
+    }
+  },
+
+  // ── Energy Balance Rules ──
+
+  {
+    id: 'energy_balance_daily',
+    domain: 'nutrition',
+    severity: 'neutral',
+    detect: function(ctx) {
+      var eb = computeEnergyBalance(ctx, 1);
+      if (!eb || eb.daysTracked === 0) return null;
+      var today = eb.days[0];
+      if (!today) return null;
+      return { calIn: today.calIn, calOut: today.calOut, active: today.active, basal: today.basal, balance: today.balance };
+    },
+    template: function(data) {
+      var dir = data.balance < 0 ? 'deficit' : 'surplus';
+      var abs = Math.abs(data.balance);
+      var goal = getUserGoal();
+      var sev = 'neutral';
+      var goalFrame = '';
+      if (goal.indexOf('weight') !== -1) {
+        sev = data.balance < -100 ? 'positive' : data.balance > 100 ? 'attention' : 'neutral';
+        goalFrame = data.balance < -100 ? ' On track for weight loss.' : data.balance > 100 ? ' This surplus works against your weight loss goal.' : ' Near maintenance.';
+      } else if (goal.indexOf('strength') !== -1) {
+        sev = data.balance > -200 ? 'positive' : 'attention';
+        goalFrame = data.balance < -300 ? ' This deficit may limit muscle recovery and strength gains.' : data.balance >= 0 ? ' Slight surplus supports muscle growth.' : ' Near maintenance — enough for recovery.';
+      }
+      return {
+        headline: abs + ' cal ' + dir + ' today',
+        body: 'You ate ' + data.calIn.toLocaleString() + ' cal and burned ' + data.calOut.toLocaleString() + ' (' + data.basal.toLocaleString() + ' basal + ' + data.active.toLocaleString() + ' active).' + goalFrame,
+        action: 'How does my daily energy balance affect my goals?',
+        _severity: sev
+      };
+    }
+  },
+  {
+    id: 'energy_balance_weekly',
+    domain: 'nutrition',
+    severity: 'neutral',
+    detect: function(ctx) {
+      var eb = computeEnergyBalance(ctx, 7);
+      if (!eb || eb.daysTracked < 3) return null;
+      return eb;
+    },
+    template: function(data) {
+      var dir = data.avgBalance < 0 ? 'deficit' : 'surplus';
+      var abs = Math.abs(data.avgBalance);
+      var goal = getUserGoal();
+      var sev = 'neutral';
+      var body = 'Over ' + data.daysTracked + ' tracked days: averaging ' + data.avgIn.toLocaleString() + ' cal in vs ' + data.avgOut.toLocaleString() + ' cal burned — a ' + abs + ' cal/day ' + dir + '.';
+
+      if (data.predictedWeeklyKg !== 0) {
+        var absKg = Math.abs(data.predictedWeeklyKg);
+        body += ' At this pace, you\'d ' + (data.predictedWeeklyKg < 0 ? 'lose' : 'gain') + ' ~' + absKg + ' kg/week.';
+      }
+
+      if (goal.indexOf('weight') !== -1) {
+        if (data.inDeficit) {
+          if (data.avgBalance < -1000) {
+            sev = 'attention';
+            body += ' A deficit over 1,000 cal/day is aggressive — research shows this accelerates muscle loss. Aim for 500-750 cal/day deficit for sustainable fat loss.';
+          } else {
+            sev = 'positive';
+            body += ' This is a healthy deficit for sustainable weight loss.';
+          }
+        } else if (data.inSurplus) {
+          sev = 'attention';
+          body += ' You\'re in surplus despite a weight loss goal. Either reduce intake or increase activity.';
+        }
+      } else if (goal.indexOf('strength') !== -1) {
+        if (data.avgBalance < -300) {
+          sev = 'attention';
+          body += ' This deficit may impair strength recovery. For muscle gain, aim for maintenance or a small surplus (+200-300 cal).';
+        } else if (data.avgBalance >= -100 && data.avgBalance <= 500) {
+          sev = 'positive';
+          body += ' Good range for strength goals — enough fuel for recovery and adaptation.';
+        }
+      }
+
+      return {
+        headline: abs + ' cal/day average ' + dir + ' this week',
+        body: body,
+        action: 'Is my calorie balance right for my goals?',
+        _severity: sev
+      };
+    }
+  },
+  {
+    id: 'energy_predicted_vs_actual_weight',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      var eb = computeEnergyBalance(ctx, 14);
+      if (!eb || eb.daysTracked < 5) return null;
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      var points = weightEntries.map(function(w) {
+        var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 };
+      });
+      var trend = computeMetricTrend(points, 14);
+      if (!trend) return null;
+      var actualWeeklyKg = Math.round(trend.slope * 7 * 10) / 10;
+      var predictedWeeklyKg = eb.predictedWeeklyKg;
+      var discrepancy = Math.abs(predictedWeeklyKg - actualWeeklyKg);
+      if (discrepancy < 0.3) return null;
+      return { predicted: predictedWeeklyKg, actual: actualWeeklyKg, avgIn: eb.avgIn, avgOut: eb.avgOut, daysTracked: eb.daysTracked };
+    },
+    template: function(data) {
+      var body = 'Based on ' + data.daysTracked + ' days of data, your energy balance predicts ' + (data.predicted < 0 ? 'losing' : 'gaining') + ' ~' + Math.abs(data.predicted) + ' kg/week. But your actual weight is ' + (data.actual < 0 ? 'down' : 'up') + ' ~' + Math.abs(data.actual) + ' kg/week.';
+      if (Math.abs(data.actual) > Math.abs(data.predicted)) {
+        body += ' You may be burning more than tracked, or some high-calorie items in your logs are overestimated.';
+      } else {
+        body += ' Some meals may not be logged — research shows people underreport intake by 20-40% on average. Try logging everything for one strict week to calibrate.';
+      }
+      return {
+        headline: 'Energy balance doesn\'t match weight trend',
+        body: body,
+        action: 'Why doesn\'t my calorie balance match my weight change?'
+      };
+    }
+  },
+  {
+    id: 'deficit_too_aggressive',
+    domain: 'nutrition',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('weight')) return null;
+      var eb = computeEnergyBalance(ctx, 7);
+      if (!eb || eb.daysTracked < 3) return null;
+      if (eb.avgBalance >= -1000) return null; // Not too aggressive
+      return { avgBalance: eb.avgBalance, avgIn: eb.avgIn, avgOut: eb.avgOut, predictedWeeklyKg: eb.predictedWeeklyKg };
+    },
+    template: function(data) {
+      return {
+        headline: 'Calorie deficit may be too aggressive',
+        body: 'You\'re averaging a ' + Math.abs(data.avgBalance) + ' cal/day deficit (eating ' + data.avgIn.toLocaleString() + ', burning ' + data.avgOut.toLocaleString() + '). Deficits over 1,000 cal/day accelerate muscle loss and trigger metabolic adaptation — your body fights back by reducing energy expenditure. A 500-750 cal/day deficit preserves muscle and is more sustainable long-term.',
+        action: 'What happens when my calorie deficit is too large?'
+      };
+    }
+  },
+  {
+    id: 'strength_in_deficit_warning',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      var eb = computeEnergyBalance(ctx, 7);
+      if (!eb || eb.daysTracked < 3) return null;
+      if (eb.avgBalance >= -200) return null; // Not a meaningful deficit
+      return { avgBalance: eb.avgBalance, avgIn: eb.avgIn, avgOut: eb.avgOut };
+    },
+    template: function(data) {
+      return {
+        headline: 'Calorie deficit working against strength goal',
+        body: 'You\'re in a ' + Math.abs(data.avgBalance) + ' cal/day deficit (eating ' + data.avgIn.toLocaleString() + ', burning ' + data.avgOut.toLocaleString() + '). For strength and muscle gain, you need to be at maintenance or a slight surplus (+200-300 cal). Muscle protein synthesis requires energy — training hard in a deficit limits gains and slows recovery.',
+        action: 'How many calories do I need to build strength?'
       };
     }
   }
