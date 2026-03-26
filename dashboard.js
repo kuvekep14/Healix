@@ -231,7 +231,6 @@ async function init() {
     loadDashboardData().then(function() {
       renderVitalityUnlockState();
       renderOnboardingChecklist();
-      renderMilestones();
       renderSmartEmptyStates(window._lastVitalityResult);
       loadBossInsight();
       // Run deterministic insight engine
@@ -1947,23 +1946,6 @@ async function loadDashboardData() {
   renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', timestamps.bloodwork);
   renderSyncBanner(timestamps);
   renderVitalityConfidence(timestamps);
-
-  // Meal streak — use lightweight 120-day query for accurate long streaks
-  var streakMeals = (mealLogs && !mealLogs.error && Array.isArray(mealLogs)) ? mealLogs : [];
-  try {
-    var streakSince = new Date();
-    streakSince.setDate(streakSince.getDate() - 120);
-    var streakData = await supabaseRequest(
-      '/rest/v1/meal_log?select=meal_time,created_at&user_id=eq.' + currentUser.id
-      + '&meal_time=gte.' + streakSince.toISOString()
-      + '&order=meal_time.desc',
-      'GET', null, token
-    );
-    if (streakData && !streakData.error && Array.isArray(streakData)) {
-      streakMeals = streakData;
-    }
-  } catch(e) { console.error('[Healix] Streak query error:', e); }
-  renderMealStreak(streakMeals);
 
   // Load weekly insights and health summary (non-blocking)
   loadWeeklyInsights();
@@ -4412,7 +4394,6 @@ async function handleDocUpload(input) {
               localStorage.removeItem('healix_dashboard_cache');
               loadDashboardData().then(function() {
                 renderOnboardingChecklist();
-                renderMilestones();
                 renderVitalityUnlockState();
                 renderSmartEmptyStates(window._lastVitalityResult);
               });
@@ -10646,6 +10627,177 @@ var INSIGHT_RULES = [
         body: lines.join('. ') + '. These ratios are more meaningful than raw numbers — they normalize for body size and are how strength standards are measured.',
         action: 'What are good strength-to-bodyweight ratios for my level?',
         _severity: 'neutral'
+      };
+    }
+  },
+
+  // ── Achievements (replaces milestone timeline) ──
+
+  {
+    id: 'achievement_va_improved',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.vaHistory || ctx.vaHistory.length < 7) return null;
+      var first = ctx.vaHistory[0];
+      var last = ctx.vaHistory[ctx.vaHistory.length - 1];
+      if (!first || !last || !first.vAge || !last.vAge) return null;
+      var improvement = first.vAge - last.vAge;
+      if (improvement < 1) return null;
+      return { improvement: Math.round(improvement * 10) / 10, first: first.vAge, current: last.vAge };
+    },
+    template: function(data) {
+      var headline = 'Vitality Age improved ' + data.improvement + ' years';
+      var body = 'Your Vitality Age has gone from ' + data.first + ' to ' + data.current + ' since you started tracking. This reflects real, measurable improvements in your health markers — not just noise.';
+      if (data.improvement >= 3) body += ' A 3+ year improvement is exceptional.';
+      return { headline: headline, body: body, action: 'What\'s driving my vitality age improvement?' };
+    }
+  },
+  {
+    id: 'achievement_composite_80',
+    domain: 'cross',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.result || !ctx.result.composite || ctx.result.composite < 80) return null;
+      return { composite: Math.round(ctx.result.composite) };
+    },
+    template: function(data) {
+      return {
+        headline: 'Composite health score: ' + data.composite + '/100',
+        body: 'Your composite score is in the top tier. This means your combined cardiovascular fitness, body composition, strength, and biomarkers are all performing well. Few people maintain this level — keep doing what you\'re doing.',
+        action: 'How do I maintain a high composite score as I age?'
+      };
+    }
+  },
+  {
+    id: 'achievement_rhr_elite',
+    domain: 'heart',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      if (ctx.metrics.hr > 55) return null;
+      return { hr: ctx.metrics.hr };
+    },
+    template: function(data) {
+      return {
+        headline: 'Resting HR of ' + data.hr + ' bpm — athlete zone',
+        body: 'A resting heart rate below 55 bpm puts you in the athletic range. This reflects strong cardiovascular efficiency — your heart pumps more blood per beat, so it doesn\'t need to beat as often. Research links resting HR below 60 to significantly lower all-cause mortality.',
+        action: 'What does an athletic resting heart rate mean for my longevity?'
+      };
+    }
+  },
+  {
+    id: 'achievement_strength_progress',
+    domain: 'strength',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.strengthData || !ctx.metrics.strengthData.tests) return null;
+      var tests = ctx.metrics.strengthData.tests;
+      var byKey = {};
+      tests.forEach(function(t) { if (!byKey[t.test_key]) byKey[t.test_key] = []; byKey[t.test_key].push(t); });
+      var improvements = [];
+      var liftKeys = ['bench_1rm', 'squat_1rm', 'deadlift_1rm'];
+      for (var i = 0; i < liftKeys.length; i++) {
+        var k = liftKeys[i];
+        var history = byKey[k];
+        if (!history || history.length < 2) continue;
+        var latest = parseFloat(history[0].raw_value);
+        var oldest = parseFloat(history[history.length - 1].raw_value);
+        if (oldest <= 0) continue;
+        var pctGain = Math.round(((latest - oldest) / oldest) * 100);
+        if (pctGain >= 10) {
+          var norm = (typeof FITNESS_NORMS !== 'undefined' && FITNESS_NORMS[k]) || {};
+          improvements.push({ label: norm.label || k, pctGain: pctGain, latest: Math.round(latest), unit: norm.unit || 'lbs' });
+        }
+      }
+      if (improvements.length === 0) return null;
+      return { improvements: improvements };
+    },
+    template: function(data) {
+      var best = data.improvements[0];
+      var body = best.label + ' up ' + best.pctGain + '% to ' + best.latest + ' ' + best.unit + ' since you started tracking.';
+      if (data.improvements.length > 1) {
+        body += ' Also: ' + data.improvements.slice(1).map(function(i) { return i.label + ' +' + i.pctGain + '%'; }).join(', ') + '.';
+      }
+      body += ' Consistent progressive overload is working.';
+      return {
+        headline: best.label + ' up ' + best.pctGain + '% since you started',
+        body: body,
+        action: 'How do I keep progressing on my lifts?'
+      };
+    }
+  },
+  {
+    id: 'achievement_sleep_consistency',
+    domain: 'sleep',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var avg = ctx.metrics.sleepData.avg;
+      var eff = ctx.metrics.sleepData.efficiency;
+      var debt = ctx.metrics.sleepData.debt;
+      if (!avg || avg < 7 || !eff || eff < 85 || debt > 3) return null;
+      return { avg: Math.round(avg * 10) / 10, efficiency: eff, debt: Math.round(debt * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Sleep is dialed in',
+        body: 'Averaging ' + data.avg + 'h with ' + data.efficiency + '% efficiency and only ' + data.debt + 'h of debt. This supports recovery, cognitive function, and metabolic health. Consistent sleep quality like this is one of the most impactful things you can do for long-term health.',
+        action: 'How does consistent sleep affect my other health markers?'
+      };
+    }
+  },
+  {
+    id: 'achievement_all_domains',
+    domain: 'strength',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!goalIncludes('strength')) return null;
+      if (!ctx.metrics || !ctx.metrics.strengthData) return null;
+      var domains = getCompletedDomains(ctx.metrics.strengthData);
+      if (domains.missing.length > 0) return null;
+      return { pctl: ctx.metrics.strengthData.avgPercentile };
+    },
+    template: function(data) {
+      return {
+        headline: 'All 5 strength domains complete',
+        body: 'You\'ve tested Upper Push, Upper Pull, Lower Body, Core, and Carry/Grip — your confirmed fitness percentile is ' + data.pctl + 'th. This is a comprehensive strength profile that most people never build. Keep logging to track progression.',
+        action: 'How does my strength compare across domains?'
+      };
+    }
+  },
+  {
+    id: 'achievement_weight_goal_progress',
+    domain: 'weight',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!goalIncludes('weight')) return null;
+      if (!ctx.profile || !ctx.profile.current_weight_kg) return null;
+      // Check if target weight exists
+      var targetKg = ctx.profile.target_weight_kg;
+      if (!targetKg) return null;
+      var currentKg = ctx.profile.current_weight_kg;
+      // Need to know starting weight — use oldest weight log
+      if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
+      var oldest = weightEntries[weightEntries.length - 1];
+      var startKg = parseFloat(oldest.value);
+      if ((oldest.unit || 'lbs').toLowerCase() !== 'kg') startKg = startKg / 2.205;
+      var totalToLose = startKg - targetKg;
+      if (totalToLose <= 0) return null;
+      var lostSoFar = startKg - currentKg;
+      if (lostSoFar <= 0) return null;
+      var pct = Math.round((lostSoFar / totalToLose) * 100);
+      if (pct < 10) return null; // Not enough progress yet
+      return { lostKg: Math.round(lostSoFar * 10) / 10, pct: pct, targetKg: Math.round(targetKg * 10) / 10, currentKg: Math.round(currentKg * 10) / 10 };
+    },
+    template: function(data) {
+      var body = 'You\'ve lost ' + data.lostKg + ' kg — ' + data.pct + '% of the way to your ' + data.targetKg + ' kg goal.';
+      if (data.pct >= 50) body += ' Over halfway there. The research is clear: people who track consistently are far more likely to reach their target.';
+      else body += ' Steady progress. Sustainable weight loss is 0.5-1 kg/week — consistency beats speed.';
+      return {
+        headline: data.pct + '% toward your weight goal',
+        body: body,
+        action: 'Am I losing weight at a healthy pace?'
       };
     }
   },
