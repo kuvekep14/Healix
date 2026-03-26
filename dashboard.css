@@ -1909,12 +1909,12 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
 }
 
 /* ── UPGRADE MODAL ── */
-.modal-overlay {
+#upgrade-modal {
   position: fixed; inset: 0; background: rgba(0,0,0,.6);
   backdrop-filter: blur(4px); display: none; z-index: 10000;
   align-items: center; justify-content: center;
 }
-.modal-overlay.open { display: flex; }
+#upgrade-modal.open { display: flex; }
 .upgrade-modal-box {
   background: var(--dark-3); border: 1px solid var(--gold-border);
   padding: 40px 36px; max-width: 400px; width: 90%; text-align: center;

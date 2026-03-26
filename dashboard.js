@@ -8675,9 +8675,9 @@ var INSIGHT_RULES = [
       // Check previous VA history for tier change
       var prevTier = null;
       if (ctx.vaHistory && ctx.vaHistory.length > 1) {
-        var prev = ctx.vaHistory[1];
-        if (prev && prev.drivers && prev.drivers.heart !== undefined) {
-          prevTier = prev.drivers.heart >= 70 ? 'good' : prev.drivers.heart >= 40 ? 'fair' : 'low';
+        var prev = ctx.vaHistory[ctx.vaHistory.length - 2];
+        if (prev && prev.drivers && prev.drivers.hr !== undefined) {
+          prevTier = prev.drivers.hr >= 70 ? 'good' : prev.drivers.hr >= 40 ? 'fair' : 'low';
         }
       }
       if (!prevTier || prevTier === tier) return null;
@@ -8702,7 +8702,7 @@ var INSIGHT_RULES = [
       var tier = score >= 70 ? 'good' : score >= 40 ? 'fair' : 'low';
       var prevTier = null;
       if (ctx.vaHistory && ctx.vaHistory.length > 1) {
-        var prev = ctx.vaHistory[1];
+        var prev = ctx.vaHistory[ctx.vaHistory.length - 2];
         if (prev && prev.drivers && prev.drivers.weight !== undefined) {
           prevTier = prev.drivers.weight >= 70 ? 'good' : prev.drivers.weight >= 40 ? 'fair' : 'low';
         }
@@ -8838,7 +8838,7 @@ var INSIGHT_RULES = [
     detect: function(ctx) {
       if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
       var points = weightEntries.map(function(w) {
-        return { recorded_at: w.logged_at, value: w.weight_kg };
+        var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 };
       });
       var trend = computeMetricTrend(points, 14);
       if (!trend || trend.direction === 'stable') return null;
@@ -9423,7 +9423,7 @@ var INSIGHT_RULES = [
       if (!avgSleep || avgSleep >= 6.5) return null;
       // Check weight trend
       if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
-      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var points = weightEntries.map(function(w) { var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 }; });
       var trend = computeMetricTrend(points, 14);
       if (!trend || trend.direction !== 'up') return null;
       var weeklyGain = Math.round(trend.slope * 7 * 10) / 10;
@@ -9674,7 +9674,7 @@ var INSIGHT_RULES = [
       var hba1c = ctx.metrics.bloodwork.hba1c;
       if (!hba1c || hba1c <= 5.6) return null;
       if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
-      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var points = weightEntries.map(function(w) { var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 }; });
       var trend = computeMetricTrend(points, 30);
       if (!trend) return null;
       return { hba1c: hba1c, direction: trend.direction, weeklyChange: Math.round(Math.abs(trend.slope * 7) * 10) / 10 };
@@ -10041,7 +10041,7 @@ var INSIGHT_RULES = [
       var bedtime = ctx.metrics.sleepData.bedtime;
       if (!bedtime) return null;
       // Count meals within 2 hours of bedtime in last 7 days
-      var lateMealDays = 0;
+      var lateDays = {};
       var todayStr = localDateStr(new Date());
       var recentMeals = ctx.meals.filter(function(m) {
         return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
@@ -10062,8 +10062,9 @@ var INSIGHT_RULES = [
       recentMeals.forEach(function(m) {
         var mealTime = new Date(m.meal_time || m.created_at);
         var mealHour = mealTime.getHours();
-        if (mealHour >= cutoffHour || (cutoffHour > 20 && mealHour < 4)) lateMealDays++;
+        if (mealHour >= cutoffHour || (cutoffHour > 20 && mealHour < 4)) lateDays[localDateStr(mealTime)] = true;
       });
+      var lateMealDays = Object.keys(lateDays).length;
       if (lateMealDays < 3) return null;
       var eff = ctx.metrics.sleepData.efficiency;
       return { count: lateMealDays, efficiency: eff };
@@ -10132,7 +10133,7 @@ var INSIGHT_RULES = [
         recentMeals.forEach(function(m) { var mac = getMacrosFromMeal(m); totalCal += mac.cal || 0; });
         var days = new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size;
         var dailyCal = totalCal / days;
-        var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+        var points = weightEntries.map(function(w) { var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 }; });
         var trend = computeMetricTrend(points, 14);
         if (!trend) return null;
         var weeklyKg = trend.slope * 7;
@@ -10485,7 +10486,7 @@ var INSIGHT_RULES = [
       if (!crp || crp <= 3) return null;
       // Check for unexplained weight loss
       if (typeof weightEntries === 'undefined' || !weightEntries || weightEntries.length < 2) return null;
-      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var points = weightEntries.map(function(w) { var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 }; });
       var trend = computeMetricTrend(points, 30);
       if (!trend || trend.direction !== 'down') return null;
       var monthlyLoss = Math.abs(trend.slope * 30);
@@ -10898,7 +10899,7 @@ function computeDriverExplainer(key, ctx) {
     var zone = m.weightScore >= 70 ? 'optimal' : m.weightScore >= 40 ? 'moderate' : 'needs attention';
     var text = 'Weight score: ' + zone + '.';
     if (typeof weightEntries !== 'undefined' && weightEntries && weightEntries.length >= 2) {
-      var points = weightEntries.map(function(w) { return { recorded_at: w.logged_at, value: w.weight_kg }; });
+      var points = weightEntries.map(function(w) { var wv = parseFloat(w.value); return { recorded_at: w.logged_at, value: (w.unit||'lbs').toLowerCase() === 'kg' ? wv : wv / 2.205 }; });
       var trend = computeMetricTrend(points, 14);
       if (trend && trend.direction !== 'stable') {
         var weeklyKg = Math.abs(Math.round(trend.slope * 7 * 10) / 10);
