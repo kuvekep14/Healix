@@ -10583,6 +10583,121 @@ var INSIGHT_RULES = [
         _severity: 'neutral'
       };
     }
+  },
+
+  // ── Unlock Teasers (fire when data is missing) ──
+
+  {
+    id: 'unlock_bloodwork',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (ctx.metrics && ctx.metrics.bloodwork) return null;
+      // Only show if they have at least some other data
+      if (!ctx.metrics || (ctx.metrics.hr === null && !ctx.metrics.sleepData && !ctx.metrics.steps)) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Unlock 15+ insights with bloodwork',
+        body: 'Upload a lab report to see how your blood markers connect to your sleep, nutrition, and fitness — like how your fiber intake affects LDL, or how sleep debt impacts blood sugar.',
+        action: 'What bloodwork should I get to track my health?'
+      };
+    }
+  },
+  {
+    id: 'unlock_meals',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (ctx.meals && ctx.meals.length >= 5) return null;
+      if (!ctx.metrics || (ctx.metrics.hr === null && !ctx.metrics.sleepData)) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Log meals to unlock nutrition insights',
+        body: 'With 5+ meals logged, Healix can detect patterns like magnesium intake affecting your sleep, protein gaps limiting recovery, or omega-3 levels impacting inflammation.',
+        action: 'How does meal logging improve my health insights?'
+      };
+    }
+  },
+  {
+    id: 'unlock_strength',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (ctx.metrics && ctx.metrics.strengthData) return null;
+      if (!goalIncludes('strength')) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Log a fitness test to track your progress',
+        body: 'Your goal is to gain strength — logging bench, squat, or deadlift lets Healix detect PRs, stalls, push/pull imbalances, and show your strength-to-bodyweight ratios vs age-group norms.',
+        action: 'Which fitness tests should I start with?'
+      };
+    }
+  },
+  {
+    id: 'unlock_sleep',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (ctx.metrics && ctx.metrics.sleepData) return null;
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Connect sleep data for recovery insights',
+        body: 'Sleep connects to everything — heart rate, blood sugar, weight, strength gains, and inflammation. Sync via HealthBite to unlock cross-domain insights like how sleep debt elevates your resting HR.',
+        action: 'How does sleep affect my other health metrics?'
+      };
+    }
+  },
+  {
+    id: 'unlock_vo2',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (ctx.metrics && ctx.metrics.vo2max !== null) return null;
+      // Only show if they have other fitness data or bloodwork
+      if (!ctx.metrics || (!ctx.metrics.strengthData && !ctx.metrics.bloodwork)) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Add VO2 max — the top longevity predictor',
+        body: 'VO2 max is the single strongest predictor of all-cause mortality. Adding it unlocks insights connecting your aerobic fitness to deep sleep quality, HDL cholesterol, and resting heart rate.',
+        action: 'How do I measure my VO2 max?'
+      };
+    }
+  },
+  {
+    id: 'unlock_family_history',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var fh = ctx.profile.family_history;
+      if (fh) {
+        try {
+          var parsed = typeof fh === 'string' ? JSON.parse(fh) : fh;
+          if (Object.keys(parsed).length > 0) return null;
+        } catch(e) {}
+      }
+      // Only show if they have bloodwork (where family history matters most)
+      if (!ctx.metrics || !ctx.metrics.bloodwork) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Add family history for personalized risk signals',
+        body: 'Family history of diabetes, heart disease, or high cholesterol changes how your blood markers should be interpreted. Adding it unlocks insights that flag elevated risk before standard thresholds would.',
+        action: 'Why does family history matter for my health data?'
+      };
+    }
   }
 ];
 
@@ -10606,14 +10721,14 @@ function buildInsightContext() {
 }
 
 function runInsightRules(ctx) {
-  var insights = [];
+  var all = [];
   for (var i = 0; i < INSIGHT_RULES.length; i++) {
     var rule = INSIGHT_RULES[i];
     try {
       var data = rule.detect(ctx);
       if (data) {
         var tpl = rule.template(data);
-        insights.push({
+        all.push({
           id: rule.id,
           domain: rule.domain,
           severity: tpl._severity || rule.severity,
@@ -10626,10 +10741,53 @@ function runInsightRules(ctx) {
       console.warn('[Insight] Rule ' + rule.id + ' error:', e);
     }
   }
+
   // Sort by severity: alert > attention > positive > neutral
   var order = { alert: 0, attention: 1, positive: 2, neutral: 3 };
-  insights.sort(function(a, b) { return (order[a.severity] || 3) - (order[b.severity] || 3); });
-  return insights.slice(0, 4);
+  all.sort(function(a, b) { return (order[a.severity] || 3) - (order[b.severity] || 3); });
+
+  // Freshness: deprioritize recently seen insights
+  var seenKey = 'healix_insights_seen_' + (currentUser ? currentUser.id : '');
+  var seen = {};
+  try { var raw = localStorage.getItem(seenKey); if (raw) seen = JSON.parse(raw); } catch(e) {}
+  var now = Date.now();
+  var DAY_MS = 86400000;
+
+  // Score each insight: severity base + freshness bonus
+  all.forEach(function(ins) {
+    var base = (4 - (order[ins.severity] || 3)) * 100; // alert=400, attention=300, positive=200, neutral=100
+    var lastSeen = seen[ins.id] || 0;
+    var daysSince = (now - lastSeen) / DAY_MS;
+    var freshBonus = lastSeen === 0 ? 50 : Math.min(50, daysSince * 10); // Never-seen gets max bonus
+    ins._score = base + freshBonus;
+  });
+
+  all.sort(function(a, b) { return b._score - a._score; });
+
+  // Domain diversity: max 2 per domain, max 1 unlock teaser
+  var picked = [];
+  var domainCount = {};
+  var unlockCount = 0;
+  for (var j = 0; j < all.length && picked.length < 4; j++) {
+    var ins = all[j];
+    var dom = ins.domain;
+    if (dom === 'unlock') {
+      if (unlockCount >= 1) continue;
+      unlockCount++;
+    } else {
+      if ((domainCount[dom] || 0) >= 2) continue;
+      domainCount[dom] = (domainCount[dom] || 0) + 1;
+    }
+    picked.push(ins);
+  }
+
+  // Record what we showed
+  picked.forEach(function(ins) { seen[ins.id] = now; });
+  // Prune seen entries older than 30 days
+  Object.keys(seen).forEach(function(k) { if (now - seen[k] > 30 * DAY_MS) delete seen[k]; });
+  try { localStorage.setItem(seenKey, JSON.stringify(seen)); } catch(e) {}
+
+  return picked;
 }
 
 function renderInsightFeed(insights) {
