@@ -3049,7 +3049,7 @@ async function saveMeal() {
 }
 
 function showIntakeProcessing(id, name, type, needsAI) {
-  var emojis = { breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', beverage:'🥤', supplement:'💊', medication:'💊', alcohol:'🍷', other:'📦' };
+  var emojis = { cooked:'🍳', 'ate out':'🍽', breakfast:'🍳', lunch:'🥗', dinner:'🍽', snack:'🍎', beverage:'🥤', supplement:'💊', medication:'💊', alcohol:'🍷', other:'📦' };
   var emoji = emojis[type.toLowerCase()] || '🥘';
   var card = document.createElement('div');
   card.id = id;
@@ -8163,7 +8163,7 @@ function openEditMeal(mealId) {
   if (!meal) return;
   var macros = getMacrosFromMeal(meal);
   document.getElementById('ml-name').value = meal.meal_description || meal.description || '';
-  document.getElementById('ml-type').value = (meal.meal_type || 'lunch').toLowerCase();
+  document.getElementById('ml-type').value = (meal.meal_type || 'cooked').toLowerCase();
   if (meal.meal_time) {
     var dt = new Date(meal.meal_time);
     var y = dt.getFullYear();
