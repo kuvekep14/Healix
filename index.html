@@ -108,6 +108,7 @@ nav.s { border-bottom-color: var(--gold-border); }
 .ic-name { font-family: var(--F); font-size: 20px; font-weight: 400; }
 .ic-type { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .ic-badge { position: absolute; top: 16px; right: 16px; font-size: 9px; letter-spacing: .15em; text-transform: uppercase; padding: 4px 10px; border: 1px solid var(--gold-border); color: var(--gold); }
+.ic-soon { color: var(--muted); border-color: rgba(245,240,232,0.15); }
 
 /* INSIGHTS */
 .ins { padding: 140px 64px; background: var(--dark-2); }
@@ -350,7 +351,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
       <div class="sc reveal">
         <div class="si">01</div>
         <h3>Upload bloodwork or connect a wearable</h3>
-        <p>Upload a blood panel PDF or connect Apple Watch, Oura, Garmin, or Whoop through the Healix app. Your data starts flowing immediately.</p>
+        <p>Upload a blood panel PDF or connect your Apple Watch through the Healix app. Oura Ring and Whoop support coming soon. Your data starts flowing immediately.</p>
         <span class="sc-tag">5-minute setup</span>
       </div>
       <div class="sc reveal d1">
@@ -378,9 +379,8 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
     </div>
     <div class="integ-grid reveal">
       <div class="ic"><div class="ic-icon">⌚</div><div><div class="ic-name">Apple Watch</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
-      <div class="ic"><div class="ic-icon">💍</div><div><div class="ic-name">Oura Ring</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
-      <div class="ic"><div class="ic-icon">🏃</div><div><div class="ic-name">Garmin</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
-      <div class="ic"><div class="ic-icon">💪</div><div><div class="ic-name">Whoop</div><div class="ic-type">Wearable</div></div><div class="ic-badge">Live</div></div>
+      <div class="ic"><div class="ic-icon">💍</div><div><div class="ic-name">Oura Ring</div><div class="ic-type">Wearable</div></div><div class="ic-badge ic-soon">Coming Soon</div></div>
+      <div class="ic"><div class="ic-icon">💪</div><div><div class="ic-name">Whoop</div><div class="ic-type">Wearable</div></div><div class="ic-badge ic-soon">Coming Soon</div></div>
       <div class="ic"><div class="ic-icon">🧬</div><div><div class="ic-name">Lab Results</div><div class="ic-type">Health data</div></div><div class="ic-badge">Live</div></div>
       <div class="ic"><div class="ic-icon">🍎</div><div><div class="ic-name">Apple Health</div><div class="ic-type">Platform</div></div><div class="ic-badge">Live</div></div>
     </div>
@@ -543,9 +543,8 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
             <button class="hq-choice" data-val="wearable-none"><span class="hq-bullet"></span><span class="hq-choice-key">A</span><span class="hq-choice-text">Nothing yet</span></button>
             <button class="hq-choice" data-val="wearable-apple"><span class="hq-bullet"></span><span class="hq-choice-key">B</span><span class="hq-choice-text">Apple Watch / iPhone Health</span></button>
             <button class="hq-choice" data-val="wearable-oura"><span class="hq-bullet"></span><span class="hq-choice-key">C</span><span class="hq-choice-text">Oura Ring</span></button>
-            <button class="hq-choice" data-val="wearable-garmin"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Garmin / Polar / Suunto</span></button>
-            <button class="hq-choice" data-val="wearable-whoop"><span class="hq-bullet"></span><span class="hq-choice-key">E</span><span class="hq-choice-text">Whoop</span></button>
-            <button class="hq-choice" data-val="wearable-multi"><span class="hq-bullet"></span><span class="hq-choice-key">F</span><span class="hq-choice-text">Multiple devices</span></button>
+            <button class="hq-choice" data-val="wearable-whoop"><span class="hq-bullet"></span><span class="hq-choice-key">D</span><span class="hq-choice-text">Whoop</span></button>
+            <button class="hq-choice" data-val="wearable-multi"><span class="hq-bullet"></span><span class="hq-choice-key">E</span><span class="hq-choice-text">Multiple devices</span></button>
           </div>
         </div>
 
@@ -604,7 +603,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
         </div>
         <div class="fi">
           <button class="fq" onclick="tFaq(this)">Which devices are supported?<div class="ficon">+</div></button>
-          <div class="fa">We support Apple Watch, Oura Ring, Garmin, Whoop, and Apple Health. You can also upload blood panel PDFs directly. We add new integrations based on member demand.</div>
+          <div class="fa">We currently support Apple Watch and Apple Health, with Oura Ring and Whoop coming soon. You can also upload blood panel PDFs directly. We add new integrations based on member demand.</div>
         </div>
         <div class="fi">
           <button class="fq" onclick="tFaq(this)">Is Healix a medical device?<div class="ficon">+</div></button>
@@ -749,7 +748,7 @@ function tFaq(btn){
 
   var EM={'goal-energy':'steady all-day energy','goal-sleep':'better sleep quality','goal-workout':'fitness and performance','goal-focus':'focus and clarity','goal-mood':'stress and emotional balance','goal-longevity':'long-term health and longevity'};
   var CM={'no-caffeine':'keeping caffeine','no-alcohol':'keeping alcohol','no-tracking':'skipping calorie tracking','no-cooking':'not cooking more','no-workout':'not adding workouts','sleep-constrained':'working around constrained sleep'};
-  var WM={'wearable-none':'No wearable yet','wearable-apple':'Apple Watch / iPhone Health','wearable-oura':'Oura Ring','wearable-garmin':'Garmin / Polar / Suunto','wearable-whoop':'Whoop','wearable-multi':'Multiple devices'};
+  var WM={'wearable-none':'No wearable yet','wearable-apple':'Apple Watch / iPhone Health','wearable-oura':'Oura Ring','wearable-whoop':'Whoop','wearable-multi':'Multiple devices'};
   var YM={'why-wall':'Hit a wall','why-diagnosis':'Recent diagnosis / result','why-proactive':'Getting ahead of problems','why-better':'Just want to feel better','why-curious':'Curious / recommended'};
   function eL(v){return['','10 sec/day','1 min/day','3 min/day','10 min/day'][v]||'';}
   function hL(v){return['','Skips questions','Vibes-only','Rounds down','Full confessor'][v]||'';}
