@@ -7,7 +7,7 @@
 :root {
   /* ── Core palette ── */
   --cream: #F5F0E8;
-  --cream-dim: rgba(245,240,232,0.5);
+  --cream-dim: rgba(245,240,232,0.65);
   --cream-faint: rgba(245,240,232,0.08);
 
   --dark: #0B0B0B;
@@ -24,7 +24,7 @@
   --gold-hover: rgba(184,151,90,0.4);
   --gold-partial: rgba(184,151,90,0.35);
 
-  --muted: rgba(245,240,232,0.3);
+  --muted: rgba(245,240,232,0.5);
   --neutral: rgba(245,240,232,0.4);
 
   /* ── Sleep stage colors ── */
