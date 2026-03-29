@@ -236,7 +236,7 @@ async function init() {
       }
     } catch(e) { /* cache parse error, ignore */ }
 
-    loadDashboardData().then(function() {
+    loadDashboardData().then(async function() {
       renderVitalityUnlockState();
       renderOnboardingChecklist();
       renderSmartEmptyStates(window._lastVitalityResult);
