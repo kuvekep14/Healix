@@ -193,9 +193,6 @@ async function init() {
           document.getElementById('sb-avatar').textContent = profileFirst.charAt(0).toUpperCase();
           document.getElementById('page-title').textContent = greet() + ', ' + profileFirst;
         }
-        // Show Cycle nav for female users
-        var navCycle = document.getElementById('nav-cycle');
-        if (navCycle) navCycle.style.display = profileData[0].gender === 'female' ? '' : 'none';
         // Dynamic plan label
         var planEl = document.querySelector('.user-plan');
         if (planEl) {
@@ -267,7 +264,7 @@ function greet() {
 }
 
 // ── PAGE NAV ──
-var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', cycle: 'Cycle', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
+var pageTitles = { dashboard: 'Dashboard', meals: 'Intake', sleep: 'Sleep', bloodwork: 'Bloodwork', documents: 'Documents', strength: 'Strength Log', profile: 'Profile & Settings' };
 function showPage(id, btn) {
   // Exit client view only when navigating to profile (owner-only page)
   if (_viewingUserId && id === 'profile') {
@@ -302,7 +299,6 @@ function showPage(id, btn) {
   if (id === 'bloodwork') loadBloodworkPage();
   if (id === 'documents') loadDocumentsPage();
   if (id === 'strength') renderStrengthPage();
-  if (id === 'cycle') loadCyclePage();
 }
 
 // ── DATA FRESHNESS ──
@@ -4826,9 +4822,6 @@ async function saveProfile() {
       document.getElementById('sb-name').textContent = profileName;
       document.getElementById('sb-avatar').textContent = firstName.charAt(0).toUpperCase();
     }
-    // Toggle Cycle nav visibility based on gender
-    var navCycle = document.getElementById('nav-cycle');
-    if (navCycle) navCycle.style.display = sex === 'female' ? '' : 'none';
   } catch(e) {
     console.error('[Healix] Profile save error:', e);
     if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
@@ -5562,7 +5555,7 @@ function onFitnessTestChange() {
     if (isSelfRated && norm.scaleLabels) {
       var group = document.getElementById('ft-scale-group');
       group.innerHTML = norm.scaleLabels.map(function(label, i) {
-        return '<button type="button" class="cycle-opt-btn" data-value="' + (i + 1) + '" onclick="selectCycleOption(\'ft-scale-group\',this)">' + (i + 1) + ' — ' + escapeHtml(label) + '</button>';
+        return '<button type="button" class="opt-btn" data-value="' + (i + 1) + '" onclick="selectOptionBtn(\'ft-scale-group\',this)">' + (i + 1) + ' — ' + escapeHtml(label) + '</button>';
       }).join('');
       document.getElementById('ft-scale-label').textContent = norm.hint || 'How would you rate yourself?';
     }
@@ -5723,7 +5716,7 @@ async function saveFitnessTest() {
   var rawValue;
 
   if (norm && norm.selfRated) {
-    rawValue = parseInt(getCycleOptionValue('ft-scale-group'));
+    rawValue = parseInt(getOptionBtnValue('ft-scale-group'));
     if (!rawValue || rawValue < 1 || rawValue > 5) { alert('Select a rating.'); return; }
   } else if (key === 'mile_time') {
     var mins = parseFloat(document.getElementById('ft-mins').value) || 0;
@@ -6961,12 +6954,6 @@ async function switchToClientView(ownerId, name) {
     console.warn('[Share] Could not load client profile:', e);
   }
 
-  // Update cycle nav visibility based on client's gender
-  var navCycle = document.getElementById('nav-cycle');
-  if (navCycle && window.userProfileData) {
-    navCycle.style.display = window.userProfileData.gender === 'female' ? '' : 'none';
-  }
-
   // Visual: add shared-mode class, show back button, update header
   document.body.classList.add('shared-mode');
   var backBtn = document.getElementById('back-to-my-dashboard');
@@ -7014,12 +7001,6 @@ function switchToOwnView() {
   if (_ownProfileData) {
     window.userProfileData = _ownProfileData;
     _ownProfileData = null;
-  }
-
-  // Restore cycle nav visibility based on coach's own gender
-  var navCycle = document.getElementById('nav-cycle');
-  if (navCycle && window.userProfileData) {
-    navCycle.style.display = window.userProfileData.gender === 'female' ? '' : 'none';
   }
 
   document.body.classList.remove('shared-mode');
@@ -7406,247 +7387,6 @@ function renderOnboardingChecklist() {
     + '</div>'
     + '<div class="checklist-squares">' + squaresHtml + '</div>'
     + '<div class="checklist-items">' + itemsHtml + '</div>'
-    + '</div>';
-}
-
-// ── MEAL STREAK + ENGAGEMENT ──
-var STREAK_MILESTONES = [3, 7, 14, 30, 60, 90];
-var MILESTONE_MESSAGES = {
-  3: 'Three days of data. Patterns are starting to emerge.',
-  7: 'A full week logged. Streak shield earned.',
-  14: 'Two weeks. Enough data for meaningful nutrient trends.',
-  30: 'Thirty days. Your nutritional baseline is well established.',
-  60: 'Sixty days of continuous logging.',
-  90: 'A full quarter. Seasonal patterns are now visible.'
-};
-
-function loadStreakShields(userId) {
-  try {
-    var raw = localStorage.getItem('healix_streak_shields_' + userId);
-    if (raw) return JSON.parse(raw);
-  } catch(e) {}
-  return { count: 0, usedDates: [] };
-}
-
-function saveStreakShields(userId, shields) {
-  try { localStorage.setItem('healix_streak_shields_' + userId, JSON.stringify(shields)); } catch(e) {}
-}
-
-function loadBestStreak(userId) {
-  return parseInt(localStorage.getItem('healix_best_streak_' + userId) || '0', 10);
-}
-
-function saveBestStreak(userId, val) {
-  try { localStorage.setItem('healix_best_streak_' + userId, String(val)); } catch(e) {}
-}
-
-function loadLastCelebratedMilestone(userId) {
-  return parseInt(localStorage.getItem('healix_last_celebrated_milestone_' + userId) || '0', 10);
-}
-
-function saveLastCelebratedMilestone(userId, val) {
-  try { localStorage.setItem('healix_last_celebrated_milestone_' + userId, String(val)); } catch(e) {}
-}
-
-function computeMealEngagement(meals, localDateStrFn, storedShields, storedBestStreak, lastCelebrated) {
-  var dates = {};
-  if (meals && meals.length > 0) {
-    meals.forEach(function(m) {
-      var d = localDateStrFn(new Date(m.meal_time || m.created_at));
-      dates[d] = true;
-    });
-  }
-
-  var today = localDateStrFn(new Date());
-  var todayLogged = !!dates[today];
-  var shields = { count: storedShields.count || 0, usedDates: (storedShields.usedDates || []).slice() };
-
-  // Calculate streak walking backwards, consuming shield on gap
-  var streak = 0;
-  var shieldActive = false;
-  var checkDate = new Date();
-  var MAX_STREAK_DAYS = 120;
-
-  if (todayLogged) {
-    streak = 1;
-    checkDate.setDate(checkDate.getDate() - 1);
-  } else {
-    checkDate.setDate(checkDate.getDate() - 1);
-  }
-
-  var shieldUsedThisWalk = false;
-  var iterations = 0;
-  while (iterations < MAX_STREAK_DAYS) {
-    iterations++;
-    var ds = localDateStrFn(checkDate);
-    if (dates[ds]) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else if (!shieldUsedThisWalk && shields.count > 0 && streak > 0 && shields.usedDates.indexOf(ds) === -1) {
-      // Auto-consume shield for this gap (only first gap adjacent to logged days)
-      shields.count = 0;
-      shields.usedDates.push(ds);
-      shieldActive = true;
-      shieldUsedThisWalk = true;
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-      // After shield, next day must be a real logged day or streak ends
-      var nextDs = localDateStrFn(checkDate);
-      if (!dates[nextDs]) break;
-    } else if (!shieldUsedThisWalk && shields.usedDates.indexOf(ds) !== -1) {
-      // Honor persisted shield only if it's adjacent (first gap)
-      shieldActive = true;
-      shieldUsedThisWalk = true;
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-      var nextDs2 = localDateStrFn(checkDate);
-      if (!dates[nextDs2]) break;
-    } else {
-      break;
-    }
-  }
-
-  // Earn shield every 7 consecutive days (max 1)
-  if (streak > 0 && streak % 7 === 0 && shields.count < 1) {
-    shields.count = 1;
-  }
-
-  var atRisk = !todayLogged && streak > 0;
-
-  // 7-day consistency
-  var last7 = [];
-  var dayCheck = new Date();
-  for (var i = 6; i >= 0; i--) {
-    var d7 = new Date();
-    d7.setDate(dayCheck.getDate() - i);
-    var ds7 = localDateStrFn(d7);
-    last7.push({
-      date: ds7,
-      logged: !!dates[ds7],
-      shielded: shields.usedDates.indexOf(ds7) !== -1,
-      dayLabel: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d7.getDay()]
-    });
-  }
-  var daysLogged = last7.filter(function(d) { return d.logged; }).length;
-  var consistencyPct = Math.round(daysLogged / 7 * 100);
-  var consistencyLevel = consistencyPct >= 85 ? 'excellent' : consistencyPct >= 57 ? 'good' : consistencyPct >= 28 ? 'fair' : 'low';
-
-  // Best streak
-  var bestStreak = storedBestStreak || 0;
-  if (streak > bestStreak) bestStreak = streak;
-
-  // Milestone
-  lastCelebrated = lastCelebrated || 0;
-  var milestone = null;
-  for (var mi = STREAK_MILESTONES.length - 1; mi >= 0; mi--) {
-    if (streak >= STREAK_MILESTONES[mi] && STREAK_MILESTONES[mi] > lastCelebrated) {
-      milestone = { days: STREAK_MILESTONES[mi], message: MILESTONE_MESSAGES[STREAK_MILESTONES[mi]] };
-      break;
-    }
-  }
-
-  return {
-    streak: streak,
-    todayLogged: todayLogged,
-    atRisk: atRisk,
-    shieldActive: shieldActive,
-    shieldsAvailable: shields.count,
-    shields: shields,
-    consistency: { days: last7, daysLogged: daysLogged, percent: consistencyPct, level: consistencyLevel },
-    bestStreak: bestStreak,
-    milestone: milestone
-  };
-}
-
-function renderMealStreak(meals) {
-  var container = document.getElementById('meal-streak');
-  if (!container) return;
-
-  var userId = currentUser && currentUser.id ? currentUser.id : 'anon';
-  var shields = loadStreakShields(userId);
-  var bestStreak = loadBestStreak(userId);
-  var lastCelebrated = loadLastCelebratedMilestone(userId);
-  var result = computeMealEngagement(meals, localDateStr, shields, bestStreak, lastCelebrated);
-
-  // Persist shields and best streak
-  saveStreakShields(userId, result.shields);
-  if (result.bestStreak > bestStreak) saveBestStreak(userId, result.bestStreak);
-
-  // Persist milestone celebration
-  if (result.milestone) saveLastCelebratedMilestone(userId, result.milestone.days);
-
-  // Build status message
-  var msg = '';
-  var isNewBest = result.streak > 0 && result.streak > bestStreak && result.todayLogged;
-
-  if (result.milestone) {
-    msg = result.milestone.message;
-  } else if (result.shieldActive && result.streak > 0 && !result.atRisk) {
-    msg = 'Streak shield used — ' + result.streak + '-day streak preserved.';
-  } else if (isNewBest && result.streak > 3) {
-    msg = 'New personal record — ' + result.streak + ' days.';
-  } else if (result.atRisk && result.shieldsAvailable > 0) {
-    msg = 'Log a meal to continue, or your shield will preserve your streak tomorrow.';
-  } else if (result.atRisk) {
-    msg = 'Your ' + result.streak + '-day streak ends at midnight.';
-  } else if (result.streak >= 14) {
-    msg = 'Enough data for meaningful nutrient trends.';
-  } else if (result.streak >= 7) {
-    msg = 'Consistency is compounding.';
-  } else if (result.streak >= 3) {
-    msg = 'Patterns are starting to emerge.';
-  } else if (result.streak >= 1) {
-    msg = 'Great start. Tomorrow makes it stronger.';
-  }
-
-  // 7-day dots HTML
-  var dotsHtml = '<div class="meal-streak-dots">';
-  result.consistency.days.forEach(function(day) {
-    var cls = 'meal-streak-dot';
-    if (day.shielded) cls += ' shielded';
-    else if (day.logged) cls += ' logged';
-    dotsHtml += '<div class="' + cls + '" title="' + escapeHtml(day.date) + '">'
-      + '<div class="meal-streak-dot-label">' + day.dayLabel + '</div>'
-      + '</div>';
-  });
-  dotsHtml += '</div>';
-
-  // Shield indicator
-  var shieldHtml = '';
-  if (result.shieldsAvailable > 0 || result.shieldActive) {
-    shieldHtml = '<div class="meal-streak-shields" title="Streak shield' + (result.shieldsAvailable > 0 ? ' available' : ' used') + '">'
-      + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="vertical-align:middle"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" style="fill:' + (result.shieldsAvailable > 0 ? 'var(--gold)' : 'var(--muted)') + ';opacity:' + (result.shieldsAvailable > 0 ? '0.9' : '0.4') + '"/></svg>'
-      + (result.shieldsAvailable > 0 ? '<span class="meal-streak-shield-count">x' + result.shieldsAvailable + '</span>' : '')
-      + '</div>';
-  }
-
-  var cardClass = 'meal-streak-card';
-  if (result.atRisk) cardClass += ' at-risk';
-  if (result.milestone) cardClass += ' milestone';
-
-  if (result.streak === 0 && !result.todayLogged) {
-    container.style.display = '';
-    container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
-      + '<div class="meal-streak-count-num">0</div>'
-      + '<div class="meal-streak-info">'
-      + '<div class="meal-streak-label">Intake Streak</div>'
-      + '<div class="meal-streak-msg">Log your first intake to start building consistency.</div>'
-      + dotsHtml
-      + '</div>'
-      + '<div class="meal-streak-action">Log intake →</div>'
-      + '</div>';
-    return;
-  }
-
-  container.style.display = '';
-  container.innerHTML = '<div class="' + cardClass + '" onclick="setMealDateTimeDefault();openModal(\'meal-modal\')">'
-    + '<div class="meal-streak-count-num">' + result.streak + '</div>'
-    + '<div class="meal-streak-info">'
-    + '<div class="meal-streak-label">' + result.streak + '-day streak' + shieldHtml + (result.atRisk ? ' <span style="color:var(--warn)">— at risk</span>' : '') + '</div>'
-    + '<div class="meal-streak-msg">' + escapeHtml(msg) + '</div>'
-    + dotsHtml
-    + '</div>'
-    + '<div class="meal-streak-action">' + (result.atRisk ? 'Save streak →' : 'Log intake →') + '</div>'
     + '</div>';
 }
 
@@ -8132,10 +7872,6 @@ async function completeOnboarding() {
       document.getElementById('sb-avatar').textContent = onboardingState.firstName.charAt(0).toUpperCase();
       document.getElementById('page-title').textContent = greet() + ', ' + onboardingState.firstName;
     }
-    // Show/hide cycle nav based on gender
-    var navCycle = document.getElementById('nav-cycle');
-    if (navCycle) navCycle.style.display = onboardingState.gender === 'female' ? '' : 'none';
-
     var overlay = document.getElementById('onboarding-overlay');
     if (overlay) overlay.remove();
 
@@ -8203,418 +7939,29 @@ async function deleteMeal(mealId) {
   }
 }
 
-// ── CYCLE TRACKING ──
-var cycleData = {};
-var cycleStarts = [];
-var cyclePeriodLengths = [];
-var cycleLengths = [];
-var cycleCalMonth = null;
-var cycleCalYear = null;
+// ── OPTION BUTTON HELPERS (used by fitness test scale) ──
 
-var CYCLE_METRIC_TYPES = ['menstrual_flow', 'basal_body_temperature', 'cervical_mucus_quality', 'ovulation_test_result', 'progesterone_test_result'];
-
-async function loadCyclePage() {
-  var session = getSession();
-  if (!session || !session.access_token || !currentUser) return;
-
-  var daysAgo = new Date();
-  daysAgo.setDate(daysAgo.getDate() - 365);
-
-  try {
-    var data = await supabaseRequest(
-      '/rest/v1/apple_health_samples' +
-      '?select=metric_type,value,text_value,recorded_at,metadata' +
-      '&user_id=eq.' + currentUser.id +
-      '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
-      '&recorded_at=gte.' + daysAgo.toISOString() +
-      '&order=recorded_at.asc',
-      'GET', null, session.access_token
-    );
-
-    if (!data || data.error || !Array.isArray(data)) {
-      console.error('[Cycle] Error loading data:', data && data.error);
-      showCycleEmpty(true);
-      return;
-    }
-
-    if (data.length === 0) {
-      showCycleEmpty(true);
-      return;
-    }
-
-    showCycleEmpty(false);
-    processCycleData(data);
-    renderCyclePage();
-  } catch (e) {
-    console.error('[Cycle] Load error:', e);
-    showCycleEmpty(true);
-  }
-}
-
-function processCycleData(rows) {
-  cycleData = {};
-
-  rows.forEach(function(r) {
-    var dateStr = localDateStr(new Date(r.recorded_at));
-    if (!cycleData[dateStr]) cycleData[dateStr] = {};
-    var d = cycleData[dateStr];
-
-    if (r.metric_type === 'menstrual_flow') d.flow = r.text_value;
-    if (r.metric_type === 'basal_body_temperature') d.bbt = parseFloat(r.value);
-    if (r.metric_type === 'cervical_mucus_quality') d.mucus = r.text_value;
-    if (r.metric_type === 'ovulation_test_result') d.ovtest = r.text_value;
-    if (r.metric_type === 'progesterone_test_result') d.progesterone = parseFloat(r.value);
-    if (r.metadata && r.metadata.notes && !d.notes) d.notes = r.metadata.notes;
-  });
-
-  var flowDates = Object.keys(cycleData).filter(function(d) {
-    var f = cycleData[d].flow;
-    return f && f !== 'none';
-  }).sort();
-
-  cycleStarts = [];
-  cyclePeriodLengths = [];
-
-  if (flowDates.length > 0) {
-    var currentPeriodStart = flowDates[0];
-    var currentPeriodEnd = flowDates[0];
-
-    for (var i = 1; i < flowDates.length; i++) {
-      var prev = new Date(currentPeriodEnd + 'T12:00:00');
-      var curr = new Date(flowDates[i] + 'T12:00:00');
-      var gapDays = Math.round((curr - prev) / 86400000);
-
-      if (gapDays > 2) {
-        cycleStarts.push(currentPeriodStart);
-        var periodLen = Math.round((new Date(currentPeriodEnd + 'T12:00:00') - new Date(currentPeriodStart + 'T12:00:00')) / 86400000) + 1;
-        cyclePeriodLengths.push(periodLen);
-        currentPeriodStart = flowDates[i];
-      }
-      currentPeriodEnd = flowDates[i];
-    }
-    cycleStarts.push(currentPeriodStart);
-    var lastPeriodLen = Math.round((new Date(currentPeriodEnd + 'T12:00:00') - new Date(currentPeriodStart + 'T12:00:00')) / 86400000) + 1;
-    cyclePeriodLengths.push(lastPeriodLen);
-  }
-
-  cycleLengths = [];
-  for (var j = 1; j < cycleStarts.length; j++) {
-    var d1 = new Date(cycleStarts[j - 1] + 'T12:00:00');
-    var d2 = new Date(cycleStarts[j] + 'T12:00:00');
-    cycleLengths.push(Math.round((d2 - d1) / 86400000));
-  }
-}
-
-function renderCyclePage() {
-  renderCycleStats();
-  if (!cycleCalMonth) {
-    var now = new Date();
-    cycleCalMonth = now.getMonth();
-    cycleCalYear = now.getFullYear();
-  }
-  renderCycleCalendar();
-  renderCycleTemperatureChart();
-  var chatCta = document.getElementById('cycle-chat-cta');
-  if (chatCta && cycleStarts.length > 0) chatCta.style.display = 'block';
-}
-
-function renderCycleStats() {
-  var today = new Date();
-  var recentLengths = cycleLengths.slice(-6);
-  var avgCycleLen = recentLengths.length > 0 ? Math.round(recentLengths.reduce(function(a, b) { return a + b; }, 0) / recentLengths.length) : 0;
-  var recentPeriods = cyclePeriodLengths.slice(-6);
-  var avgPeriodLen = recentPeriods.length > 0 ? Math.round(recentPeriods.reduce(function(a, b) { return a + b; }, 0) / recentPeriods.length) : 0;
-
-  var cycleDay = 0;
-  var phase = '';
-  var lastStart = cycleStarts.length > 0 ? cycleStarts[cycleStarts.length - 1] : null;
-
-  if (lastStart) {
-    cycleDay = Math.round((today - new Date(lastStart + 'T12:00:00')) / 86400000) + 1;
-    var effectiveCycleLen = avgCycleLen || 28;
-    var ovulationDay = effectiveCycleLen - 14;
-
-    if (cycleDay <= avgPeriodLen && avgPeriodLen > 0) phase = 'Menstrual';
-    else if (cycleDay < ovulationDay - 1) phase = 'Follicular';
-    else if (cycleDay >= ovulationDay - 1 && cycleDay <= ovulationDay + 1) phase = 'Ovulatory';
-    else phase = 'Luteal';
-  }
-
-  var nextPeriodStr = '';
-  var daysUntil = 0;
-  if (lastStart && avgCycleLen > 0) {
-    var nextDate = new Date(lastStart + 'T12:00:00');
-    nextDate.setDate(nextDate.getDate() + avgCycleLen);
-    daysUntil = Math.round((nextDate - today) / 86400000);
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    nextPeriodStr = months[nextDate.getMonth()] + ' ' + nextDate.getDate();
-  }
-
-  setEl('cyc-day', cycleDay > 0 ? cycleDay : '—');
-  setEl('cyc-day-sub', phase || 'current phase');
-  setEl('cyc-length', avgCycleLen > 0 ? avgCycleLen : '—');
-  setEl('cyc-length-sub', recentLengths.length > 0 ? 'days avg (' + recentLengths.length + ' cycles)' : 'days avg');
-  setEl('cyc-period', avgPeriodLen > 0 ? avgPeriodLen : '—');
-  setEl('cyc-period-sub', 'days avg');
-  setEl('cyc-next', nextPeriodStr || '—');
-  setEl('cyc-next-sub', daysUntil > 0 ? 'in ' + daysUntil + ' days' : 'predicted');
-}
-
-function renderCycleCalendar() {
-  var container = document.getElementById('cyc-calendar');
-  var label = document.getElementById('cyc-cal-label');
-  if (!container) return;
-
-  var months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  label.textContent = months[cycleCalMonth] + ' ' + cycleCalYear;
-
-  var firstDay = new Date(cycleCalYear, cycleCalMonth, 1).getDay();
-  var daysInMonth = new Date(cycleCalYear, cycleCalMonth + 1, 0).getDate();
-  var today = localDateStr(new Date());
-
-  var fertileStartStr = null, fertileEndStr = null, ovDateStr = null;
-  var avgCycleLen = 0;
-  var recentLengths = cycleLengths.slice(-6);
-  if (recentLengths.length > 0) {
-    avgCycleLen = Math.round(recentLengths.reduce(function(a, b) { return a + b; }, 0) / recentLengths.length);
-  }
-  var lastStart = cycleStarts.length > 0 ? cycleStarts[cycleStarts.length - 1] : null;
-  if (lastStart && avgCycleLen > 0) {
-    var lastStartDate = new Date(lastStart + 'T12:00:00');
-    var ovDay = avgCycleLen - 14;
-    var ovDate = new Date(lastStartDate);
-    ovDate.setDate(ovDate.getDate() + ovDay - 1);
-    var fertStartDate = new Date(ovDate);
-    fertStartDate.setDate(fertStartDate.getDate() - 5);
-    var fertEndDate = new Date(ovDate);
-    fertEndDate.setDate(fertEndDate.getDate() + 1);
-    fertileStartStr = localDateStr(fertStartDate);
-    fertileEndStr = localDateStr(fertEndDate);
-    ovDateStr = localDateStr(ovDate);
-  }
-
-  var html = '';
-  for (var e = 0; e < firstDay; e++) {
-    html += '<div class="cycle-cal-day cyc-empty"></div>';
-  }
-
-  for (var d = 1; d <= daysInMonth; d++) {
-    var dateStr = cycleCalYear + '-' + String(cycleCalMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
-    var entry = cycleData[dateStr];
-    var classes = 'cycle-cal-day';
-
-    if (dateStr === today) classes += ' cyc-today';
-    if (entry && entry.flow) {
-      if (entry.flow === 'HEAVY') classes += ' cyc-flow-heavy';
-      else if (entry.flow === 'MEDIUM') classes += ' cyc-flow-medium';
-      else if (entry.flow === 'LIGHT') classes += ' cyc-flow-light';
-      else if (entry.flow === 'SPOTTING') classes += ' cyc-flow-spotting';
-    }
-    if (fertileStartStr && dateStr >= fertileStartStr && dateStr <= fertileEndStr) classes += ' cyc-fertile';
-    if (ovDateStr && dateStr === ovDateStr) classes += ' cyc-ovulation';
-
-    html += '<div class="' + classes + '" onclick="openCycleLogForDate(\'' + dateStr + '\')">' + d + '</div>';
-  }
-  container.innerHTML = html;
-}
-
-function stepCycleCalendar(dir) {
-  cycleCalMonth += dir;
-  if (cycleCalMonth > 11) { cycleCalMonth = 0; cycleCalYear++; }
-  if (cycleCalMonth < 0) { cycleCalMonth = 11; cycleCalYear--; }
-  renderCycleCalendar();
-}
-
-function renderCycleTemperatureChart() {
-  var container = document.getElementById('cyc-temp-chart');
-  if (!container) return;
-
-  var lastStart = cycleStarts.length > 0 ? cycleStarts[cycleStarts.length - 1] : null;
-  var bbtPoints = [];
-  var dates = Object.keys(cycleData).sort();
-  dates.forEach(function(d) {
-    if (cycleData[d].bbt && (!lastStart || d >= lastStart)) {
-      bbtPoints.push({ date: d, temp: cycleData[d].bbt });
-    }
-  });
-
-  if (bbtPoints.length < 2) {
-    container.innerHTML = '<div class="empty-state" style="padding:24px"><div class="empty-state-text">No BBT data logged yet. Log at least 2 temperatures to see your chart.</div></div>';
-    return;
-  }
-
-  var minTemp = 96.5, maxTemp = 99.0;
-  bbtPoints.forEach(function(p) {
-    if (p.temp < minTemp) minTemp = Math.floor(p.temp * 2) / 2;
-    if (p.temp > maxTemp) maxTemp = Math.ceil(p.temp * 2) / 2;
-  });
-
-  var w = 600, h = 140, pad = 40, padRight = 10, padTop = 10, padBottom = 25;
-  var chartW = w - pad - padRight;
-  var chartH = h - padTop - padBottom;
-  var tempRange = maxTemp - minTemp || 1;
-
-  function xPos(i) { return pad + (bbtPoints.length > 1 ? (i / (bbtPoints.length - 1)) * chartW : chartW / 2); }
-  function yPos(temp) { return padTop + chartH - ((temp - minTemp) / tempRange) * chartH; }
-
-  var svg = '<svg class="cyc-temp-svg" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">';
-  var steps = [96.5, 97.0, 97.5, 98.0, 98.5, 99.0].filter(function(v) { return v >= minTemp && v <= maxTemp; });
-  steps.forEach(function(t) {
-    var y = yPos(t);
-    var cls = Math.abs(t - 97.5) < 0.01 ? 'cyc-temp-ref' : 'cyc-temp-grid';
-    svg += '<line x1="' + pad + '" y1="' + y + '" x2="' + (w - padRight) + '" y2="' + y + '" class="' + cls + '"/>';
-    svg += '<text x="' + (pad - 4) + '" y="' + (y + 3) + '" text-anchor="end" class="cyc-temp-axis">' + t.toFixed(1) + '</text>';
-  });
-
-  var points = bbtPoints.map(function(p, i) { return xPos(i) + ',' + yPos(p.temp); }).join(' ');
-  svg += '<polyline points="' + points + '" class="cyc-temp-line"/>';
-
-  bbtPoints.forEach(function(p, i) {
-    var x = xPos(i);
-    var y = yPos(p.temp);
-    svg += '<circle cx="' + x + '" cy="' + y + '" r="3" class="cyc-temp-dot"/>';
-    if (bbtPoints.length <= 10 || i % Math.ceil(bbtPoints.length / 8) === 0 || i === bbtPoints.length - 1) {
-      svg += '<text x="' + x + '" y="' + (h - 4) + '" text-anchor="middle" class="cyc-temp-axis">' + p.date.slice(5) + '</text>';
-    }
-  });
-
-  svg += '</svg>';
-  container.innerHTML = svg;
-}
-
-async function saveCycleEntry() {
-  var session = getSession();
-  if (!session || !session.access_token || !currentUser) return;
-
-  var dateInput = document.getElementById('cyc-date').value;
-  if (!dateInput) { alert('Please select a date.'); return; }
-
-  var statusEl = document.getElementById('cyc-modal-status');
-  var saveBtn = document.getElementById('cyc-save-btn');
-  statusEl.textContent = 'Saving...';
-  statusEl.style.display = 'block';
-  saveBtn.disabled = true;
-
-  var flow = getCycleOptionValue('cyc-flow-group');
-  var mucus = getCycleOptionValue('cyc-mucus-group');
-  var ovtest = getCycleOptionValue('cyc-ovtest-group');
-  var bbt = document.getElementById('cyc-bbt').value ? parseFloat(document.getElementById('cyc-bbt').value) : null;
-  var progesterone = document.getElementById('cyc-progesterone').value ? parseFloat(document.getElementById('cyc-progesterone').value) : null;
-  var notes = document.getElementById('cyc-notes').value.trim();
-  var recordedAt = dateInput + 'T12:00:00Z';
-
-  try {
-    await supabaseRequest(
-      '/rest/v1/apple_health_samples?user_id=eq.' + currentUser.id +
-      '&metric_type=in.(' + CYCLE_METRIC_TYPES.join(',') + ')' +
-      '&recorded_at=gte.' + dateInput + 'T00:00:00Z' +
-      '&recorded_at=lt.' + dateInput + 'T23:59:59Z',
-      'DELETE', null, session.access_token
-    );
-
-    var rows = [];
-    var baseRow = { user_id: currentUser.id, source_name: 'Healix Web', recorded_at: recordedAt, start_date: recordedAt, end_date: recordedAt };
-
-    if (flow && flow !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'menstrual_flow', text_value: flow, unit: 'category' }));
-    if (bbt !== null && !isNaN(bbt)) rows.push(Object.assign({}, baseRow, { metric_type: 'basal_body_temperature', value: bbt, unit: 'degF' }));
-    if (mucus && mucus !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'cervical_mucus_quality', text_value: mucus, unit: 'category' }));
-    if (ovtest && ovtest !== 'none') rows.push(Object.assign({}, baseRow, { metric_type: 'ovulation_test_result', text_value: ovtest, unit: 'category' }));
-    if (progesterone !== null && !isNaN(progesterone)) rows.push(Object.assign({}, baseRow, { metric_type: 'progesterone_test_result', value: progesterone, unit: 'ng/mL' }));
-
-    if (notes && rows.length > 0) rows[0].metadata = { notes: notes };
-
-    if (rows.length > 0) {
-      await supabaseRequest('/rest/v1/apple_health_samples', 'POST', rows, session.access_token, { 'Prefer': 'return=minimal' });
-    }
-
-    closeModal('cycle-modal');
-    statusEl.style.display = 'none';
-    saveBtn.disabled = false;
-    loadCyclePage();
-  } catch (e) {
-    console.error('[Cycle] Save error:', e);
-    statusEl.textContent = 'Error saving entry. Please try again.';
-    statusEl.style.color = 'var(--down)';
-    saveBtn.disabled = false;
-  }
-}
-
-function openCycleLogForDate(dateStr) {
-  resetCycleModal();
-  document.getElementById('cyc-date').value = dateStr;
-  prefillCycleModal(dateStr);
-  openModal('cycle-modal');
-}
-
-function prefillCycleModal(dateStr) {
-  var entry = cycleData[dateStr];
-  if (!entry) return;
-  if (entry.flow) selectCycleOptionByValue('cyc-flow-group', entry.flow);
-  if (entry.bbt) document.getElementById('cyc-bbt').value = entry.bbt;
-  if (entry.mucus) selectCycleOptionByValue('cyc-mucus-group', entry.mucus);
-  if (entry.ovtest) selectCycleOptionByValue('cyc-ovtest-group', entry.ovtest);
-  if (entry.progesterone) document.getElementById('cyc-progesterone').value = entry.progesterone;
-  if (entry.notes) document.getElementById('cyc-notes').value = entry.notes;
-}
-
-function resetCycleModal() {
-  document.getElementById('cyc-bbt').value = '';
-  document.getElementById('cyc-progesterone').value = '';
-  document.getElementById('cyc-notes').value = '';
-  var statusEl = document.getElementById('cyc-modal-status');
-  if (statusEl) { statusEl.style.display = 'none'; statusEl.style.color = 'var(--muted)'; }
-  var saveBtn = document.getElementById('cyc-save-btn');
-  if (saveBtn) saveBtn.disabled = false;
-  ['cyc-flow-group', 'cyc-mucus-group', 'cyc-ovtest-group'].forEach(function(groupId) {
-    var group = document.getElementById(groupId);
-    if (!group) return;
-    var btns = group.querySelectorAll('.cycle-opt-btn');
-    btns.forEach(function(b) { b.classList.remove('active'); });
-    if (btns[0]) btns[0].classList.add('active');
-  });
-}
-
-function selectCycleOption(groupId, btn) {
+function selectOptionBtn(groupId, btn) {
   var group = document.getElementById(groupId);
   if (!group) return;
-  group.querySelectorAll('.cycle-opt-btn').forEach(function(b) { b.classList.remove('active'); });
+  group.querySelectorAll('.opt-btn').forEach(function(b) { b.classList.remove('active'); });
   btn.classList.add('active');
 }
 
-function selectCycleOptionByValue(groupId, value) {
+function selectOptionBtnByValue(groupId, value) {
   var group = document.getElementById(groupId);
   if (!group) return;
-  group.querySelectorAll('.cycle-opt-btn').forEach(function(b) {
+  group.querySelectorAll('.opt-btn').forEach(function(b) {
     b.classList.remove('active');
     if (b.getAttribute('data-value') === value) b.classList.add('active');
   });
 }
 
-function getCycleOptionValue(groupId) {
+function getOptionBtnValue(groupId) {
   var group = document.getElementById(groupId);
   if (!group) return 'none';
-  var active = group.querySelector('.cycle-opt-btn.active');
+  var active = group.querySelector('.opt-btn.active');
   return active ? active.getAttribute('data-value') : 'none';
-}
-
-function showCycleEmpty(show) {
-  var empty = document.getElementById('cycle-empty');
-  var scores = document.getElementById('cycle-scores');
-  var tempCard = document.getElementById('cyc-temp-card');
-  var chatCta = document.getElementById('cycle-chat-cta');
-  var logBtn = document.getElementById('cycle-log-btn');
-
-  if (empty) empty.style.display = show ? 'block' : 'none';
-  if (scores) scores.style.display = show ? 'none' : '';
-  if (tempCard) tempCard.style.display = show ? 'none' : '';
-  if (chatCta) chatCta.style.display = show ? 'none' : '';
-  if (logBtn) logBtn.style.display = show ? 'none' : '';
-
-  var page = document.getElementById('page-cycle');
-  if (page) {
-    var cards = page.querySelectorAll(':scope > .card');
-    cards.forEach(function(c) { c.style.display = show ? 'none' : ''; });
-  }
 }
 
 // ── GOAL HELPERS ──

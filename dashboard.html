@@ -36,9 +36,6 @@
       <button class="nav-item" onclick="showPage('sleep', this)">
         <span class="nav-icon">◑</span> Sleep
       </button>
-      <button class="nav-item" id="nav-cycle" onclick="showPage('cycle', this)" style="display:none">
-        <span class="nav-icon">◐</span> Cycle
-      </button>
       <button class="nav-item" onclick="showPage('bloodwork', this)">
         <span class="nav-icon">◐</span> Bloodwork
       </button>
@@ -280,9 +277,6 @@
 
         <!-- Milestones timeline -->
         <div id="milestones-section" style="display:none"></div>
-
-        <!-- Meal streak -->
-        <div id="meal-streak" style="display:none"></div>
 
         <!-- Weekly health summary -->
         <div id="health-summary-section" style="display:none">
@@ -607,96 +601,6 @@
         <div class="empty-state" style="padding:60px">
           <div class="empty-state-icon">🌙</div>
           <div class="empty-state-text">No sleep data yet.<br>Connect HealthBite to sync your sleep from Apple Watch.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══ CYCLE PAGE ══ -->
-    <div class="page" id="page-cycle">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:28px">
-        <div>
-          <div style="font-size:9px;letter-spacing:.25em;text-transform:uppercase;color:var(--gold);margin-bottom:6px">Reproductive Health</div>
-          <div style="font-family:var(--F);font-size:28px;font-weight:300">Your <em style="font-style:italic;color:var(--gold)">Cycle</em></div>
-        </div>
-        <button class="upload-btn" id="cycle-log-btn" onclick="openCycleLogForDate(localDateStr(new Date()))">+ Log Today</button>
-      </div>
-
-      <!-- Stat cards -->
-      <div class="cycle-scores" id="cycle-scores">
-        <div class="card">
-          <div class="card-label">Cycle Day</div>
-          <div class="stat-item-val" id="cyc-day" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral" id="cyc-day-sub">current phase</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Cycle Length</div>
-          <div class="stat-item-val" id="cyc-length" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral" id="cyc-length-sub">days avg</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Period Length</div>
-          <div class="stat-item-val" id="cyc-period" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral" id="cyc-period-sub">days avg</div>
-        </div>
-        <div class="card">
-          <div class="card-label">Next Period</div>
-          <div class="stat-item-val" id="cyc-next" style="font-family:var(--F);font-size:36px;font-weight:300">—</div>
-          <div class="stat-item-delta delta-neutral" id="cyc-next-sub">predicted</div>
-        </div>
-      </div>
-
-      <!-- Calendar -->
-      <div class="card" style="margin-top:16px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div class="card-label" style="margin-bottom:0">Calendar</div>
-          <div class="date-nav-arrows">
-            <button class="date-nav-btn" onclick="stepCycleCalendar(-1)">←</button>
-            <span id="cyc-cal-label" style="font-size:13px;color:var(--cream-dim);min-width:120px;text-align:center"></span>
-            <button class="date-nav-btn" onclick="stepCycleCalendar(1)">→</button>
-          </div>
-        </div>
-        <div class="cycle-calendar-header">
-          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
-        </div>
-        <div class="cycle-calendar" id="cyc-calendar"></div>
-        <div class="cycle-legend">
-          <span class="cycle-legend-item"><span class="cycle-legend-dot" style="background:var(--cycle-heavy)"></span> Heavy</span>
-          <span class="cycle-legend-item"><span class="cycle-legend-dot" style="background:var(--cycle-medium)"></span> Medium</span>
-          <span class="cycle-legend-item"><span class="cycle-legend-dot" style="background:var(--cycle-light)"></span> Light</span>
-          <span class="cycle-legend-item"><span class="cycle-legend-dot" style="background:var(--cycle-spotting)"></span> Spotting</span>
-          <span class="cycle-legend-item"><span class="cycle-legend-dot" style="border:1.5px dashed var(--gold);background:none"></span> Fertile</span>
-        </div>
-      </div>
-
-      <!-- Temperature chart -->
-      <div class="card" style="margin-top:16px" id="cyc-temp-card">
-        <div class="card-label" style="margin-bottom:16px">Basal Body Temperature</div>
-        <div id="cyc-temp-chart" style="min-height:140px">
-          <div class="empty-state" style="padding:24px"><div class="empty-state-text">No BBT data logged yet.</div></div>
-        </div>
-      </div>
-
-      <!-- Chat CTA -->
-      <div id="cycle-chat-cta" style="display:none;margin-top:20px">
-        <div class="vitality-chat-card" onclick="HealixChat.openWithQuestion('What patterns do you see in my cycle data?')">
-          <div class="vitality-chat-left">
-            <div class="vitality-chat-label">ASK HEALIX</div>
-            <div class="vitality-chat-title">What patterns do you see in my <em>cycle data</em>?</div>
-            <div class="vitality-chat-suggestions">
-              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('When is my fertile window this cycle?')">When is my fertile window?</span>
-              <span class="vcs" onclick="event.stopPropagation();HealixChat.openWithQuestion('Is my cycle length normal?')">Is my cycle length normal?</span>
-            </div>
-          </div>
-          <div class="vitality-chat-arrow">→</div>
-        </div>
-      </div>
-
-      <!-- Empty state -->
-      <div id="cycle-empty" style="display:none">
-        <div class="empty-state" style="padding:60px">
-          <div class="empty-state-icon" style="font-size:36px">🌸</div>
-          <div class="empty-state-text">No cycle data yet.<br>Log your first entry to start tracking.</div>
-          <button class="upload-btn" onclick="openCycleLogForDate(localDateStr(new Date()))" style="margin:16px auto 0;display:flex">+ Log Entry</button>
         </div>
       </div>
     </div>
@@ -1034,12 +938,12 @@
     </div>
     <div id="ft-scale-fields" style="display:none">
       <label class="modal-label" id="ft-scale-label">How would you rate yourself?</label>
-      <div class="cycle-option-group" id="ft-scale-group">
-        <button type="button" class="cycle-opt-btn" data-value="1" onclick="selectCycleOption('ft-scale-group',this)">1 — Poor</button>
-        <button type="button" class="cycle-opt-btn" data-value="2" onclick="selectCycleOption('ft-scale-group',this)">2 — Limited</button>
-        <button type="button" class="cycle-opt-btn" data-value="3" onclick="selectCycleOption('ft-scale-group',this)">3 — Average</button>
-        <button type="button" class="cycle-opt-btn" data-value="4" onclick="selectCycleOption('ft-scale-group',this)">4 — Good</button>
-        <button type="button" class="cycle-opt-btn" data-value="5" onclick="selectCycleOption('ft-scale-group',this)">5 — Excellent</button>
+      <div class="option-group" id="ft-scale-group">
+        <button type="button" class="opt-btn" data-value="1" onclick="selectOptionBtn('ft-scale-group',this)">1 — Poor</button>
+        <button type="button" class="opt-btn" data-value="2" onclick="selectOptionBtn('ft-scale-group',this)">2 — Limited</button>
+        <button type="button" class="opt-btn" data-value="3" onclick="selectOptionBtn('ft-scale-group',this)">3 — Average</button>
+        <button type="button" class="opt-btn" data-value="4" onclick="selectOptionBtn('ft-scale-group',this)">4 — Good</button>
+        <button type="button" class="opt-btn" data-value="5" onclick="selectOptionBtn('ft-scale-group',this)">5 — Excellent</button>
       </div>
     </div>
     <div id="ft-fw-weight-fields" style="display:none;margin-bottom:14px">
@@ -1264,70 +1168,6 @@
   <div class="modal" style="position:relative;width:520px">
     <button class="modal-close" onclick="closeConnectHealthBiteModal()">&#10005;</button>
     <div id="hb-connect-content"></div>
-  </div>
-</div>
-
-<!-- ── CYCLE LOG MODAL ── -->
-<div class="modal-overlay" id="cycle-modal" onclick="closeModalOutside(event,'cycle-modal')">
-  <div class="modal" style="position:relative">
-    <button class="modal-close" onclick="closeModal('cycle-modal')">&#10005;</button>
-    <div class="modal-title">Log <em>Cycle</em></div>
-    <div class="modal-sub">Track your period, temperature, and symptoms.</div>
-    <div class="modal-field">
-      <label class="modal-label">Date</label>
-      <input class="modal-input" id="cyc-date" type="date">
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Flow</label>
-      <div class="cycle-option-group" id="cyc-flow-group">
-        <button type="button" class="cycle-opt-btn active" data-value="none" onclick="selectCycleOption('cyc-flow-group',this)">None</button>
-        <button type="button" class="cycle-opt-btn" data-value="SPOTTING" onclick="selectCycleOption('cyc-flow-group',this)">Spotting</button>
-        <button type="button" class="cycle-opt-btn" data-value="LIGHT" onclick="selectCycleOption('cyc-flow-group',this)">Light</button>
-        <button type="button" class="cycle-opt-btn" data-value="MEDIUM" onclick="selectCycleOption('cyc-flow-group',this)">Medium</button>
-        <button type="button" class="cycle-opt-btn" data-value="HEAVY" onclick="selectCycleOption('cyc-flow-group',this)">Heavy</button>
-      </div>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Basal Body Temperature</label>
-      <div style="display:flex;align-items:center;gap:8px">
-        <input class="modal-input" id="cyc-bbt" type="number" placeholder="e.g. 97.8" step="0.1" min="95" max="103" style="flex:1">
-        <span style="font-size:12px;color:var(--muted)">°F</span>
-      </div>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Cervical Mucus</label>
-      <div class="cycle-option-group" id="cyc-mucus-group">
-        <button type="button" class="cycle-opt-btn active" data-value="none" onclick="selectCycleOption('cyc-mucus-group',this)">Not Tracked</button>
-        <button type="button" class="cycle-opt-btn" data-value="DRY" onclick="selectCycleOption('cyc-mucus-group',this)">Dry</button>
-        <button type="button" class="cycle-opt-btn" data-value="STICKY" onclick="selectCycleOption('cyc-mucus-group',this)">Sticky</button>
-        <button type="button" class="cycle-opt-btn" data-value="CREAMY" onclick="selectCycleOption('cyc-mucus-group',this)">Creamy</button>
-        <button type="button" class="cycle-opt-btn" data-value="WATERY" onclick="selectCycleOption('cyc-mucus-group',this)">Egg White</button>
-      </div>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Ovulation Test</label>
-      <div class="cycle-option-group" id="cyc-ovtest-group">
-        <button type="button" class="cycle-opt-btn active" data-value="none" onclick="selectCycleOption('cyc-ovtest-group',this)">Not Taken</button>
-        <button type="button" class="cycle-opt-btn" data-value="NEGATIVE" onclick="selectCycleOption('cyc-ovtest-group',this)">Negative</button>
-        <button type="button" class="cycle-opt-btn" data-value="POSITIVE" onclick="selectCycleOption('cyc-ovtest-group',this)">Positive</button>
-      </div>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Progesterone (optional)</label>
-      <div style="display:flex;align-items:center;gap:8px">
-        <input class="modal-input" id="cyc-progesterone" type="number" placeholder="e.g. 12.5" step="0.1" min="0" style="flex:1">
-        <span style="font-size:12px;color:var(--muted)">ng/mL</span>
-      </div>
-    </div>
-    <div class="modal-field">
-      <label class="modal-label">Notes</label>
-      <textarea class="modal-input" id="cyc-notes" rows="2" placeholder="Cramps, mood, energy..." style="resize:vertical"></textarea>
-    </div>
-    <div id="cyc-modal-status" style="font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
-    <div class="modal-actions">
-      <button class="modal-btn-secondary" onclick="closeModal('cycle-modal')">Cancel</button>
-      <button class="modal-btn-primary" id="cyc-save-btn" onclick="saveCycleEntry()">Save Entry</button>
-    </div>
   </div>
 </div>
 
