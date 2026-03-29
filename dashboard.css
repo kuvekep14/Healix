@@ -1851,3 +1851,56 @@ body { font-family: var(--B); background: var(--dark); color: var(--cream); disp
   transition: color .2s;
 }
 .upgrade-modal-skip:hover { color: var(--cream-dim); }
+.upgrade-pricing-toggle {
+  display: flex; justify-content: center; gap: 0; margin-bottom: 20px;
+}
+.upgrade-toggle-btn {
+  padding: 8px 22px; font-family: var(--B); font-size: 12px; font-weight: 500;
+  letter-spacing: .08em; text-transform: uppercase; cursor: pointer;
+  border: 1px solid var(--gold-border); background: transparent; color: var(--cream-dim);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.upgrade-toggle-btn:first-child { border-radius: 20px 0 0 20px; border-right: none; }
+.upgrade-toggle-btn:last-child { border-radius: 0 20px 20px 0; }
+.upgrade-toggle-btn.active {
+  background: var(--gold); color: var(--dark); border-color: var(--gold);
+}
+.upgrade-toggle-btn:hover:not(.active) { border-color: var(--gold-hover); color: var(--cream); }
+.upgrade-price {
+  text-align: center; margin-bottom: 6px;
+}
+.upgrade-price-amount {
+  font-family: var(--F); font-size: 36px; font-weight: 300; color: var(--gold);
+}
+.upgrade-price-period {
+  font-family: var(--B); font-size: 13px; color: var(--cream-dim);
+}
+.upgrade-save {
+  text-align: center; font-family: var(--B); font-size: 11px; color: var(--up);
+  margin-bottom: 20px;
+}
+.subscription-status {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+}
+.subscription-badge {
+  display: inline-block; padding: 4px 12px; font-family: var(--B); font-size: 10px;
+  font-weight: 500; letter-spacing: .12em; text-transform: uppercase; border-radius: 12px;
+}
+.subscription-badge.free { background: var(--cream-faint); color: var(--cream-dim); }
+.subscription-badge.premium { background: var(--gold-faint); color: var(--gold); border: 1px solid var(--gold-border); }
+.subscription-manage-btn {
+  display: inline-block; padding: 10px 24px; background: transparent;
+  border: 1px solid var(--gold-border); color: var(--cream-dim);
+  font-family: var(--B); font-size: 11px; font-weight: 500;
+  letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+  transition: border-color .2s, color .2s;
+}
+.subscription-manage-btn:hover { border-color: var(--gold); color: var(--cream); }
+.subscription-upgrade-btn {
+  display: inline-block; padding: 10px 24px; background: var(--gold);
+  border: none; color: var(--dark);
+  font-family: var(--B); font-size: 11px; font-weight: 500;
+  letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+  transition: background .2s;
+}
+.subscription-upgrade-btn:hover { background: var(--gold-light); }

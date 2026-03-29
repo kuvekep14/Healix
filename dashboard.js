@@ -199,6 +199,7 @@ async function init() {
           var tier = profileData[0].subscription_tier || 'free';
           planEl.textContent = tier === 'premium' ? 'Premium' : tier === 'clinical' ? 'Clinical' : 'Free';
         }
+        renderSubscriptionCard();
       } else {
         // No profile row — onboarding will handle creation
         window.userProfileData = null;
@@ -248,6 +249,36 @@ async function init() {
       if (window.location.search.indexOf('upgrade=1') !== -1) {
         showUpgradeModal();
         history.replaceState(null, '', window.location.pathname);
+      }
+      // Handle post-upgrade redirect from Stripe
+      if (new URLSearchParams(window.location.search).get('upgraded') === '1') {
+        history.replaceState(null, '', window.location.pathname);
+        // Refresh profile to get updated tier
+        try {
+          var freshProfile = await supabaseRequest(
+            '/rest/v1/profiles?auth_user_id=eq.' + currentUser.id + '&limit=1',
+            'GET', null, getToken()
+          );
+          if (freshProfile && Array.isArray(freshProfile) && freshProfile.length > 0) {
+            window.userProfileData = freshProfile[0];
+            populateProfileForm(freshProfile[0]);
+            renderSubscriptionCard();
+            var planEl = document.querySelector('.user-plan');
+            if (planEl) {
+              var newTier = freshProfile[0].subscription_tier || 'free';
+              planEl.textContent = newTier === 'premium' ? 'Premium' : newTier === 'clinical' ? 'Clinical' : 'Free';
+            }
+          }
+        } catch(e) { console.warn('[Upgrade] Profile refresh error:', e); }
+        // Show success banner
+        var errEl = document.getElementById('profile-errors');
+        if (errEl) {
+          errEl.textContent = 'Welcome to Premium! You now have full access to Healix AI.';
+          errEl.style.display = 'block';
+          errEl.style.color = 'var(--up)';
+          errEl.style.borderColor = 'var(--success-border)';
+          errEl.style.background = 'var(--success-bg)';
+        }
       }
     });
     initSectionIntros();
@@ -8054,6 +8085,101 @@ function showUpgradeModal() {
 function closeUpgradeModal() {
   var modal = document.getElementById('upgrade-modal');
   if (modal) modal.classList.remove('open');
+}
+
+// ── STRIPE CHECKOUT & BILLING ──
+
+var selectedPlan = 'monthly';
+
+function selectPlan(plan) {
+  selectedPlan = plan;
+  document.getElementById('toggle-monthly').classList.toggle('active', plan === 'monthly');
+  document.getElementById('toggle-annual').classList.toggle('active', plan === 'annual');
+
+  if (plan === 'monthly') {
+    document.getElementById('upgrade-price').innerHTML = '<span class="upgrade-price-amount">$14.99</span><span class="upgrade-price-period">/month</span>';
+    document.getElementById('upgrade-save').style.display = 'none';
+  } else {
+    document.getElementById('upgrade-price').innerHTML = '<span class="upgrade-price-amount">$100</span><span class="upgrade-price-period">/year</span>';
+    document.getElementById('upgrade-save').style.display = 'block';
+  }
+}
+
+async function startCheckout() {
+  var btn = document.getElementById('upgrade-cta-btn');
+  btn.disabled = true;
+  btn.textContent = 'Redirecting...';
+
+  try {
+    var session = getSession();
+    if (!session || !session.access_token) { handleAuthFailure(); return; }
+    var resp = await fetch(SUPABASE_URL + '/functions/v1/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token
+      },
+      body: JSON.stringify({ plan: selectedPlan })
+    });
+
+    var data = await resp.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      throw new Error(data.error || 'Failed to create checkout session');
+    }
+  } catch (err) {
+    console.error('[Upgrade] Checkout error:', err);
+    alert('Failed to start checkout. Please try again.');
+    btn.disabled = false;
+    btn.textContent = 'Subscribe Now';
+  }
+}
+
+async function openBillingPortal() {
+  try {
+    var session = getSession();
+    if (!session || !session.access_token) { handleAuthFailure(); return; }
+    var resp = await fetch(SUPABASE_URL + '/functions/v1/create-billing-portal', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + session.access_token
+      }
+    });
+    var data = await resp.json();
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      throw new Error(data.error || 'Failed to open billing portal');
+    }
+  } catch (err) {
+    console.error('[Billing] Portal error:', err);
+    alert('Failed to open billing portal.');
+  }
+}
+
+function renderSubscriptionCard() {
+  var el = document.getElementById('subscription-card-content');
+  if (!el) return;
+  var premium = isPremium();
+  var tier = getUserTier();
+  var tierLabel = tier === 'clinical' ? 'Clinical' : tier === 'premium' ? 'Premium' : 'Free';
+  var badgeClass = premium ? 'premium' : 'free';
+
+  var html = '<div class="subscription-status">';
+  html += '<span class="subscription-badge ' + badgeClass + '">' + escapeHtml(tierLabel) + '</span>';
+  html += '</div>';
+
+  if (premium) {
+    html += '<p style="font-size:12px;color:var(--cream-dim);line-height:1.6;margin-bottom:16px">You have full access to Healix AI and all premium features.</p>';
+    html += '<button class="subscription-manage-btn" onclick="openBillingPortal()">Manage Subscription</button>';
+  } else {
+    html += '<p style="font-size:12px;color:var(--cream-dim);line-height:1.6;margin-bottom:16px">Upgrade to Premium for unlimited AI health chat. $14.99/month or $100/year.</p>';
+    html += '<button class="subscription-upgrade-btn" onclick="showUpgradeModal()">Upgrade to Premium</button>';
+  }
+
+  el.innerHTML = html;
 }
 
 // ── INSIGHT ENGINE (DETERMINISTIC, NO LLM) ──

@@ -612,7 +612,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
         </div>
         <div class="fi">
           <button class="fq" onclick="tFaq(this)">Is Healix free?<div class="ficon">+</div></button>
-          <div class="fa">Yes. Healix is completely free during beta. We'll announce pricing before the beta ends, and you'll never be charged without your explicit consent.</div>
+          <div class="fa">Healix has a free tier with full access to health tracking, insights, and data visualization. Premium ($14.99/month or $100/year) unlocks unlimited AI health chat.</div>
         </div>
       </div>
     </div>
@@ -624,7 +624,7 @@ footer { border-top: 1px solid var(--gold-border); padding: 60px 64px 44px; }
   <div class="cta-in reveal">
     <p class="sl" style="margin-bottom:20px">Get started</p>
     <h2>Try Healix free.<br><em>No commitment.</em></h2>
-    <p>Get access to the full Healix experience — mobile app for data ingestion, web dashboard for analysis and AI chat. Free during beta.</p>
+    <p>Get access to the full Healix experience — mobile app for data ingestion, web dashboard for analysis and AI chat. Free tier available.</p>
     <a href="signup.html" class="btn-p" style="display:inline-block;margin-top:8px">Sign Up Free</a>
     <a href="login.html" class="cta-secondary" style="margin-top:16px;display:inline-block">Already have an account? Log in →</a>
   </div>
@@ -799,7 +799,7 @@ function tFaq(btn){
     } else {
       badge='Recommended: Full Access';
       title='You are built for <em>this.</em>';
-      body=kL(q4)+'-level knowledge, '+mL(q3).toLowerCase()+', and you want <strong>'+energy+'</strong>. Healix was built for exactly your profile — the full experience is free during beta.';
+      body=kL(q4)+'-level knowledge, '+mL(q3).toLowerCase()+', and you want <strong>'+energy+'</strong>. Healix was built for exactly your profile — Premium unlocks the full AI experience.';
     }
 
     if(cons.length>0) body+=' Constraints noted: <strong>'+cons.join(', ')+'</strong> — Healix will work around them.';
@@ -820,11 +820,11 @@ function tFaq(btn){
 
     var rb=document.getElementById('hq-rec-block');
     if(tier==='free'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Free while we\u2019re testing</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Try Healix completely free during beta. Get your health data unified and your first AI insights — no credit card, no pressure, no catch.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free \u2192</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Free Tier</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Full access to health tracking, insights, and data visualization. Upgrade to Premium ($14.99/mo or $100/yr) anytime for unlimited AI health chat.</div><a href="signup.html" class="hq-cta-btn">Sign Up Free \u2192</a></div>';
     } else if(tier==='premium'){
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Full Premium, free while we\u2019re testing</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">You\u2019re exactly who Healix was built for. Try the full Premium experience — wearable data, meal tracking, AI insights, bloodwork analysis — completely free during beta. No credit card needed.</div><a href="signup.html" class="hq-cta-btn">Try Healix Free \u2192</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Recommended: Premium \u2014 $14.99/mo or $100/yr</div><div class="hq-rec-headline">The full picture, without the noise.</div><div class="hq-rec-desc">You\u2019re exactly who Healix was built for. Premium unlocks unlimited AI health chat on top of full health tracking, wearable sync, and bloodwork analysis.</div><a href="signup.html" class="hq-cta-btn">Get Started \u2192</a></div>';
     } else {
-      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Beta — Full access, completely free</div><div class="hq-rec-headline">Everything Healix offers. On us.</div><div class="hq-rec-desc">You\u2019re the power user we built this for. During beta, you get full access to every feature — wearable sync, bloodwork analysis, AI chat, Vitality Age — completely free. No credit card, no catch.</div><a href="signup.html" class="hq-cta-btn">Sign Up Free \u2192</a></div>';
+      rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Recommended: Premium \u2014 $14.99/mo or $100/yr</div><div class="hq-rec-headline">Everything Healix offers. Unlocked.</div><div class="hq-rec-desc">You\u2019re the power user we built this for. Premium gives you unlimited AI health chat, plus full access to wearable sync, bloodwork analysis, and Vitality Age.</div><a href="signup.html" class="hq-cta-btn">Get Started \u2192</a></div>';
     }
 
     allPanes.forEach(function(p){ p.style.display='none'; });

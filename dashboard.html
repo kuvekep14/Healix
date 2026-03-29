@@ -774,6 +774,14 @@
           <button class="save-btn" onclick="saveMedicalProfile()" style="margin-top:16px">Save Allergies</button>
         </div>
 
+        <!-- Subscription -->
+        <div class="card" id="subscription-card">
+          <div class="profile-section-title">Subscription <em>Plan</em></div>
+          <div id="subscription-card-content">
+            <!-- Populated by renderSubscriptionCard() -->
+          </div>
+        </div>
+
         <!-- Dashboard Sharing -->
         <div class="card span-2">
           <div class="profile-section-title">Dashboard <em>Sharing</em></div>
@@ -1241,9 +1249,21 @@
   <div class="upgrade-modal-box">
     <button class="upgrade-modal-close" onclick="closeUpgradeModal()">&times;</button>
     <div class="upgrade-modal-icon">&#9670;</div>
-    <div class="upgrade-modal-title">Unlock AI Health Chat</div>
-    <div class="upgrade-modal-body">Get personalized answers about your health data from Healix AI. Ask follow-up questions, explore trends, and get actionable recommendations.</div>
-    <a href="#" class="upgrade-modal-btn" id="upgrade-cta-btn">Upgrade to Premium</a>
+    <div class="upgrade-modal-title">Unlock Healix AI</div>
+    <div class="upgrade-modal-body">Full access to your personal health intelligence assistant. Ask anything about your health data.</div>
+
+    <div class="upgrade-pricing-toggle">
+      <button class="upgrade-toggle-btn active" id="toggle-monthly" onclick="selectPlan('monthly')">Monthly</button>
+      <button class="upgrade-toggle-btn" id="toggle-annual" onclick="selectPlan('annual')">Annual</button>
+    </div>
+
+    <div class="upgrade-price" id="upgrade-price">
+      <span class="upgrade-price-amount">$14.99</span>
+      <span class="upgrade-price-period">/month</span>
+    </div>
+    <div class="upgrade-save" id="upgrade-save" style="display:none;">Save $80/year</div>
+
+    <button class="upgrade-modal-btn" id="upgrade-cta-btn" onclick="startCheckout()">Subscribe Now</button>
     <button class="upgrade-modal-skip" onclick="closeUpgradeModal()">Maybe Later</button>
   </div>
 </div>
