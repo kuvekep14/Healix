@@ -3120,7 +3120,11 @@ function updateIntakeProcessing(id, status, isError) {
 }
 
 // Auto-reanalyze meals that have no nutrition data
+var _reanalyzeInProgress = false;
 async function reanalyzeMealsWithEmptyData(meals, token) {
+  // Guard against infinite loop: loadMealsPage -> reanalyze -> loadMealsPage -> reanalyze
+  if (_reanalyzeInProgress) return;
+
   var emptyMeals = meals.filter(function(m) {
     if (!m.data || !m.meal_description) return false;
     var d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data;
@@ -3129,8 +3133,11 @@ async function reanalyzeMealsWithEmptyData(meals, token) {
     return !macros || !Array.isArray(macros) || macros.length === 0;
   });
   if (emptyMeals.length === 0) return;
+
+  _reanalyzeInProgress = true;
   console.log('[Healix] Re-analyzing ' + emptyMeals.length + ' meals with empty nutrition data');
 
+  var successCount = 0;
   for (var i = 0; i < emptyMeals.length; i++) {
     var meal = emptyMeals[i];
     try {
@@ -3148,6 +3155,7 @@ async function reanalyzeMealsWithEmptyData(meals, token) {
             meal_analysis: aiData.meal_analysis || '',
             dev_feedback: aiData.dev_feedback || ''
           }, token);
+          successCount++;
           console.log('[Healix] Re-analyzed: ' + meal.meal_description.slice(0, 40));
         }
       }
@@ -3155,8 +3163,9 @@ async function reanalyzeMealsWithEmptyData(meals, token) {
       console.warn('[Healix] Re-analysis failed for meal ' + meal.id + ':', e);
     }
   }
-  // Reload meals page to show updated data
-  if (emptyMeals.length > 0) loadMealsPage();
+  _reanalyzeInProgress = false;
+  // Only reload if at least one meal was successfully re-analyzed
+  if (successCount > 0) loadMealsPage();
 }
 
 function removeIntakeProcessing(id) {
@@ -3176,7 +3185,7 @@ async function saveMealBackground(processingId, name, type, mealTime, mealData, 
         var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-          body: JSON.stringify({ mealLog: name, meal_type: 'Cooked' })
+          body: JSON.stringify({ mealLog: name, meal_type: type })
         });
         console.log('[Healix] analyze-meal-ai status:', aiRes.status);
         if (aiRes.ok) {
