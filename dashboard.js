@@ -2584,7 +2584,11 @@ async function loadMealsPage() {
       return;
     }
     console.log('[Healix] meals fetched:', meals.length, 'mealsDate=', localDateStr(mealsDate));
-    window._healixMeals = meals; // debug: call debugMealData(window._healixMeals[0]) in console
+    window._healixMeals = meals;
+
+    // Auto-reanalyze meals with empty nutrition data (non-blocking)
+    reanalyzeMealsWithEmptyData(meals, token);
+
     // Auto-log ALL nutrition fields from first meal that has data
     var sampleMeal = meals.find(function(m) { return m.data; });
     if (sampleMeal) {
@@ -3113,6 +3117,46 @@ function updateIntakeProcessing(id, status, isError) {
     var bar = card.querySelector('.intake-progress-bar');
     if (bar) bar.style.display = 'none';
   }
+}
+
+// Auto-reanalyze meals that have no nutrition data
+async function reanalyzeMealsWithEmptyData(meals, token) {
+  var emptyMeals = meals.filter(function(m) {
+    if (!m.data || !m.meal_description) return false;
+    var d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data;
+    if (!d || !d.total_nutrition) return true;
+    var macros = d.total_nutrition.Macronutrients;
+    return !macros || !Array.isArray(macros) || macros.length === 0;
+  });
+  if (emptyMeals.length === 0) return;
+  console.log('[Healix] Re-analyzing ' + emptyMeals.length + ' meals with empty nutrition data');
+
+  for (var i = 0; i < emptyMeals.length; i++) {
+    var meal = emptyMeals[i];
+    try {
+      var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ mealLog: meal.meal_description, meal_type: meal.meal_type || 'Cooked' })
+      });
+      if (aiRes.ok) {
+        var aiData = await aiRes.json();
+        if (aiData && aiData.total_nutrition && aiData.total_nutrition.Macronutrients && aiData.total_nutrition.Macronutrients.length > 0) {
+          await supabaseRequest('/rest/v1/meal_log?id=eq.' + meal.id, 'PATCH', {
+            data: aiData,
+            meal_description: aiData.meal_description || meal.meal_description,
+            meal_analysis: aiData.meal_analysis || '',
+            dev_feedback: aiData.dev_feedback || ''
+          }, token);
+          console.log('[Healix] Re-analyzed: ' + meal.meal_description.slice(0, 40));
+        }
+      }
+    } catch(e) {
+      console.warn('[Healix] Re-analysis failed for meal ' + meal.id + ':', e);
+    }
+  }
+  // Reload meals page to show updated data
+  if (emptyMeals.length > 0) loadMealsPage();
 }
 
 function removeIntakeProcessing(id) {
