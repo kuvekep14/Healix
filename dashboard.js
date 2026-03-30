@@ -3031,17 +3031,23 @@ async function saveMeal() {
       showIntakeProcessing(processingId, name, type, true);
 
       try {
-        var aiResult = await supabaseRequest(SUPABASE_URL + '/functions/v1/analyze-meal-ai', 'POST', {
-          mealLog: name,
-          meal_type: type
-        }, getToken());
-
-        if (aiResult && !aiResult.error) {
-          await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'PATCH', {
-            data: aiResult,
-            meal_analysis: aiResult.meal_analysis || '',
-            dev_feedback: aiResult.dev_feedback || ''
-          }, getToken());
+        var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
+          body: JSON.stringify({ mealLog: name, meal_type: type })
+        });
+        if (aiRes.ok) {
+          var aiResult = await aiRes.json();
+          if (aiResult && aiResult.total_nutrition) {
+            await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'PATCH', {
+              data: aiResult,
+              meal_description: aiResult.meal_description || name,
+              meal_analysis: aiResult.meal_analysis || '',
+              dev_feedback: aiResult.dev_feedback || ''
+            }, getToken());
+          }
+        } else {
+          console.warn('[Meals] Re-analysis returned ' + aiRes.status);
         }
       } catch(aiErr) {
         console.warn('[Meals] Re-analysis failed:', aiErr);
@@ -3128,8 +3134,11 @@ async function saveMealBackground(processingId, name, type, mealTime, mealData, 
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
           body: JSON.stringify({ mealLog: name, meal_type: 'Cooked' })
         });
+        console.log('[Healix] analyze-meal-ai status:', aiRes.status);
         if (aiRes.ok) {
           var aiData = await aiRes.json();
+          console.log('[Healix] AI response keys:', aiData ? Object.keys(aiData) : 'null');
+          console.log('[Healix] AI Macronutrients count:', aiData && aiData.total_nutrition && aiData.total_nutrition.Macronutrients ? aiData.total_nutrition.Macronutrients.length : 'none');
           if (aiData) {
             mealData = aiData;
             mealDescription = aiData.meal_description || null;
