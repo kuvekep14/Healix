@@ -1074,6 +1074,46 @@ var DRIVER_EXPLAINERS = {
   bloodwork: 'Scored from your latest lab results — glucose, cholesterol, HbA1c, and other biomarkers each compared to optimal ranges. This is the most objective measure and carries 35% of your score.'
 };
 
+var GOAL_GHOST_TEXT = {
+  heart: {
+    sleep_better: 'Your resting HR directly correlates with sleep quality — lower is better.',
+    longevity: 'Resting HR is the #2 predictor of biological age.',
+    improve_endurance: 'Track how your resting HR drops as your cardio fitness improves.',
+    default: 'Heart rate reveals your cardiovascular fitness and recovery capacity.'
+  },
+  weight: {
+    lose_weight: 'Track your weight trend and see how it affects your Vitality Age score.',
+    sleep_better: 'Body composition affects sleep apnea risk and sleep quality.',
+    longevity: 'Optimal BMI is associated with 3-5 years of additional lifespan.',
+    default: 'Weight + height unlocks your BMI, worth 20% of your Vitality Age.'
+  },
+  strength: {
+    gain_strength: 'See where you rank for your age and track your progress over time.',
+    sleep_better: 'Strength training improves sleep onset — you fall asleep 13% faster.',
+    longevity: 'Grip strength is the #1 predictor of all-cause mortality.',
+    default: 'Strength benchmarks show where you stand compared to your age group.'
+  },
+  aerobic: {
+    improve_endurance: 'VO2 max is your cardio scorecard — track it and watch it climb.',
+    longevity: 'VO2 max is the single strongest predictor of how long you\'ll live.',
+    sleep_better: 'Higher cardio fitness improves deep sleep duration and quality.',
+    default: 'VO2 max is the #1 longevity predictor. Add yours to unlock this metric.'
+  },
+  bloodwork: {
+    sleep_better: 'Magnesium & Vitamin D in your bloodwork directly affect sleep quality.',
+    longevity: 'Blood biomarkers are worth 35% of your Vitality Age — the biggest single factor.',
+    lose_weight: 'Bloodwork reveals metabolic markers that affect weight management.',
+    default: 'Blood biomarkers carry the most weight in your Vitality Age calculation (35%).'
+  }
+};
+
+function getGoalGhostText(driverKey) {
+  var userGoal = (window.userProfileData && window.userProfileData.primary_goal) ? window.userProfileData.primary_goal.split(',')[0].trim() : '';
+  var texts = GOAL_GHOST_TEXT[driverKey];
+  if (!texts) return '';
+  return texts[userGoal] || texts.default || '';
+}
+
 var GHOST_CTAS = {
   heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect HealthBite →', action: function() { openConnectHealthBiteModal(); }, chatQ: 'Why is resting heart rate important for longevity?' },
   weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); }, chatQ: 'How does body weight affect my vitality age?' },
@@ -1124,7 +1164,7 @@ function renderDriverCards(metrics, result) {
       var ghost = GHOST_CTAS[key];
       // If HealthBite has synced but this metric is missing, show a "waiting" state
       var wearableSynced = !!window._healthSyncDetected || !!window._healthSamplesExist;
-      var ghostText = ghost.text;
+      var ghostText = getGoalGhostText(key) || ghost.text;
       var ghostCta = ghost.cta;
       var ghostAction = ghost.action;
       if (key === 'heart' && wearableSynced) {
@@ -7303,6 +7343,29 @@ function renderMilestones() {
 }
 
 // ── ONBOARDING CHECKLIST ──
+function getChecklistLabel(itemKey, goal) {
+  var labels = {
+    wearable: {
+      sleep_better: 'Connect HealthBite to start tracking your sleep patterns',
+      improve_endurance: 'Connect HealthBite to track your heart rate and activity',
+      default: 'Connect HealthBite to sync your health data'
+    },
+    bloodwork: {
+      sleep_better: 'Upload labs to check magnesium & vitamin D for sleep',
+      longevity: 'Upload labs — they\'re worth 35% of your Vitality Age',
+      default: 'Upload bloodwork to unlock biomarker scoring'
+    },
+    fitness: {
+      gain_strength: 'Log a fitness test to see where you rank',
+      longevity: 'Log a fitness test — strength predicts longevity',
+      default: 'Log a fitness test for percentile benchmarks'
+    },
+    profile: { default: 'Complete your profile' }
+  };
+  var itemLabels = labels[itemKey] || { default: itemKey };
+  return itemLabels[goal] || itemLabels.default;
+}
+
 function renderOnboardingChecklist() {
   var state = getDataConnectivityState();
   var container = document.getElementById('onboarding-checklist');
@@ -7318,11 +7381,12 @@ function renderOnboardingChecklist() {
   var newlyCompleted = currentCount > prevCount;
   if (!_viewingUserId) localStorage.setItem('healix_checklist_count_' + currentUser.id, currentCount.toString());
 
+  var userGoal = (window.userProfileData && window.userProfileData.primary_goal) ? window.userProfileData.primary_goal.split(',')[0].trim() : '';
   var items = [
-    { key: 'profile', label: 'Complete profile', time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
-    { key: 'wearable', label: 'Connect wearable', time: '1 min', done: state.wearable.connected, action: 'openConnectHealthBiteModal()' },
-    { key: 'fitness', label: 'Log fitness test', time: '3 min', done: state.fitness.tested, action: 'showPage(\'strength\', null)' },
-    { key: 'bloodwork', label: 'Upload bloodwork', time: '2 min', done: state.bloodwork.uploaded, action: 'showPage(\'documents\', null)' }
+    { key: 'profile', label: getChecklistLabel('profile', userGoal), time: '2 min', done: state.profile.connected, action: 'showPage(\'profile\', null)' },
+    { key: 'wearable', label: getChecklistLabel('wearable', userGoal), time: '1 min', done: state.wearable.connected, action: 'openConnectHealthBiteModal()' },
+    { key: 'fitness', label: getChecklistLabel('fitness', userGoal), time: '3 min', done: state.fitness.tested, action: 'showPage(\'strength\', null)' },
+    { key: 'bloodwork', label: getChecklistLabel('bloodwork', userGoal), time: '2 min', done: state.bloodwork.uploaded, action: 'showPage(\'documents\', null)' }
   ];
 
   var squaresHtml = '';
@@ -7364,6 +7428,13 @@ function renderSmartEmptyStates(vitalityResult) {
 }
 
 // ── ONBOARDING WIZARD ──
+var quizData = null;
+try {
+  var _rawQuiz = localStorage.getItem('healix_quiz_data');
+  if (_rawQuiz) quizData = JSON.parse(_rawQuiz);
+} catch(e) {}
+var hasQuizData = !!(quizData && quizData.goals && quizData.goals.length > 0);
+
 var onboardingState = {
   firstName: '', lastName: '',
   birthYear: null, gender: 'prefer-not-to-say',
@@ -7371,10 +7442,12 @@ var onboardingState = {
   primaryGoals: [], targetWeight: '',
   activityLevel: 'moderately_active', fitnessLevel: 'beginner',
   healthConditions: [], dietaryRestrictions: [],
-  hasAppleWatch: true
+  hasAppleWatch: true,
+  quizWearable: '', quizMotivation: ''
 };
 var onboardingStep = 1;
-var ONBOARDING_TOTAL_STEPS = 7;
+// Non-quiz users get 2 extra steps (wearable + motivation) after step 7
+var ONBOARDING_TOTAL_STEPS = hasQuizData ? 7 : 9;
 
 function checkOnboarding() {
   // Profile exists in DB = onboarding was completed (either here or in HealthBite)
@@ -7392,6 +7465,26 @@ function showOnboardingWizard() {
   onboardingState.lastName = profile.last_name || (fullName ? fullName.split(' ').slice(1).join(' ') : '');
   onboardingStep = 1;
 
+  // Pre-fill from quiz data if available
+  if (hasQuizData) {
+    var goalMap = {
+      'goal-energy': 'feel_better',
+      'goal-sleep': 'sleep_better',
+      'goal-workout': 'improve_endurance',
+      'goal-focus': 'feel_better',
+      'goal-mood': 'feel_better',
+      'goal-longevity': 'longevity'
+    };
+    var mappedGoals = [];
+    quizData.goals.forEach(function(g) {
+      var mapped = goalMap[g];
+      if (mapped && mappedGoals.indexOf(mapped) === -1) mappedGoals.push(mapped);
+    });
+    if (mappedGoals.length > 0) onboardingState.primaryGoals = mappedGoals;
+    if (quizData.wearable === 'wearable-apple') onboardingState.hasAppleWatch = true;
+    else if (quizData.wearable === 'wearable-none') onboardingState.hasAppleWatch = false;
+  }
+
   var overlay = document.createElement('div');
   overlay.className = 'onboarding-overlay';
   overlay.id = 'onboarding-overlay';
@@ -7408,6 +7501,7 @@ function renderOnboardingStep(step) {
   dots += '</div>';
 
   var backBtn = step > 1 ? '<button class="ob-btn ob-btn-back" onclick="onboardingBack()">Back</button>' : '<div class="ob-nav-spacer"></div>';
+  var obStepTotal = ONBOARDING_TOTAL_STEPS - 1; // Exclude welcome screen from count
 
   if (step === 1) {
     return '<div class="ob-title">Hey there! I\'m <em>Healix</em></div>'
@@ -7417,7 +7511,7 @@ function renderOnboardingStep(step) {
   }
 
   if (step === 2) {
-    return '<div class="ob-step-indicator">Step 1 of 6</div>'
+    return '<div class="ob-step-indicator">Step 1 of ' + obStepTotal + '</div>'
       + '<div class="ob-title">What\'s your name?</div>'
       + '<div class="ob-subtitle">We\'ll use this to personalize your experience.</div>'
       + '<div class="ob-row">'
@@ -7447,7 +7541,7 @@ function renderOnboardingStep(step) {
     });
     genderHtml += '</div>';
 
-    return '<div class="ob-step-indicator">Step 2 of 6</div>'
+    return '<div class="ob-step-indicator">Step 2 of ' + obStepTotal + '</div>'
       + '<div class="ob-title">About You</div>'
       + '<div class="ob-subtitle">This helps us calculate age-adjusted health scores.</div>'
       + '<div class="ob-field"><div class="ob-label">Birth Year</div>'
@@ -7491,7 +7585,7 @@ function renderOnboardingStep(step) {
         + '</div></div>';
     }
 
-    return '<div class="ob-step-indicator">Step 3 of 6</div>'
+    return '<div class="ob-step-indicator">Step 3 of ' + obStepTotal + '</div>'
       + '<div class="ob-title">Body Metrics</div>'
       + '<div class="ob-subtitle">Used for BMI and vitality age calculations.</div>'
       + '<div class="ob-unit-toggle">'
@@ -7528,7 +7622,7 @@ function renderOnboardingStep(step) {
     var showTarget = onboardingState.primaryGoals.indexOf('lose_weight') !== -1 || onboardingState.primaryGoals.indexOf('gain_strength') !== -1;
     var twLabel = onboardingState.measurementSystem === 'imperial' ? 'Target Weight (lbs)' : 'Target Weight (kg)';
 
-    return '<div class="ob-step-indicator">Step 4 of 6</div>'
+    return '<div class="ob-step-indicator">Step 4 of ' + obStepTotal + '</div>'
       + '<div class="ob-title">What\'s your goal?</div>'
       + '<div class="ob-subtitle">We\'ll tailor your dashboard and insights accordingly.</div>'
       + goalsHtml
@@ -7570,7 +7664,7 @@ function renderOnboardingStep(step) {
     });
     fitHtml += '</div>';
 
-    return '<div class="ob-step-indicator">Step 5 of 6</div>'
+    return '<div class="ob-step-indicator">Step 5 of ' + obStepTotal + '</div>'
       + '<div class="ob-title">Activity Level</div>'
       + '<div class="ob-subtitle">Helps us set realistic baselines for your metrics.</div>'
       + '<div class="ob-field"><div class="ob-label">How active are you?</div>' + actHtml + '</div>'
@@ -7600,7 +7694,11 @@ function renderOnboardingStep(step) {
 
     var watchOn = onboardingState.hasAppleWatch;
 
-    return '<div class="ob-step-indicator">Step 6 of 6</div>'
+    var step7Cta = hasQuizData
+      ? '<button class="ob-btn ob-btn-primary" onclick="completeOnboarding()">Complete Setup</button>'
+      : '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button>';
+
+    return '<div class="ob-step-indicator">Step 6 of ' + obStepTotal + '</div>'
       + '<div class="ob-title">Health & Device</div>'
       + '<div class="ob-subtitle">Optional info to refine your insights.</div>'
       + '<div class="ob-field"><div class="ob-label">Health Conditions</div>' + condHtml + '</div>'
@@ -7609,6 +7707,53 @@ function renderOnboardingStep(step) {
       + '<div><div class="ob-toggle-label">Apple Watch</div><div class="ob-toggle-sub">Enables heart rate and activity tracking</div></div>'
       + '<div class="ob-switch' + (watchOn ? ' on' : '') + '" id="ob-watch-toggle" onclick="onboardingToggleWatch()"></div>'
       + '</div>'
+      + '<div class="ob-nav">' + backBtn + dots + step7Cta + '</div>';
+  }
+
+  // Steps 8 & 9 — only for non-quiz users
+  if (step === 8 && !hasQuizData) {
+    var wearables = [
+      { val: 'wearable-apple', label: 'Apple Watch' },
+      { val: 'wearable-oura', label: 'Oura Ring' },
+      { val: 'wearable-whoop', label: 'Whoop' },
+      { val: 'wearable-fitbit', label: 'Fitbit' },
+      { val: 'wearable-none', label: 'Nothing yet' }
+    ];
+    var wearHtml = '<div class="ob-cards">';
+    wearables.forEach(function(w) {
+      var sel = onboardingState.quizWearable === w.val ? ' selected' : '';
+      wearHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectWearable(\'' + w.val + '\')">'
+        + '<div class="ob-card-label">' + w.label + '</div></div>';
+    });
+    wearHtml += '</div>';
+
+    return '<div class="ob-step-indicator">Step 7 of ' + obStepTotal + '</div>'
+      + '<div class="ob-title">What do you track with?</div>'
+      + '<div class="ob-subtitle">Helps us personalize your setup experience.</div>'
+      + wearHtml
+      + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="onboardingNext()">Continue</button></div>';
+  }
+
+  if (step === 9 && !hasQuizData) {
+    var motivations = [
+      { val: 'why-wall', label: 'Hit a wall' },
+      { val: 'why-diagnosis', label: 'Recent diagnosis' },
+      { val: 'why-proactive', label: 'Getting ahead' },
+      { val: 'why-better', label: 'Want to feel better' },
+      { val: 'why-curious', label: 'Just curious' }
+    ];
+    var motHtml = '<div class="ob-cards">';
+    motivations.forEach(function(m) {
+      var sel = onboardingState.quizMotivation === m.val ? ' selected' : '';
+      motHtml += '<div class="ob-card' + sel + '" onclick="onboardingSelectMotivation(\'' + m.val + '\')">'
+        + '<div class="ob-card-label">' + m.label + '</div></div>';
+    });
+    motHtml += '</div>';
+
+    return '<div class="ob-step-indicator">Step 8 of ' + obStepTotal + '</div>'
+      + '<div class="ob-title">What brought you to Healix?</div>'
+      + '<div class="ob-subtitle">This helps us understand what matters most to you.</div>'
+      + motHtml
       + '<div class="ob-nav">' + backBtn + dots + '<button class="ob-btn ob-btn-primary" onclick="completeOnboarding()">Complete Setup</button></div>';
   }
 
@@ -7762,6 +7907,19 @@ function onboardingToggleWatch() {
   if (toggle) toggle.classList.toggle('on');
 }
 
+function onboardingSelectWearable(val) {
+  onboardingState.quizWearable = val;
+  if (val === 'wearable-apple') onboardingState.hasAppleWatch = true;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
+function onboardingSelectMotivation(val) {
+  onboardingState.quizMotivation = val;
+  var card = document.getElementById('ob-card');
+  if (card) card.innerHTML = renderOnboardingStep(onboardingStep);
+}
+
 async function completeOnboarding() {
   var session = getSession();
   if (!session || !currentUser) return;
@@ -7793,6 +7951,20 @@ async function completeOnboarding() {
     health_conditions: onboardingState.healthConditions.join(', ') || null,
     dietary_restrictions: onboardingState.dietaryRestrictions.join(', ') || null
   };
+
+  // Add quiz fields from quiz data (quiz users) or from onboarding extra steps (non-quiz users)
+  if (hasQuizData && quizData) {
+    profileData.quiz_motivation = quizData.motivation || null;
+    profileData.quiz_wearable = quizData.wearable || null;
+    profileData.quiz_engagement_level = quizData.engagementLevel || null;
+    profileData.quiz_knowledge_level = quizData.knowledgeLevel || null;
+    profileData.quiz_constraints = quizData.constraints ? quizData.constraints.join(', ') : null;
+    try { localStorage.removeItem('healix_quiz_data'); } catch(e) {}
+  } else {
+    profileData.quiz_wearable = onboardingState.quizWearable || null;
+    profileData.quiz_motivation = onboardingState.quizMotivation || null;
+  }
+
   if (birthDate) profileData.birth_date = birthDate;
   if (targetWeightKg) profileData.target_weight_kg = targetWeightKg;
 
@@ -7841,12 +8013,86 @@ async function completeOnboarding() {
       renderVitalityUnlockState();
       renderOnboardingChecklist();
       renderSmartEmptyStates(window._lastVitalityResult);
+      // Show personalized "Your Plan" modal after onboarding (once only)
+      if (!localStorage.getItem('healix_your_plan_shown')) {
+        showYourPlan();
+      }
     });
   } catch(e) {
     console.error('[Healix] Onboarding profile creation error:', e);
     if (btn) { btn.disabled = false; btn.textContent = 'Complete Setup'; }
     alert('Could not save your profile. Please try again.');
   }
+}
+
+// ── YOUR PLAN MODAL ──
+var yourPlanStep = 1;
+
+function showYourPlan() {
+  var profile = window.userProfileData || {};
+  var goals = (profile.primary_goal || '').split(',').map(function(g) { return g.trim(); });
+  var mainGoal = goals[0] || 'feel_better';
+  var wearable = profile.quiz_wearable || (profile.has_apple_watch ? 'wearable-apple' : '');
+  var motivation = profile.quiz_motivation || '';
+
+  // Card 1: Value prop based on goal
+  var goalMessages = {
+    'feel_better': 'We\'ll track your energy patterns across sleep, nutrition, and activity — showing you exactly what\'s draining you and what helps.',
+    'lose_weight': 'We\'ll track your nutrition with AI-powered meal analysis, monitor your weight trends, and show how body composition affects your biological age.',
+    'improve_endurance': 'We\'ll build your cardio profile from heart rate and VO2 max data, showing you how your fitness compares to others your age.',
+    'gain_strength': 'We\'ll benchmark your strength against age-adjusted norms and track your progress over time. Every test feeds into your Vitality Age.',
+    'sleep_better': 'We\'ll track your sleep stages, calculate sleep debt, and show you how sleep quality directly affects your biological age.',
+    'healthier_diet': 'We\'ll analyze every meal with AI — breaking down macros, micronutrients, and dietary gaps. You\'ll see exactly where your nutrition stands.',
+    'longevity': 'We\'ll calculate your Vitality Age from heart rate, bloodwork, fitness, and more — showing you exactly how to move the needle on biological aging.'
+  };
+  var body1El = document.getElementById('yp-body-1');
+  if (body1El) body1El.textContent = goalMessages[mainGoal] || goalMessages['feel_better'];
+
+  // Card 2: Easiest first win based on context
+  var body2El = document.getElementById('yp-body-2');
+  var cta2El = document.getElementById('yp-cta-2');
+  var ctaHTML = '';
+  if (wearable === 'wearable-apple' || profile.has_apple_watch) {
+    if (body2El) body2El.textContent = 'Connect the HealthBite app to pull your Apple Watch data. This takes 2 minutes and immediately unlocks heart rate, sleep, and activity tracking.';
+    ctaHTML = '<button class="yp-cta-btn" onclick="closeYourPlan(); openConnectHealthBiteModal();">Connect HealthBite</button>';
+  } else if (motivation === 'why-diagnosis') {
+    if (body2El) body2El.textContent = 'Upload your lab results — we\'ll extract every biomarker and show where you stand. This is the single biggest input to your Vitality Age (35% of the score).';
+    ctaHTML = '<button class="yp-cta-btn" onclick="closeYourPlan(); showPage(\'documents\', null);">Upload Lab Results</button>';
+  } else {
+    if (body2El) body2El.textContent = 'Log your first meal — describe what you ate and our AI will break down the full nutrition. Takes 30 seconds.';
+    ctaHTML = '<button class="yp-cta-btn" onclick="closeYourPlan(); showPage(\'intake\', null); setMealDateTimeDefault(); openModal(\'meal-modal\');">Log a Meal</button>';
+  }
+  if (cta2El) cta2El.innerHTML = ctaHTML;
+
+  var modal = document.getElementById('your-plan-modal');
+  if (modal) modal.style.display = 'flex';
+  yourPlanStep = 1;
+  updateYourPlanDots();
+}
+
+function nextYourPlanStep() {
+  var curStep = document.getElementById('yp-step-' + yourPlanStep);
+  if (curStep) curStep.style.display = 'none';
+  yourPlanStep++;
+  var nextStep = document.getElementById('yp-step-' + yourPlanStep);
+  if (nextStep) nextStep.style.display = 'block';
+  updateYourPlanDots();
+}
+
+function updateYourPlanDots() {
+  for (var i = 1; i <= 3; i++) {
+    var dot = document.getElementById('yp-dot-' + i);
+    if (dot) {
+      if (i === yourPlanStep) { dot.classList.add('active'); }
+      else { dot.classList.remove('active'); }
+    }
+  }
+}
+
+function closeYourPlan() {
+  var modal = document.getElementById('your-plan-modal');
+  if (modal) modal.style.display = 'none';
+  try { localStorage.setItem('healix_your_plan_shown', 'true'); } catch(e) {}
 }
 
 // ── MEAL EDIT/DELETE ──

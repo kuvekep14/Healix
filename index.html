@@ -819,6 +819,18 @@ function tFaq(btn){
     }).join('');
 
     var rb=document.getElementById('hq-rec-block');
+    // Store quiz data for personalized onboarding
+    var quizData = {
+      goals: Array.from(goalSel),
+      constraints: Array.from(multiSel),
+      wearable: answers[6] || '',
+      motivation: answers[7] || '',
+      engagementLevel: parseInt(answers[0]) || 0,
+      knowledgeLevel: parseInt(answers[3]) || 0,
+      tier: tier
+    };
+    try { localStorage.setItem('healix_quiz_data', JSON.stringify(quizData)); } catch(e) {}
+
     if(tier==='free'){
       rb.innerHTML='<div class="hq-rec hq-rec-featured"><div class="hq-rec-tier">Free Tier</div><div class="hq-rec-headline">Zero commitment. Real value.</div><div class="hq-rec-desc">Full access to health tracking, insights, and data visualization. Upgrade to Premium ($14.99/mo or $100/yr) anytime for unlimited AI health chat.</div><a href="signup.html" class="hq-cta-btn">Sign Up Free \u2192</a></div>';
     } else if(tier==='premium'){

@@ -1241,6 +1241,36 @@
   <div class="cw-resize-handle cw-rh-sw" data-handle="sw"></div>
 </div>
 
+<!-- Your Plan Modal (post-onboarding) -->
+<div class="modal-overlay yp-overlay" id="your-plan-modal" style="display:none;">
+  <div class="your-plan-box">
+    <div class="yp-step" id="yp-step-1">
+      <div class="yp-badge">YOUR PLAN</div>
+      <h2 class="yp-title" id="yp-title-1">Here's what Healix will do for you</h2>
+      <p class="yp-body" id="yp-body-1"></p>
+      <button class="yp-next" onclick="nextYourPlanStep()">Next</button>
+    </div>
+    <div class="yp-step" id="yp-step-2" style="display:none;">
+      <div class="yp-badge">GET STARTED</div>
+      <h2 class="yp-title" id="yp-title-2">Your easiest first win</h2>
+      <p class="yp-body" id="yp-body-2"></p>
+      <div id="yp-cta-2"></div>
+      <button class="yp-next" onclick="nextYourPlanStep()">Next</button>
+    </div>
+    <div class="yp-step" id="yp-step-3" style="display:none;">
+      <div class="yp-badge">WHAT TO EXPECT</div>
+      <h2 class="yp-title">Your dashboard will come alive</h2>
+      <p class="yp-body">After connecting your data, you'll see your personalized Vitality Age update daily. Every meal logged, every night of sleep tracked, and every lab result uploaded makes your health picture clearer.</p>
+      <button class="yp-next yp-go" onclick="closeYourPlan()">Let's go</button>
+    </div>
+    <div class="yp-dots">
+      <span class="yp-dot active" id="yp-dot-1"></span>
+      <span class="yp-dot" id="yp-dot-2"></span>
+      <span class="yp-dot" id="yp-dot-3"></span>
+    </div>
+  </div>
+</div>
+
 <!-- Upgrade Modal -->
 <div class="modal-overlay" id="upgrade-modal">
   <div class="upgrade-modal-box">
