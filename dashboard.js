@@ -3012,7 +3012,7 @@ async function saveMeal() {
   }
 
   if (editingMealId) {
-    // Update existing meal — direct PATCH, no AI re-analysis
+    // Update existing meal — PATCH first, then re-analyze with AI
     try {
       var patchPayload = {
         meal_type: type, meal_description: name, raw_input: name, meal_time: mealTime
@@ -3020,8 +3020,36 @@ async function saveMeal() {
       if (mealData) patchPayload.data = mealData;
       await supabaseRequest('/rest/v1/meal_log?id=eq.' + editingMealId, 'PATCH',
         patchPayload, getToken());
+
+      // Re-analyze with AI if description changed or no nutrition data
+      var mealId = editingMealId;
       editingMealId = null;
       resetMealModal();
+
+      // Show processing state
+      var processingId = 'intake-processing-' + Date.now();
+      showIntakeProcessing(processingId, name, type, true);
+
+      try {
+        var aiResult = await supabaseRequest(SUPABASE_URL + '/functions/v1/analyze-meal-ai', 'POST', {
+          mealLog: name,
+          meal_type: type
+        }, getToken());
+
+        if (aiResult && !aiResult.error) {
+          await supabaseRequest('/rest/v1/meal_log?id=eq.' + mealId, 'PATCH', {
+            data: aiResult,
+            meal_analysis: aiResult.meal_analysis || '',
+            dev_feedback: aiResult.dev_feedback || ''
+          }, getToken());
+        }
+      } catch(aiErr) {
+        console.warn('[Meals] Re-analysis failed:', aiErr);
+      }
+
+      // Remove processing card and reload
+      var procEl = document.getElementById(processingId);
+      if (procEl) procEl.remove();
       loadMealsPage();
       loadDashboardData();
     } catch(e) {
