@@ -344,9 +344,9 @@ var FRESHNESS_THRESHOLDS = {
 };
 
 var FRESHNESS_CTA = {
-  heart_rate: { text: 'Open HealthBite to sync', href: null },
-  sleep:      { text: 'Open HealthBite to sync', href: null },
-  steps:      { text: 'Open HealthBite to sync', href: null },
+  heart_rate: { text: 'Open Healix app to sync', href: null },
+  sleep:      { text: 'Open Healix app to sync', href: null },
+  steps:      { text: 'Open Healix app to sync', href: null },
   weight:     { text: 'Log new weight', action: function() { openModal('weight-modal'); } },
   strength:   { text: 'Log a new test', action: function() { showPage('strength', null); } },
   vo2max:     { text: 'Log a new test', action: function() { showPage('strength', null); } },
@@ -434,7 +434,7 @@ function renderSyncBanner(timestamps) {
         if (rows && rows.length > 0 && rows[0].sync_completed_at) {
           var ago = formatRelativeTime(rows[0].sync_completed_at);
           var device = rows[0].device_name ? ' from ' + rows[0].device_name : '';
-          textEl.textContent = 'Last sync ' + ago + device + '. Open HealthBite to refresh your data.';
+          textEl.textContent = 'Last sync ' + ago + device + '. Open Healix app to refresh your data.';
         }
       }).catch(function() {});
     }
@@ -1115,7 +1115,7 @@ function getGoalGhostText(driverKey) {
 }
 
 var GHOST_CTAS = {
-  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect HealthBite →', action: function() { openConnectHealthBiteModal(); }, chatQ: 'Why is resting heart rate important for longevity?' },
+  heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Healix App →', action: function() { openConnectHealthBiteModal(); }, chatQ: 'Why is resting heart rate important for longevity?' },
   weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); }, chatQ: 'How does body weight affect my vitality age?' },
   strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); }, chatQ: 'Why does strength matter for healthy aging?' },
   aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); }, chatQ: 'What is VO2 max and why does it predict longevity?' },
@@ -1168,7 +1168,7 @@ function renderDriverCards(metrics, result) {
       var ghostCta = ghost.cta;
       var ghostAction = ghost.action;
       if (key === 'heart' && wearableSynced) {
-        ghostText = 'HealthBite is connected. Heart rate data will appear here once your Apple Watch syncs resting HR.';
+        ghostText = 'Healix app is connected. Heart rate data will appear here once your Apple Watch syncs resting HR.';
         ghostCta = 'View connection status →';
         ghostAction = function() { openConnectHealthBiteModal(); };
       }
@@ -4960,16 +4960,16 @@ function renderConnectHealthBiteContent(state) {
 
   var checkmark = '&#10003;';
 
-  var html = '<div class="hb-connect-title">Connect <em>HealthBite</em></div>'
-    + '<div class="hb-connect-sub">HealthBite syncs Apple Health data from your iPhone and Apple Watch to Healix automatically.</div>'
+  var html = '<div class="hb-connect-title">Connect <em>Healix App</em></div>'
+    + '<div class="hb-connect-sub">The Healix app syncs Apple Health data from your iPhone and Apple Watch to Healix automatically.</div>'
     + '<div class="hb-steps">';
 
   // Step 1
   html += '<div class="hb-step' + (step1Done ? ' done' : '') + (step1Active ? ' active' : '') + '">'
     + '<div class="hb-step-indicator"><div class="hb-step-num">' + (step1Done ? checkmark : '1') + '</div><div class="hb-step-line"></div></div>'
     + '<div class="hb-step-content">'
-    + '<div class="hb-step-label">Install HealthBite</div>'
-    + '<div class="hb-step-desc">Search &ldquo;HealthBite&rdquo; in the App Store on your iPhone.</div>';
+    + '<div class="hb-step-label">Install Healix</div>'
+    + '<div class="hb-step-desc">Search &ldquo;Healix&rdquo; in the App Store on your iPhone.</div>';
   if (step1Active) {
     html += '<div class="hb-step-actions">'
       + '<a href="' + HEALTHBITE_APP_URL + '" target="_blank" class="hb-btn-primary">Open App Store</a>'
@@ -4983,7 +4983,7 @@ function renderConnectHealthBiteContent(state) {
     + '<div class="hb-step-indicator"><div class="hb-step-num">' + (step2Done ? checkmark : '2') + '</div><div class="hb-step-line"></div></div>'
     + '<div class="hb-step-content">'
     + '<div class="hb-step-label">Sign in &amp; allow Apple Health</div>'
-    + '<div class="hb-step-desc">Use the same email and password you use for Healix. When prompted, grant HealthBite access to Apple Health.</div>'
+    + '<div class="hb-step-desc">Use the same email and password you use for Healix. When prompted, grant Healix access to Apple Health.</div>'
     + '</div></div>';
 
   // Step 3
@@ -4991,7 +4991,7 @@ function renderConnectHealthBiteContent(state) {
     + '<div class="hb-step-indicator"><div class="hb-step-num">' + (step3Done ? checkmark : '3') + '</div></div>'
     + '<div class="hb-step-content">'
     + '<div class="hb-step-label">Wait for sync</div>'
-    + '<div class="hb-step-desc">HealthBite syncs your data automatically in the background. This usually takes under a minute.</div>'
+    + '<div class="hb-step-desc">The Healix app syncs your data automatically in the background. This usually takes under a minute.</div>'
     + '</div></div>';
 
   html += '</div>';
@@ -5006,7 +5006,7 @@ function renderConnectHealthBiteContent(state) {
   } else {
     html += '<div class="hb-status">'
       + '<div class="hb-status-dot"></div>'
-      + '<div class="hb-status-text">Checking for HealthBite&hellip;</div>'
+      + '<div class="hb-status-text">Checking for Healix app&hellip;</div>'
       + '</div>';
   }
 
@@ -7436,9 +7436,9 @@ function renderMilestones() {
 function getChecklistLabel(itemKey, goal) {
   var labels = {
     wearable: {
-      sleep_better: 'Connect HealthBite to start tracking your sleep patterns',
-      improve_endurance: 'Connect HealthBite to track your heart rate and activity',
-      default: 'Connect HealthBite to sync your health data'
+      sleep_better: 'Connect Healix app to start tracking your sleep patterns',
+      improve_endurance: 'Connect Healix app to track your heart rate and activity',
+      default: 'Connect Healix app to sync your health data'
     },
     bloodwork: {
       sleep_better: 'Upload labs to check magnesium & vitamin D for sleep',
@@ -8143,8 +8143,8 @@ function showYourPlan() {
   var cta2El = document.getElementById('yp-cta-2');
   var ctaHTML = '';
   if (wearable === 'wearable-apple' || profile.has_apple_watch) {
-    if (body2El) body2El.textContent = 'Connect the HealthBite app to pull your Apple Watch data. This takes 2 minutes and immediately unlocks heart rate, sleep, and activity tracking.';
-    ctaHTML = '<button class="yp-cta-btn" onclick="closeYourPlan(); openConnectHealthBiteModal();">Connect HealthBite</button>';
+    if (body2El) body2El.textContent = 'Connect the Healix app to pull your Apple Watch data. This takes 2 minutes and immediately unlocks heart rate, sleep, and activity tracking.';
+    ctaHTML = '<button class="yp-cta-btn" onclick="closeYourPlan(); openConnectHealthBiteModal();">Connect Healix App</button>';
   } else if (motivation === 'why-diagnosis') {
     if (body2El) body2El.textContent = 'Upload your lab results — we\'ll extract every biomarker and show where you stand. This is the single biggest input to your Vitality Age (35% of the score).';
     ctaHTML = '<button class="yp-cta-btn" onclick="closeYourPlan(); showPage(\'documents\', null);">Upload Lab Results</button>';
@@ -10776,7 +10776,7 @@ var INSIGHT_RULES = [
     template: function() {
       return {
         headline: 'Connect sleep data for recovery insights',
-        body: 'Sleep connects to everything — heart rate, blood sugar, weight, strength gains, and inflammation. Sync via HealthBite to unlock cross-domain insights like how sleep debt elevates your resting HR.',
+        body: 'Sleep connects to everything — heart rate, blood sugar, weight, strength gains, and inflammation. Sync via the Healix app to unlock cross-domain insights like how sleep debt elevates your resting HR.',
         action: 'How does sleep affect my other health metrics?'
       };
     }
