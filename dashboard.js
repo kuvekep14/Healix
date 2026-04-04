@@ -699,7 +699,8 @@ function calcVitalityAge(metrics) {
   // Each 5 points = ~1 year. Range ±15 years max.
   // Use raw composite (not rounded) to avoid staircase jumps where
   // vitality age changes by a year without visible driver score changes
-  var adjustment = Math.round((compositeRaw - 50) / 3.5);
+  var baseAdjustment = (compositeRaw - 50) / 3.5;
+  var adjustment = Math.round(baseAdjustment * (realAge / 60));
   var vAge = Math.max(18, Math.min(realAge + 15, realAge - adjustment));
 
   return {
