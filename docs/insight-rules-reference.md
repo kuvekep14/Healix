@@ -2,13 +2,13 @@
 
 Complete reference for the deterministic insight rules engine in HealthBite (`src/services/insights/rules/`). These rules run client-side against the user's health context and surface prioritized insights sorted by severity (`alert > attention > positive > neutral`).
 
-**Total active rules: 72**
+**Total active rules: 82**
 
 Last updated: 2026-04-02
 
 ---
 
-## Heart (7 rules)
+## Heart (12 rules)
 
 | Rule ID | Severity | What it detects | Recommendation |
 |---------|----------|----------------|----------------|
@@ -19,6 +19,11 @@ Last updated: 2026-04-02
 | `see_doctor_rhr_extreme` | alert | Resting HR >= 100 bpm (tachycardia) or <= 40 bpm without elite VO2 max (bradycardia) | Speak with a healthcare provider |
 | `achievement_rhr_elite` | positive | Resting HR <= 55 bpm, indicating athlete-level cardiovascular conditioning | Keep training consistently |
 | `wellness_rhr_elevated` | attention | Goal includes "feel", resting HR > 75 bpm, and steps < 12,000 | Add a short walk or light cardio session |
+| `bp_optimal` | positive | Systolic BP < 120 and diastolic BP < 80 | Maintain with exercise, sleep, and moderate sodium |
+| `bp_elevated` | attention | Systolic BP 120-139 or diastolic BP 80-89 (below hypertension threshold) | Aerobic exercise 150 min/week, sodium < 2,300 mg/day, weight management |
+| `bp_hypertension` | alert | Systolic BP >= 140 or diastolic BP >= 90 | Discuss reading with healthcare provider |
+| `vo2_low_for_age` | attention | VO2 max below 30 mL/kg/min | Moderate aerobic training 3-4x/week to raise VO2 max |
+| `vo2_above_average` | positive | VO2 max >= 40 mL/kg/min | Incorporate interval training alongside steady-state cardio |
 
 ## Sleep (11 rules)
 
@@ -85,7 +90,7 @@ Last updated: 2026-04-02
 | `see_doctor_crp_weight_loss` | alert | Elevated CRP with unexplained weight loss (stub -- needs weight log history) | -- |
 | `see_doctor_glucose_spike` | alert | Fasting glucose >= 126 mg/dL or HbA1c >= 6.5% (diabetic range) | Schedule appointment with healthcare provider ASAP |
 
-## Cross-Domain (38 rules)
+## Cross-Domain (42 rules)
 
 | Rule ID | Severity | What it detects | Recommendation |
 |---------|----------|----------------|----------------|
@@ -127,8 +132,12 @@ Last updated: 2026-04-02
 | `wellness_vitality_trend` | neutral | Goal includes "feel", 7+ VA history entries, and vitality age changed by 0.3+ years | Check which health drivers improved most (if improving) or focus on sleep/steps/protein (if declining) |
 | `wellness_inflammation` | attention | Goal includes "feel", CRP > 1.5, and 1+ lifestyle flags (poor sleep, low activity, high BMI) | Fix the biggest lifestyle gap first -- each factor reduces CRP by 20-30% |
 | `wellness_activity_baseline` | attention | Goal includes "feel" and steps < 5,000/day | Get to 7,000 steps -- each additional 1,000 reduces mortality by 15% |
+| `bp_activity_connection` | attention | Systolic BP >= 130 and steps < 6,000 | Aim for 7,000+ steps; aerobic activity reduces systolic BP by 5-10 mmHg |
+| `bp_sleep_connection` | attention | Systolic BP >= 130 and avg sleep < 6.5h | Improve sleep to 7+ hours to reduce systolic BP by 3-5 mmHg |
+| `bp_sodium_connection` | attention | Systolic BP >= 130 and daily sodium >= 2,300 mg | Reduce sodium to < 1,500 mg/day; focus on reducing processed foods |
+| `bp_hr_compound` | attention | Systolic BP >= 130 and resting HR > 75 bpm | Aerobic exercise to lower both BP and resting HR simultaneously |
 
-## Unlock (6 rules)
+## Unlock (7 rules)
 
 | Rule ID | Severity | What it detects | Recommendation |
 |---------|----------|----------------|----------------|
@@ -138,6 +147,7 @@ Last updated: 2026-04-02
 | `unlock_sleep` | neutral | No sleep data but has HR data | Connect a sleep-tracking wearable in Settings |
 | `unlock_vo2` | neutral | No VO2 max data but has strength or bloodwork data | Sync VO2 max from wearable or enter manually |
 | `unlock_family_history` | neutral | No family history on profile but has bloodwork data | Add family history in Settings |
+| `bp_not_set` | neutral | No BP data on profile but has other health metrics | Add blood pressure to unlock BP insights |
 
 ## Achievement (3 rules)
 
@@ -153,18 +163,18 @@ Last updated: 2026-04-02
 
 | Domain | Active Rules | Alert | Attention | Positive | Neutral |
 |--------|-------------|-------|-----------|----------|---------|
-| Heart | 7 | 1 | 3 | 1 | 2 |
+| Heart | 12 | 2 | 5 | 3 | 2 |
 | Sleep | 11 | 0 | 5 | 4 | 2 |
 | Weight | 3 | 0 | 1 | 1 | 1 |
 | Nutrition | 15 | 0 | 9 | 2 | 4 |
 | Strength | 8 | 0 | 3 | 3 | 2 |
 | Bloodwork | 3 | 2 | 1 | 0 | 0 |
-| Cross-Domain | 38 | 1 | 22 | 5 | 10 |
-| Unlock | 6 | 0 | 0 | 0 | 6 |
+| Cross-Domain | 42 | 1 | 26 | 5 | 10 |
+| Unlock | 7 | 0 | 0 | 0 | 7 |
 | Achievement | 3 | 0 | 0 | 3 | 0 |
-| **Total** | **94** | **4** | **44** | **19** | **27** |
+| **Total** | **104** | **5** | **50** | **21** | **28** |
 
-**Note on active vs. functional:** All 94 rules are in the export arrays and will be evaluated. However, 12 rules are **stubs** that always return `null` because they depend on data not yet available in the mobile context (HRV data, weight log history, energy balance data). These are:
+**Note on active vs. functional:** All 104 rules are in the export arrays and will be evaluated. However, 12 rules are **stubs** that always return `null` because they depend on data not yet available in the mobile context (HRV data, weight log history, energy balance data). These are:
 
 - `hrv_trend`, `hrv_low_baseline` (need HRV data)
 - `weight_trend`, `achievement_weight_goal_progress` (need weight log history)
@@ -174,7 +184,7 @@ Last updated: 2026-04-02
 - `sleep_weight_gain`, `weight_hba1c` (need weight entries)
 - `calorie_weight_discrepancy`, `energy_predicted_vs_actual_weight`, `strength_in_deficit_warning` (need weight/energy data)
 
-**Functional rules that can actually fire: 79**
+**Functional rules that can actually fire: 89**
 
 ## Excluded Rules (defined but not exported)
 

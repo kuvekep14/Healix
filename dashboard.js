@@ -11378,6 +11378,215 @@ var INSIGHT_RULES = [
         action: 'Why is my resting heart rate high and how can I lower it?'
       };
     }
+  },
+  // ── Blood Pressure Rules ──
+  {
+    id: 'bp_optimal',
+    domain: 'heart',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      var dia = ctx.profile.diastolic_bp;
+      if (!sys || !dia) return null;
+      if (sys < 120 && dia < 80) return { sys: sys, dia: dia };
+      return null;
+    },
+    template: function(data) {
+      return {
+        headline: 'Blood pressure is optimal',
+        body: 'Your blood pressure of ' + data.sys + '/' + data.dia + ' mmHg is in the optimal range (<120/80). Optimal blood pressure is the single strongest predictor of cardiovascular longevity. Keep it here with regular exercise, sleep, and moderate sodium.',
+        action: 'How can I maintain optimal blood pressure long-term?'
+      };
+    }
+  },
+  {
+    id: 'bp_elevated',
+    domain: 'heart',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      var dia = ctx.profile.diastolic_bp;
+      if (!sys || !dia) return null;
+      if ((sys >= 120 && sys <= 139) || (dia >= 80 && dia <= 89)) {
+        if (sys >= 140 || dia >= 90) return null; // handled by bp_hypertension
+        return { sys: sys, dia: dia };
+      }
+      return null;
+    },
+    template: function(data) {
+      return {
+        headline: 'Blood pressure is elevated',
+        body: 'Your blood pressure of ' + data.sys + '/' + data.dia + ' mmHg is in the elevated range. Without intervention, elevated BP progresses to hypertension in most people within 4 years. Aerobic exercise (150 min/week), sodium reduction (<2,300 mg/day), and weight management are the most effective lifestyle interventions.',
+        action: 'What lifestyle changes lower blood pressure most effectively?'
+      };
+    }
+  },
+  {
+    id: 'bp_hypertension',
+    domain: 'heart',
+    severity: 'alert',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      var dia = ctx.profile.diastolic_bp;
+      if (!sys || !dia) return null;
+      if (sys >= 140 || dia >= 90) return { sys: sys, dia: dia };
+      return null;
+    },
+    template: function(data) {
+      return {
+        headline: 'Blood pressure is in the hypertension range',
+        body: 'Your blood pressure of ' + data.sys + '/' + data.dia + ' mmHg meets the threshold for hypertension (\u2265140/90). Sustained hypertension doubles the risk of heart disease, stroke, and kidney damage. Discuss this reading with your healthcare provider.',
+        action: 'What should I do about high blood pressure?'
+      };
+    }
+  },
+  {
+    id: 'bp_activity_connection',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      if (!sys || sys < 130) return null;
+      if (!ctx.metrics || !ctx.metrics.steps) return null;
+      if (ctx.metrics.steps >= 6000) return null;
+      return { sys: sys, steps: ctx.metrics.steps };
+    },
+    template: function(data) {
+      return {
+        headline: 'Elevated BP + low activity',
+        body: 'Your systolic BP is ' + data.sys + ' mmHg and you\'re averaging ' + data.steps.toLocaleString() + ' steps/day. Regular aerobic activity (brisk walking, cycling) reduces systolic BP by 5\u201310 mmHg \u2014 comparable to a first-line medication. Aim for 7,000+ steps to start.',
+        action: 'How does exercise lower blood pressure?'
+      };
+    }
+  },
+  {
+    id: 'bp_sleep_connection',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      if (!sys || sys < 130) return null;
+      if (!ctx.metrics || !ctx.metrics.sleepData) return null;
+      var avgSleep = ctx.metrics.sleepData.avg || ctx.metrics.sleepData.latest;
+      if (!avgSleep || avgSleep >= 6.5) return null;
+      return { sys: sys, sleep: Math.round(avgSleep * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'Elevated BP + short sleep',
+        body: 'Your systolic BP is ' + data.sys + ' mmHg and you\'re averaging ' + data.sleep + 'h of sleep. Sleeping under 6.5 hours raises blood pressure by activating the sympathetic nervous system and disrupting the nocturnal BP dip. Improving sleep to 7+ hours can reduce systolic BP by 3\u20135 mmHg.',
+        action: 'How does sleep affect blood pressure?'
+      };
+    }
+  },
+  {
+    id: 'bp_sodium_connection',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      if (!sys || sys < 130) return null;
+      if (!ctx.meals || ctx.meals.length === 0) return null;
+      var todayStr = localDateStr(new Date());
+      var recentMeals = ctx.meals.filter(function(m) {
+        return (new Date(todayStr) - new Date(localDateStr(new Date(m.meal_time || m.created_at)))) / 86400000 <= 7;
+      });
+      if (recentMeals.length < 3) return null;
+      var totals = getMicroTotalsFromMeals(recentMeals);
+      var days = Math.min(7, new Set(recentMeals.map(function(m) { return localDateStr(new Date(m.meal_time || m.created_at)); })).size);
+      var dailySodium = (totals['Sodium'] || 0) / days;
+      if (dailySodium < 2300) return null;
+      return { sys: sys, sodium: Math.round(dailySodium) };
+    },
+    template: function(data) {
+      return {
+        headline: 'Elevated BP + high sodium intake',
+        body: 'Your systolic BP is ' + data.sys + ' mmHg and you\'re averaging ' + data.sodium + ' mg sodium/day. The DASH-Sodium trial showed that reducing sodium to <1,500 mg/day lowers systolic BP by 7\u201312 mmHg in people with elevated readings. Focus on reducing processed foods, restaurant meals, and added salt.',
+        action: 'How much does reducing sodium lower blood pressure?'
+      };
+    }
+  },
+  {
+    id: 'bp_hr_compound',
+    domain: 'cross',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      var sys = ctx.profile.systolic_bp;
+      if (!sys || sys < 130) return null;
+      if (!ctx.metrics || ctx.metrics.hr === null) return null;
+      if (ctx.metrics.hr <= 75) return null;
+      return { sys: sys, hr: ctx.metrics.hr };
+    },
+    template: function(data) {
+      return {
+        headline: 'Elevated BP + elevated resting heart rate',
+        body: 'Systolic BP of ' + data.sys + ' mmHg combined with a resting HR of ' + data.hr + ' bpm creates compounding cardiovascular strain. Together, they increase cardiac workload and arterial wall stress. Aerobic exercise is the most efficient intervention \u2014 it lowers both BP and resting HR simultaneously.',
+        action: 'What exercises lower both blood pressure and heart rate?'
+      };
+    }
+  },
+  {
+    id: 'bp_not_set',
+    domain: 'unlock',
+    severity: 'neutral',
+    detect: function(ctx) {
+      if (!ctx.profile) return null;
+      // If BP data exists, don't show unlock
+      if (ctx.profile.systolic_bp && ctx.profile.diastolic_bp) return null;
+      // Only show if they have some other data
+      if (!ctx.metrics) return null;
+      if (ctx.metrics.hr === null && !ctx.metrics.sleepData && !ctx.metrics.steps && !ctx.metrics.bloodwork) return null;
+      return {};
+    },
+    template: function() {
+      return {
+        headline: 'Add blood pressure to unlock BP insights',
+        body: 'Blood pressure is the single most predictive vital sign for cardiovascular risk. Adding your BP reading lets Healix connect it to your activity, sleep, sodium intake, and heart rate for personalized insights.',
+        action: 'Why is blood pressure important to track?'
+      };
+    }
+  },
+  // ── VO2 Max Rules ──
+  {
+    id: 'vo2_low_for_age',
+    domain: 'heart',
+    severity: 'attention',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.vo2max === null || ctx.metrics.vo2max === undefined) return null;
+      if (ctx.metrics.vo2max >= 30) return null;
+      return { vo2: Math.round(ctx.metrics.vo2max * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'VO2 max is below average',
+        body: 'Your VO2 max of ' + data.vo2 + ' mL/kg/min is below the 30 mL/kg/min threshold associated with increased all-cause mortality. A 2022 JAMA study of 750,000 veterans found that moving from low to moderate cardiorespiratory fitness reduced mortality risk by 50%. Even moderate aerobic training (brisk walking, cycling) 3\u20144x/week can raise VO2 max by 10\u201315% within 8\u201312 weeks.',
+        action: 'How can I improve my VO2 max?'
+      };
+    }
+  },
+  {
+    id: 'vo2_above_average',
+    domain: 'heart',
+    severity: 'positive',
+    detect: function(ctx) {
+      if (!ctx.metrics || ctx.metrics.vo2max === null || ctx.metrics.vo2max === undefined) return null;
+      if (ctx.metrics.vo2max < 40) return null;
+      return { vo2: Math.round(ctx.metrics.vo2max * 10) / 10 };
+    },
+    template: function(data) {
+      return {
+        headline: 'VO2 max is above average',
+        body: 'Your VO2 max of ' + data.vo2 + ' mL/kg/min puts you above average for cardiorespiratory fitness. Higher VO2 max is the strongest predictor of longevity \u2014 each 1 mL/kg/min increase reduces all-cause mortality by ~2%. To keep progressing, incorporate interval training (tempo runs, cycling intervals) alongside steady-state cardio.',
+        action: 'What\'s the best way to keep improving VO2 max?'
+      };
+    }
   }
 ];
 
