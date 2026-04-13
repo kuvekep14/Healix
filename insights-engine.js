@@ -3238,9 +3238,8 @@
     template: function (data) {
       return {
         headline: 'Cardiovascular risk factors with family history',
-        body: 'Your family history includes ' + data.conditions.join(', ') + '. Combined with ' + data.concerns.join(', ') + ', your cardiovascular risk profile deserves attention. Consider discussing these markers with your doctor at your next visit.',
-        action: 'What lifestyle changes lower cardiovascular risk with family history?',
-        _severity: 'alert'
+        body: 'Your family history includes ' + data.conditions.join(', ') + '. Combined with ' + data.concerns.join(', ') + ', focusing on heart-healthy habits may be especially impactful for you.',
+        action: 'What lifestyle changes lower cardiovascular risk with family history?'
       };
     }
   };
