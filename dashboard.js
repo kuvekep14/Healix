@@ -210,7 +210,43 @@ async function init() {
     // Load sharing state (always — even without profile, coach accounts need sidebar)
     loadShareDetails();
 
+    // Render preset buttons BEFORE populateProfileForm restores saved selections
+    // (was previously after populateProfileForm, so saved allergies/conditions couldn't find buttons)
     loadMedicalProfileUI();
+
+    // Re-populate saved conditions/allergies now that preset buttons exist
+    if (window.userProfileData) {
+      medicalProfile.conditions = [];
+      medicalProfile.allergies = [];
+      if (window.userProfileData.health_conditions) {
+        var conds = window.userProfileData.health_conditions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        conds.forEach(function(c) {
+          var matched = false;
+          conditionPresets.forEach(function(p) {
+            if (c.toLowerCase().indexOf(p.toLowerCase()) === 0 || p.toLowerCase().indexOf(c.toLowerCase()) === 0) {
+              var preset = document.querySelector('#condition-presets [data-val="' + p + '"]');
+              if (preset) { preset.classList.add('active'); medicalProfile.conditions.push(p); matched = true; }
+            }
+          });
+          if (!matched) medicalProfile.conditions.push(c);
+        });
+        renderCustomTags('custom-condition-tags', medicalProfile.conditions.filter(function(c) { return conditionPresets.indexOf(c) === -1; }), 'condition');
+      }
+      if (window.userProfileData.dietary_restrictions) {
+        var allergies = window.userProfileData.dietary_restrictions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        allergies.forEach(function(a) {
+          var matched = false;
+          allergyPresets.forEach(function(p) {
+            if (a.toLowerCase().indexOf(p.toLowerCase()) === 0 || p.toLowerCase().indexOf(a.toLowerCase()) === 0) {
+              var preset = document.querySelector('#allergy-presets [data-val="' + p + '"]');
+              if (preset) { preset.classList.add('active'); medicalProfile.allergies.push(p); matched = true; }
+            }
+          });
+          if (!matched) medicalProfile.allergies.push(a);
+        });
+        renderCustomTags('custom-allergy-tags', medicalProfile.allergies.filter(function(a) { return allergyPresets.indexOf(a) === -1; }), 'allergy');
+      }
+    }
 
     // Check onboarding before loading dashboard data — wizard blocks until completed
     checkOnboarding();
@@ -4889,6 +4925,21 @@ function loadFamilyHistoryForm() {
         }).join('')
       + '</div></div>';
   }).join('');
+
+  // Restore saved family history from profile
+  try {
+    var saved = window.userProfileData && window.userProfileData.family_history;
+    if (saved) {
+      var parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
+      familyHistory = parsed || {};
+      Object.keys(familyHistory).forEach(function(cond) {
+        (familyHistory[cond] || []).forEach(function(member) {
+          var tag = form.querySelector('[data-cond="' + cond + '"][data-member="' + member + '"]');
+          if (tag) tag.classList.add('active');
+        });
+      });
+    }
+  } catch(e) { console.warn('[Healix] Could not restore family history:', e); }
 }
 
 function toggleFH(el) {
