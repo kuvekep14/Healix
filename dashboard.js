@@ -3930,24 +3930,10 @@ async function saveSupplement() {
   saveBtn.disabled = true;
 
   try {
-    // Use photo-extracted nutrients if available, otherwise look up by name
+    // Use photo-extracted nutrients if available. No text-based fallback —
+    // estimating nutrients from a name alone is unreliable (app removed this
+    // for the same reason). User can scan the label later.
     var nutrientProfile = _suppPhotoNutrients || null;
-    if (!nutrientProfile) {
-      try {
-        var desc = dosage ? dosage + ' ' + name : name;
-        var aiRes = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-ai', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getToken() },
-          body: JSON.stringify({ mealLog: desc, meal_type: 'Cooked' })
-        });
-        if (aiRes.ok) {
-          var aiData = await aiRes.json();
-          if (aiData && aiData.total_nutrition) {
-            nutrientProfile = aiData.total_nutrition;
-          }
-        }
-      } catch(e) { console.warn('[Healix] Could not fetch nutrient profile:', e); }
-    }
 
     statusEl.textContent = 'Saving supplement...';
 
@@ -4013,26 +3999,25 @@ async function analyzeSupplementPhoto(base64) {
   statusEl.textContent = 'Reading supplement label...';
 
   try {
-    var res = await fetch(SUPABASE_URL + '/functions/v1/analyze-meal-from-image', {
+    var res = await fetch(SUPABASE_URL + '/functions/v1/analyze-supplement-ai', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
       body: JSON.stringify({
-        image: base64,
-        context: 'This is a supplement bottle label. Extract the supplement name, serving size, and all nutrients with amounts.'
+        imageUrl: base64,
+        name: nameEl.value.trim() || undefined
       })
     });
     if (!res.ok) throw new Error('Analysis failed');
     var data = await res.json();
 
-    // Extract name from response
-    if (data.meal_description || data.description) {
-      nameEl.value = data.meal_description || data.description;
+    if (data.name && data.name.trim()) {
+      nameEl.value = data.name.trim();
     }
-    if (data.serving_size) {
-      dosageEl.value = data.serving_size;
+    if (data.serving_size && data.serving_size.trim()) {
+      dosageEl.value = data.serving_size.trim();
     }
-    if (data.total_nutrition) {
-      _suppPhotoNutrients = data.total_nutrition;
+    if (data.nutrient_profile) {
+      _suppPhotoNutrients = data.nutrient_profile;
     }
 
     statusEl.style.color = 'var(--up)';
