@@ -590,13 +590,71 @@ function scoreSleep(sleepData) {
   return durScore + debtScore + consScore;
 }
 
-function scoreBloodwork(bw) {
-  // Returns 0-100 composite or null if no data
-  // U-shaped risk curves for biomarkers where clinically appropriate
+function scoreBP(systolic, diastolic) {
+  if (!systolic || !diastolic || systolic <= 0 || diastolic <= 0) return null;
+  var sysScore;
+  if (systolic < 110) sysScore = 90;
+  else if (systolic < 120) sysScore = 100;
+  else if (systolic < 130) sysScore = 75;
+  else if (systolic < 140) sysScore = 45;
+  else if (systolic < 160) sysScore = 20;
+  else sysScore = 5;
+  var diaScore;
+  if (diastolic < 70) diaScore = 90;
+  else if (diastolic < 80) diaScore = 100;
+  else if (diastolic < 90) diaScore = 45;
+  else if (diastolic < 100) diaScore = 20;
+  else diaScore = 5;
+  return Math.min(sysScore, diaScore);
+}
+
+function calcPhenoAge(bw, chronologicalAge) {
+  if (!bw) return null;
+  var albumin = bw.albumin;
+  var creatinine = bw.creatinine;
+  var glucose = bw.glucose;
+  var crp = bw.crp;
+  var lymphPct = bw.lymphocyte_pct || bw.lymphocytes;
+  var mcv = bw.mcv;
+  var rdw = bw.rdw;
+  var alp = bw.alp || bw.alkaline_phosphatase;
+  var wbc = bw.wbc;
+  if (albumin == null || creatinine == null || glucose == null ||
+      crp == null || lymphPct == null || mcv == null ||
+      rdw == null || alp == null || wbc == null) return null;
+  var albumin_gL = albumin * 10;
+  var creatinine_umolL = creatinine * 88.4;
+  var glucose_mmolL = glucose / 18.016;
+  var lnCrp = Math.log(Math.max(0.01, crp));
+  var xb = -19.9067
+    + (-0.0336 * albumin_gL)
+    + (0.0095 * creatinine_umolL)
+    + (0.1953 * glucose_mmolL)
+    + (0.0954 * lnCrp)
+    + (-0.0120 * lymphPct)
+    + (0.0268 * mcv)
+    + (0.3306 * rdw)
+    + (0.00188 * alp)
+    + (0.0554 * wbc)
+    + (0.0804 * chronologicalAge);
+  var gamma = 0.0076927;
+  var mortScore = 1 - Math.exp(-Math.exp(xb) * (Math.exp(120 * gamma) - 1) / gamma);
+  var phenoAge = 141.50225 + Math.log(-0.00553 * Math.log(1 - mortScore)) / 0.090165;
+  if (!isFinite(phenoAge) || phenoAge < 0 || phenoAge > 150) return null;
+  return Math.round(phenoAge * 10) / 10;
+}
+
+function scoreBloodwork(bw, chronologicalAge) {
   if (!bw || Object.keys(bw).length === 0) return null;
+  if (chronologicalAge != null) {
+    var phenoAge = calcPhenoAge(bw, chronologicalAge);
+    if (phenoAge !== null) {
+      var delta = chronologicalAge - phenoAge;
+      return Math.max(0, Math.min(100, Math.round(50 + (delta * 5))));
+    }
+  }
   var pts = [];
   if (bw.glucose != null) {
-    // U-shaped: hypoglycemia risk below 70, optimal 70-85, escalating risk above
     if (bw.glucose < 70) pts.push(65);
     else if (bw.glucose < 85) pts.push(100);
     else if (bw.glucose < 100) pts.push(78);
@@ -604,7 +662,6 @@ function scoreBloodwork(bw) {
     else pts.push(10);
   }
   if (bw.hba1c != null) {
-    // U-shaped: low HbA1c (<4.6) associated with increased mortality
     if (bw.hba1c < 4.6) pts.push(85);
     else if (bw.hba1c < 5.4) pts.push(100);
     else if (bw.hba1c < 5.7) pts.push(75);
@@ -612,7 +669,6 @@ function scoreBloodwork(bw) {
     else pts.push(10);
   }
   if (bw.ldl != null) {
-    // AHA high-risk target <70; more granular tiers
     if (bw.ldl < 70) pts.push(100);
     else if (bw.ldl < 100) pts.push(90);
     else if (bw.ldl < 130) pts.push(70);
@@ -621,14 +677,12 @@ function scoreBloodwork(bw) {
     else pts.push(10);
   }
   if (bw.hdl != null) {
-    // Ceiling at 90 — paradoxical mortality increase above 90 mg/dL
     if (bw.hdl > 90) pts.push(78);
     else if (bw.hdl >= 60) pts.push(100);
     else if (bw.hdl >= 40) pts.push(70);
     else pts.push(30);
   }
   if (bw.crp != null) {
-    // hs-CRP inflammation marker
     if (bw.crp < 0.5) pts.push(100);
     else if (bw.crp < 1.0) pts.push(85);
     else if (bw.crp < 2.0) pts.push(65);
@@ -636,7 +690,6 @@ function scoreBloodwork(bw) {
     else pts.push(15);
   }
   if (bw.triglycerides != null) {
-    // AHA optimal <100
     if (bw.triglycerides < 100) pts.push(100);
     else if (bw.triglycerides < 150) pts.push(80);
     else if (bw.triglycerides < 200) pts.push(55);
@@ -651,41 +704,47 @@ function calcVitalityAge(metrics) {
   var realAge = metrics.realAge || 35;
   var scores = [];
 
-  // Blood work — 35% when available, redistributed when not
-  var bwScore = scoreBloodwork(metrics.bloodwork);
+  // Weights match the mobile app (vitalityAge.ts):
+  //   Blood Work: 35%  — PhenoAge when all 9 biomarkers, fallback scoring otherwise
+  //   VO2 Max:    20%  — Strongest single mortality predictor (Cooper Institute)
+  //   Blood Pressure: 15% — Top cardiovascular predictor (AHA 2017, Framingham)
+  //   Resting HR: 15%  — Cardiovascular efficiency (Copenhagen Male Study)
+  //   Strength:   15%  — Grip/muscle strength (Lancet 140k study)
+  //   Weight: EXCLUDED — input that drives HR, BP, bloodwork, VO2
+  //   Sleep:  EXCLUDED — lifestyle behavior that modulates other metrics
+
+  // Blood work — 35%
+  var bwScore = scoreBloodwork(metrics.bloodwork, realAge);
   if (bwScore !== null) {
     scores.push({ name: 'bloodwork', label: 'Blood Work', score: bwScore, weight: 0.35 });
   }
 
-  // Resting HR — 30% (or ~43% without bloodwork)
-  if (metrics.hr != null) {
-    var hrScore = scoreHR(metrics.hr);
-    if (hrScore !== null) {
-      scores.push({ name: 'hr', label: 'Heart Rate', score: hrScore, weight: 0.30 });
-    }
-  }
-
-  // Weight (BMI) — 20% (or 33% without bloodwork)
-  if (metrics.weightScore !== null) {
-    scores.push({ name: 'weight', label: 'Weight', score: metrics.weightScore, weight: 0.20 });
-  }
-
-  // Strength — 10% (or 17% without bloodwork)
-  var strScore = scoreStrength(metrics.strengthData);
-  if (strScore !== null) {
-    scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.10 });
-  }
-
-  // Sleep — displayed on dashboard but NOT included in vitality age composite.
-  // Sleep is a lifestyle behavior that modulates HR, recovery, bloodwork, and strength
-  // rather than an independent biomarker. Kept as a driver card for visibility.
-
-  // Aerobic — 5% (VO2 max from fitness test)
+  // VO2 Max — 20%
   if (metrics.vo2max !== null) {
     var vo2Score = scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge });
     if (vo2Score !== null) {
-      scores.push({ name: 'aerobic', label: 'Aerobic', score: vo2Score, weight: 0.05 });
+      scores.push({ name: 'aerobic', label: 'Aerobic', score: vo2Score, weight: 0.20 });
     }
+  }
+
+  // Blood Pressure — 15%
+  var bpScore = scoreBP(metrics.systolic, metrics.diastolic);
+  if (bpScore !== null) {
+    scores.push({ name: 'bp', label: 'Blood Pressure', score: bpScore, weight: 0.15 });
+  }
+
+  // Resting HR — 15%
+  if (metrics.hr != null) {
+    var hrScore = scoreHR(metrics.hr);
+    if (hrScore !== null) {
+      scores.push({ name: 'hr', label: 'Heart Rate', score: hrScore, weight: 0.15 });
+    }
+  }
+
+  // Strength — 15%
+  var strScore = scoreStrength(metrics.strengthData);
+  if (strScore !== null) {
+    scores.push({ name: 'strength', label: 'Strength', score: strScore, weight: 0.15 });
   }
 
   if (scores.length === 0) return null;
@@ -1117,7 +1176,7 @@ function getGoalGhostText(driverKey) {
 
 var GHOST_CTAS = {
   heart: { text: 'Heart rate reveals your cardiovascular fitness — the #2 predictor in your score.', cta: 'Connect Healix App →', action: function() { openConnectHealthBiteModal(); }, chatQ: 'Why is resting heart rate important for longevity?' },
-  weight: { text: 'Weight + height unlocks BMI scoring — 20% of your Vitality Age.', cta: 'Add weight →', action: function() { openModal('weight-modal'); }, chatQ: 'How does body weight affect my vitality age?' },
+  bp: { text: 'Blood pressure is a top cardiovascular predictor — 15% of your Vitality Age.', cta: 'Add blood pressure →', action: function() { showPage('profile', null); }, chatQ: 'Why is blood pressure important for longevity?' },
   strength: { text: 'Strength benchmarks show where you stand for your age and sex.', cta: 'Log fitness test →', action: function() { showPage('strength', null); }, chatQ: 'Why does strength matter for healthy aging?' },
   aerobic: { text: 'VO2 max is the single best predictor of longevity.', cta: 'Add VO2 max →', action: function() { showPage('strength', 'vo2max'); }, chatQ: 'What is VO2 max and why does it predict longevity?' },
   bloodwork: { text: 'Blood biomarkers are worth 35% of your score — the most impactful data you can add.', cta: 'Upload labs →', action: function() { showPage('documents', null); }, chatQ: 'What bloodwork should I get to track my health?' }
@@ -1126,23 +1185,22 @@ var GHOST_CTAS = {
 // Contextual chat prompts for driver cards with data
 var DRIVER_CHAT_PROMPTS = {
   heart:     { low: 'How can I lower my resting heart rate?', fair: 'What can I do to improve my heart rate score?', good: 'How do I maintain a healthy resting heart rate?' },
-  weight:    { low: 'What\'s the best approach to reach a healthier weight?', fair: 'How can I improve my weight score?', good: 'How do I maintain a healthy body composition?' },
+  bp:        { low: 'What can I do to lower my blood pressure naturally?', fair: 'How can I improve my blood pressure?', good: 'How do I maintain healthy blood pressure as I age?' },
   strength:  { low: 'What strength exercises should I start with?', fair: 'How can I improve my strength percentile?', good: 'How do I keep building strength as I age?' },
   aerobic:   { low: 'How can I improve my VO2 max?', fair: 'What exercises will boost my VO2 max the most?', good: 'How do I maintain a high VO2 max?' },
   bloodwork: { low: 'Which of my blood biomarkers should I focus on improving?', fair: 'How can I improve my bloodwork results?', good: 'What do my blood results say about my overall health?' }
 };
 
 function renderDriverCards(metrics, result) {
-  // Compute actual weights (accounting for redistribution)
-  var rawWeights = { bloodwork: 0.35, heart: 0.30, weight: 0.20, sleep: 0.15, strength: 0.10, aerobic: 0.05 };
-  var bwPresent = scoreBloodwork(metrics.bloodwork) !== null;
+  // Weights match mobile app (vitalityAge.ts)
+  var rawWeights = { bloodwork: 0.35, aerobic: 0.20, bp: 0.15, heart: 0.15, strength: 0.15 };
+  var bwPresent = scoreBloodwork(metrics.bloodwork, metrics.realAge) !== null;
   var hrPresent = metrics.hr !== null;
-  var wtPresent = metrics.weightScore !== null && metrics.weightScore > 0;
-  var slpPresent = metrics.sleepData != null;
+  var bpPresent = scoreBP(metrics.systolic, metrics.diastolic) !== null;
   var strPresent = metrics.strengthData !== null;
   var aerPresent = metrics.vo2max !== null;
   var totalAvail = (bwPresent ? rawWeights.bloodwork : 0) + (hrPresent ? rawWeights.heart : 0)
-    + (wtPresent ? rawWeights.weight : 0) + (slpPresent ? rawWeights.sleep : 0)
+    + (bpPresent ? rawWeights.bp : 0)
     + (strPresent ? rawWeights.strength : 0) + (aerPresent ? rawWeights.aerobic : 0);
   function pctLabel(key, present) {
     if (totalAvail === 0) return Math.round(rawWeights[key] * 100) + '%';
@@ -1235,12 +1293,12 @@ function renderDriverCards(metrics, result) {
   }
 
   var hrScore  = metrics.hr !== null ? scoreHR(metrics.hr) : 0;
-  var wtScore  = metrics.weightScore !== null ? metrics.weightScore : 0;
+  var bpScoreVal = scoreBP(metrics.systolic, metrics.diastolic) || 0;
   var strScore = metrics.strengthData !== null ? (scoreStrength(metrics.strengthData) || 0) : 0;
   var aerScore = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || 0) : 0;
 
   var hrVal  = metrics.hr !== null ? metrics.hr : null;
-  var wtVal  = metrics.weightVal !== null ? metrics.weightVal + ' lbs' : null;
+  var bpVal  = (metrics.systolic && metrics.diastolic) ? metrics.systolic + '/' + metrics.diastolic : null;
   var strVal = null;
   var strDomains = null;
   if (metrics.strengthData !== null) {
@@ -1263,19 +1321,16 @@ function renderDriverCards(metrics, result) {
   };
 
   var hrPct = getPopulationPercentile('heart', metrics.hr, pctProfile);
-  var wtPct = getPopulationPercentile('weight', null, pctProfile);
   var strPct = metrics.strengthData ? (metrics.strengthData.avgPercentile || null) : null;
   var aerPct = metrics.vo2max !== null ? (scoreVO2(metrics.vo2max, { sex: metrics.sex, age: metrics.realAge }) || null) : null;
 
   setDriver('heart',     hrVal,  hrScore,  ' bpm', hrPct);
-  setDriver('weight',    wtVal,  wtScore,  '', wtPct);
+  setDriver('bp',        bpVal,  bpScoreVal, ' mmHg', null);
   setDriver('strength',  strVal, strScore, '', strPct);
   setDriver('aerobic',   aerVal, aerScore, '', aerPct);
 
-  // Sleep driver card removed — sleep data is still shown on the Sleep page
-
   // Blood work — show connected state or ghost card
-  var bwScore = scoreBloodwork(metrics.bloodwork);
+  var bwScore = scoreBloodwork(metrics.bloodwork, metrics.realAge);
   if (bwScore !== null) {
     var bwPct = getPopulationPercentile('bloodwork', bwScore, pctProfile);
     setDriver('bloodwork', bwScore + '%', bwScore, '', bwPct);
@@ -1366,7 +1421,7 @@ function computeSessionMinutes(session) {
     stages[stage] += duration;
     total += duration;
   }
-  var actualSleep = Math.max(0, total - stages.awake);
+  var actualSleep = stages.deep + stages.rem + stages.core;
   return { totalMinutes: total, actualSleepMinutes: actualSleep, stages: stages };
 }
 
@@ -1680,7 +1735,7 @@ async function loadDashboardData() {
   console.log('[Healix] Dashboard loading — realAge:', realAge, 'profile:', window.userProfileData ? Object.keys(window.userProfileData) : 'null');
 
   var sex = (window.userProfileData && window.userProfileData.sex) || 'male';
-  var metrics = { hr: null, hrv: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge };
+  var metrics = { hr: null, hrv: null, vo2max: null, sex: sex, weightScore: null, weightVal: null, strengthData: null, bloodwork: null, sleep: null, sleepData: null, steps: null, nutritionScore: null, realAge: realAge, systolic: null, diastolic: null };
   var timestamps = {};
 
   // 1. Health data (last 14 days for context)
@@ -1865,6 +1920,16 @@ async function loadDashboardData() {
     }
   } catch(e) { /* weight/height not available */ }
 
+  // 4b. Blood Pressure — from user profile
+  try {
+    var systolicBp = window.userProfileData && window.userProfileData.systolic_bp;
+    var diastolicBp = window.userProfileData && window.userProfileData.diastolic_bp;
+    if (systolicBp && diastolicBp) {
+      metrics.systolic = parseFloat(systolicBp);
+      metrics.diastolic = parseFloat(diastolicBp);
+    }
+  } catch(e) { /* BP not available */ }
+
   // 5. VO2 Max — latest fitness test result
   try {
     var vo2Tests = await supabaseRequest(
@@ -1966,6 +2031,11 @@ async function loadDashboardData() {
   renderVitalityTimeline();
   renderDriverCards(metrics, result);
 
+  // Activity cards (informational, not part of Vitality Age)
+  if (window._lastHealthByType) {
+    renderActivityCards(window._lastHealthByType, today);
+  }
+
   // AI insight sentence
   var sentence = buildInsightSentence(metrics, result);
   var bar = document.getElementById('va-insight-bar');
@@ -1977,7 +2047,7 @@ async function loadDashboardData() {
 
   // Freshness indicators
   renderFreshnessIndicator('drv-heart-freshness', 'heart_rate', timestamps.heart_rate);
-  renderFreshnessIndicator('drv-weight-freshness', 'weight', timestamps.weight);
+  renderFreshnessIndicator('drv-bp-freshness', 'weight', null);
   renderFreshnessIndicator('drv-strength-freshness', 'strength', timestamps.strength);
   renderFreshnessIndicator('drv-aerobic-freshness', 'vo2max', timestamps.vo2max);
   renderFreshnessIndicator('drv-bloodwork-freshness', 'bloodwork', timestamps.bloodwork);
@@ -2061,6 +2131,200 @@ function renderHealthStats(byType, today) {
     setEl('d-cal-d', Math.abs(cd) < 5 ? '— avg ' + ca : cd > 0 ? '↑ +' + cd + '% vs avg' : '↓ ' + cd + '% vs avg');
     setClass('d-cal-d', 'stat-item-delta ' + (Math.abs(cd) < 5 ? 'delta-neutral' : cd > 0 ? 'delta-up' : 'delta-down'));
   }
+}
+
+// ── Activity Cards ─────────────────────────────────────────────────────
+function scoreSteps(todaySteps) {
+  if (!todaySteps || todaySteps <= 0) return 0;
+  if (todaySteps >= 10000) return 90;
+  if (todaySteps >= 7500) return 70;
+  if (todaySteps >= 5000) return 50;
+  if (todaySteps >= 2500) return 30;
+  return 15;
+}
+function scoreExercise(todayMin) {
+  if (!todayMin || todayMin <= 0) return 0;
+  if (todayMin >= 30) return 90;
+  if (todayMin >= 20) return 70;
+  if (todayMin >= 10) return 50;
+  return 25;
+}
+function scoreEnergy(todayKcal) {
+  if (!todayKcal || todayKcal <= 0) return 0;
+  if (todayKcal >= 500) return 85;
+  if (todayKcal >= 300) return 70;
+  if (todayKcal >= 150) return 50;
+  return 25;
+}
+function scoreRespiratory(rate) {
+  if (!rate || rate <= 0) return 0;
+  if (rate >= 12 && rate <= 20) return 85;
+  if (rate >= 10 && rate <= 24) return 55;
+  return 25;
+}
+function scoreDistance(todayMiles) {
+  if (!todayMiles || todayMiles <= 0) return 0;
+  if (todayMiles >= 4) return 90;
+  if (todayMiles >= 3) return 70;
+  if (todayMiles >= 1.5) return 50;
+  return 25;
+}
+
+function renderActivityCards(byType, today) {
+  var section = document.getElementById('activity-cards-section');
+  if (!section) return;
+
+  var anyData = false;
+
+  // Weight (informational — no longer in VA score, still useful to track)
+  var weightKg = window.userProfileData && window.userProfileData.current_weight_kg;
+  var heightCm = window.userProfileData && window.userProfileData.height_cm;
+  if (weightKg) {
+    anyData = true;
+    var wtLbs = Math.round(weightKg * 2.205);
+    var wtScore = scoreWeight(weightKg, heightCm) || 0;
+    document.getElementById('drv-weight-val').textContent = wtLbs + ' lbs';
+    var bmi = heightCm ? Math.round(weightKg / Math.pow(heightCm / 100, 2) * 10) / 10 : null;
+    document.getElementById('drv-weight-status').textContent = bmi ? 'BMI ' + bmi : '';
+    document.getElementById('drv-weight-status').className = 'driver-status ' + (wtScore >= 70 ? 'good' : wtScore >= 40 ? 'fair' : wtScore > 0 ? 'low' : '');
+    var wb = document.getElementById('drv-weight-bar');
+    if (wb) { wb.style.width = wtScore + '%'; wb.className = 'driver-bar-fill ' + (wtScore >= 70 ? 'good' : wtScore >= 40 ? 'fair' : wtScore > 0 ? 'low' : ''); }
+  } else {
+    document.getElementById('drv-weight').style.display = 'none';
+  }
+
+  function getDailyTotal(rows, dateStr) {
+    var total = 0;
+    (rows || []).forEach(function(r) {
+      if (r.start_date && r.start_date.startsWith(dateStr)) {
+        total += parseFloat(r.value || 0);
+      }
+    });
+    return total;
+  }
+
+  function getWeeklyAvg(rows) {
+    var now = new Date();
+    var dayTotals = {};
+    (rows || []).forEach(function(r) {
+      var day = r.start_date ? r.start_date.split('T')[0] : null;
+      if (!day) return;
+      var val = parseFloat(r.value || 0);
+      if (!isFinite(val)) return;
+      dayTotals[day] = (dayTotals[day] || 0) + val;
+    });
+    var sum = 0, count = 0;
+    for (var d = 0; d < 7; d++) {
+      var dt = new Date(now); dt.setDate(dt.getDate() - d);
+      var ds = localDateStr(dt);
+      if (dayTotals[ds] !== undefined) { sum += dayTotals[ds]; count++; }
+    }
+    return count > 0 ? Math.round(sum / count) : 0;
+  }
+
+  function getLatestValue(rows) {
+    for (var i = 0; i < (rows || []).length; i++) {
+      var v = parseFloat(rows[i].value || 0);
+      if (isFinite(v) && v > 0) return Math.round(v * 10) / 10;
+    }
+    return 0;
+  }
+
+  // Steps
+  var stepsRows = byType['step_count'] || [];
+  var stepsToday = Math.round(getDailyTotal(stepsRows, today));
+  if (stepsToday > 0 || stepsRows.length > 0) {
+    anyData = true;
+    var stepsAvg = getWeeklyAvg(stepsRows);
+    var stepsScore = scoreSteps(stepsToday);
+    document.getElementById('drv-steps-val').textContent = (stepsToday > 0 ? stepsToday.toLocaleString() : stepsAvg.toLocaleString());
+    document.getElementById('drv-steps-status').textContent = stepsToday > 0 ? '7-day avg: ' + stepsAvg.toLocaleString() : 'Weekly avg (no data today)';
+    document.getElementById('drv-steps-status').className = 'driver-status';
+    var sb = document.getElementById('drv-steps-bar');
+    if (sb) { sb.style.width = stepsScore + '%'; sb.className = 'driver-bar-fill ' + (stepsScore >= 70 ? 'good' : stepsScore >= 40 ? 'fair' : stepsScore > 0 ? 'low' : ''); }
+  } else {
+    document.getElementById('drv-steps').style.display = 'none';
+  }
+
+  // Exercise time
+  var exRows = byType['apple_exercise_time'] || [];
+  var exToday = Math.round(getDailyTotal(exRows, today));
+  if (exToday > 0 || exRows.length > 0) {
+    anyData = true;
+    var exAvg = getWeeklyAvg(exRows);
+    var exScore = scoreExercise(exToday || exAvg);
+    document.getElementById('drv-exercise-val').textContent = (exToday > 0 ? exToday : exAvg) + ' min';
+    document.getElementById('drv-exercise-status').textContent = exToday > 0 ? '7-day avg: ' + exAvg + ' min/day' : 'Weekly avg (no data today)';
+    document.getElementById('drv-exercise-status').className = 'driver-status';
+    var eb = document.getElementById('drv-exercise-bar');
+    if (eb) { eb.style.width = exScore + '%'; eb.className = 'driver-bar-fill ' + (exScore >= 70 ? 'good' : exScore >= 40 ? 'fair' : exScore > 0 ? 'low' : ''); }
+  } else {
+    document.getElementById('drv-exercise').style.display = 'none';
+  }
+
+  // Active energy
+  var enRows = byType['active_energy_burned'] || [];
+  var enToday = Math.round(getDailyTotal(enRows, today));
+  if (enToday > 0 || enRows.length > 0) {
+    anyData = true;
+    var enAvg = getWeeklyAvg(enRows);
+    var enScore = scoreEnergy(enToday || enAvg);
+    document.getElementById('drv-energy-val').textContent = (enToday > 0 ? enToday.toLocaleString() : enAvg.toLocaleString()) + ' kcal';
+    document.getElementById('drv-energy-status').textContent = enToday > 0 ? '7-day avg: ' + enAvg.toLocaleString() + ' kcal/day' : 'Weekly avg (no data today)';
+    document.getElementById('drv-energy-status').className = 'driver-status';
+    var nb = document.getElementById('drv-energy-bar');
+    if (nb) { nb.style.width = enScore + '%'; nb.className = 'driver-bar-fill ' + (enScore >= 70 ? 'good' : enScore >= 40 ? 'fair' : enScore > 0 ? 'low' : ''); }
+  } else {
+    document.getElementById('drv-energy').style.display = 'none';
+  }
+
+  // Respiratory rate
+  var respRows = byType['respiratory_rate'] || [];
+  var respLatest = getLatestValue(respRows);
+  if (respLatest > 0) {
+    anyData = true;
+    var respScore = scoreRespiratory(respLatest);
+    document.getElementById('drv-respiratory-val').textContent = respLatest + ' breaths/min';
+    var respStatus = (respLatest >= 12 && respLatest <= 20) ? 'Normal range' : 'Outside normal range';
+    document.getElementById('drv-respiratory-status').textContent = respStatus;
+    document.getElementById('drv-respiratory-status').className = 'driver-status ' + (respScore >= 70 ? 'good' : respScore >= 40 ? 'fair' : 'low');
+    var rb = document.getElementById('drv-respiratory-bar');
+    if (rb) { rb.style.width = respScore + '%'; rb.className = 'driver-bar-fill ' + (respScore >= 70 ? 'good' : respScore >= 40 ? 'fair' : 'low'); }
+  } else {
+    document.getElementById('drv-respiratory').style.display = 'none';
+  }
+
+  // Walking/running distance (meters → miles)
+  var distRows = byType['distance_walking_running'] || [];
+  var distTodayM = getDailyTotal(distRows, today);
+  var distTodayMi = distTodayM * 0.000621371;
+  if (distTodayMi > 0.01 || distRows.length > 0) {
+    anyData = true;
+    var distDayTotals = {};
+    distRows.forEach(function(r) {
+      var day = r.start_date ? r.start_date.split('T')[0] : null;
+      if (!day) return;
+      distDayTotals[day] = (distDayTotals[day] || 0) + parseFloat(r.value || 0);
+    });
+    var distSum = 0, distCount = 0, now = new Date();
+    for (var d = 0; d < 7; d++) {
+      var dt = new Date(now); dt.setDate(dt.getDate() - d);
+      var ds = localDateStr(dt);
+      if (distDayTotals[ds] !== undefined) { distSum += distDayTotals[ds]; distCount++; }
+    }
+    var distAvgMi = distCount > 0 ? (distSum / distCount) * 0.000621371 : 0;
+    var showMi = distTodayMi > 0.01 ? distTodayMi : distAvgMi;
+    var distScore = scoreDistance(showMi);
+    document.getElementById('drv-distance-val').textContent = showMi.toFixed(1) + ' mi';
+    document.getElementById('drv-distance-status').textContent = distTodayMi > 0.01 ? '7-day avg: ' + distAvgMi.toFixed(1) + ' mi/day' : 'Weekly avg (no data today)';
+    document.getElementById('drv-distance-status').className = 'driver-status';
+    var db = document.getElementById('drv-distance-bar');
+    if (db) { db.style.width = distScore + '%'; db.className = 'driver-bar-fill ' + (distScore >= 70 ? 'good' : distScore >= 40 ? 'fair' : distScore > 0 ? 'low' : ''); }
+  } else {
+    document.getElementById('drv-distance').style.display = 'none';
+  }
+
+  section.style.display = anyData ? '' : 'none';
 }
 
 function updateMiniChart(id, data, today) {
@@ -4704,6 +4968,22 @@ function populateProfileForm(profile) {
       document.getElementById('p-weight').value = Math.round(profile.current_weight_kg * 2.205);
     }
   }
+  // Body & Vitals fields
+  if (profile.systolic_bp) document.getElementById('p-systolic').value = profile.systolic_bp;
+  if (profile.diastolic_bp) document.getElementById('p-diastolic').value = profile.diastolic_bp;
+  if (profile.target_weight_kg) document.getElementById('p-target-weight').value = Math.round(profile.target_weight_kg * 2.205);
+  if (profile.body_fat_percentage) document.getElementById('p-bodyfat').value = profile.body_fat_percentage;
+  if (profile.lean_body_mass_kg) document.getElementById('p-lbm').value = Math.round(profile.lean_body_mass_kg * 2.205);
+  if (profile.waist_circumference_cm) document.getElementById('p-waist').value = Math.round(profile.waist_circumference_cm / 2.54 * 10) / 10;
+  if (profile.fitness_level) document.getElementById('p-fitness-level').value = profile.fitness_level;
+  if (profile.activity_level) document.getElementById('p-activity-level').value = profile.activity_level;
+  if (profile.custom_goal_description) document.getElementById('p-goal-desc').value = profile.custom_goal_description;
+  // Compute BMI display
+  if (profile.height_cm && profile.current_weight_kg) {
+    var bmi = profile.current_weight_kg / Math.pow(profile.height_cm / 100, 2);
+    document.getElementById('p-bmi').value = Math.round(bmi * 10) / 10;
+  }
+
   // Load health conditions
   if (profile.health_conditions) {
     var conds = profile.health_conditions.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
@@ -4917,6 +5197,44 @@ async function saveProfile() {
     console.error('[Healix] Profile save error:', e);
     if (saveBtn) { saveBtn.textContent = 'Save Changes'; saveBtn.disabled = false; }
     if (errEl) { errEl.textContent = 'Could not save profile. Please try again.'; errEl.style.display = 'block'; }
+  }
+}
+
+async function saveBodyVitals() {
+  if (!currentUser) return;
+  var data = {};
+  var sys = parseFloat(document.getElementById('p-systolic').value);
+  var dia = parseFloat(document.getElementById('p-diastolic').value);
+  if (sys > 0) data.systolic_bp = sys;
+  if (dia > 0) data.diastolic_bp = dia;
+  var tw = parseFloat(document.getElementById('p-target-weight').value);
+  if (tw > 0) data.target_weight_kg = tw / 2.205;
+  var bf = parseFloat(document.getElementById('p-bodyfat').value);
+  if (bf > 0) data.body_fat_percentage = bf;
+  var lbm = parseFloat(document.getElementById('p-lbm').value);
+  if (lbm > 0) data.lean_body_mass_kg = lbm / 2.205;
+  var waist = parseFloat(document.getElementById('p-waist').value);
+  if (waist > 0) data.waist_circumference_cm = waist * 2.54;
+  var fl = document.getElementById('p-fitness-level').value;
+  if (fl) data.fitness_level = fl;
+  var al = document.getElementById('p-activity-level').value;
+  if (al) data.activity_level = al;
+  var gd = document.getElementById('p-goal-desc').value.trim();
+  if (gd) data.custom_goal_description = gd;
+
+  if (Object.keys(data).length === 0) return;
+
+  var saveBtn = document.querySelector('#page-profile .card:nth-child(2) .save-btn');
+  if (saveBtn) { saveBtn.textContent = 'Saving...'; saveBtn.disabled = true; }
+  try {
+    var result = await supabaseRequest('/rest/v1/profiles?auth_user_id=eq.' + currentUser.id, 'PATCH', data, getToken(), { 'Prefer': 'return=representation' });
+    if (result && Array.isArray(result) && result.length > 0) {
+      window.userProfileData = result[0];
+    }
+    if (saveBtn) { saveBtn.textContent = 'Saved ✓'; setTimeout(function() { saveBtn.textContent = 'Save Body & Vitals'; saveBtn.disabled = false; }, 2000); }
+  } catch(e) {
+    console.error('[Healix] Body & Vitals save error:', e);
+    if (saveBtn) { saveBtn.textContent = 'Save Body & Vitals'; saveBtn.disabled = false; }
   }
 }
 
@@ -11591,13 +11909,21 @@ var INSIGHT_RULES = [
 ];
 
 function buildInsightContext() {
+  // Delegate to the ported insight engine's context adapter if available
+  if (window.HealixInsights && window.HealixInsights.buildWebRuleContext) {
+    return window.HealixInsights.buildWebRuleContext(
+      window._lastDashboardMetrics || {},
+      window.userProfileData || {},
+      window._lastHealthByType || {}
+    );
+  }
+  // Fallback: legacy context shape
   var vaHistory = [];
   try {
     var key = 'healix_va_history_' + (currentUser ? currentUser.id : '');
     var raw = localStorage.getItem(key);
     if (raw) vaHistory = JSON.parse(raw);
   } catch(e) {}
-
   return {
     metrics: window._lastDashboardMetrics || {},
     result: window._lastVitalityResult || null,
@@ -11610,86 +11936,47 @@ function buildInsightContext() {
 }
 
 function runInsightRules(ctx) {
-  var all = [];
-  for (var i = 0; i < INSIGHT_RULES.length; i++) {
-    var rule = INSIGHT_RULES[i];
-    try {
-      var data = rule.detect(ctx);
-      if (data) {
-        var tpl = rule.template(data);
-        all.push({
-          id: rule.id,
-          domain: rule.domain,
-          severity: tpl._severity || rule.severity,
-          headline: tpl.headline,
-          body: tpl.body,
-          action: tpl.action
-        });
-      }
-    } catch(e) {
-      console.warn('[Insight] Rule ' + rule.id + ' error:', e);
-    }
-  }
+  // Use the ported engine (125 rules with rotation-aware scoring) if available
+  var rules = (window.HealixInsights && window.HealixInsights.ALL_INSIGHT_RULES)
+    ? window.HealixInsights.ALL_INSIGHT_RULES
+    : INSIGHT_RULES;
 
-  // Sort by severity: alert > attention > positive > neutral
-  var order = { alert: 0, attention: 1, positive: 2, neutral: 3 };
-  all.sort(function(a, b) { return (order[a.severity] || 3) - (order[b.severity] || 3); });
-
-  // Freshness: deprioritize recently seen insights
+  // Load seen timestamps from localStorage for freshness rotation
   var seenKey = 'healix_insights_seen_' + (currentUser ? currentUser.id : '');
   var seen = {};
   try { var raw = localStorage.getItem(seenKey); if (raw) seen = JSON.parse(raw); } catch(e) {}
-  var now = Date.now();
-  var DAY_MS = 86400000;
 
-  // Score each insight: severity base + freshness bonus + data-staleness penalty
-  var timestamps = ctx.timestamps || {};
-  all.forEach(function(ins) {
-    var base = (4 - (order[ins.severity] || 3)) * 100; // alert=400, attention=300, positive=200, neutral=100
-    var lastSeen = seen[ins.id] || 0;
-    var daysSince = (now - lastSeen) / DAY_MS;
-    var freshBonus = lastSeen === 0 ? 50 : Math.min(50, daysSince * 10); // Never-seen gets max bonus
-    // Data-staleness penalty: insights based on old data score lower
-    var stalePenalty = 0;
-    var domainTs = ins.domain === 'heart' ? timestamps.heart_rate
-      : ins.domain === 'sleep' ? timestamps.sleep
-      : ins.domain === 'bloodwork' ? timestamps.bloodwork
-      : ins.domain === 'nutrition' ? null  // meals are always recent
-      : null;
-    if (domainTs) {
-      var dataAgeDays = (now - new Date(domainTs).getTime()) / DAY_MS;
-      if (dataAgeDays > 30) stalePenalty = 80;
-      else if (dataAgeDays > 14) stalePenalty = 40;
-      else if (dataAgeDays > 7) stalePenalty = 15;
+  // Domain timestamps for data-staleness scoring
+  var timestamps = ctx.timestamps || window._lastDashboardTimestamps || {};
+  var domainTs = {};
+  if (timestamps.heart_rate) domainTs.heart = timestamps.heart_rate;
+  if (timestamps.sleep) domainTs.sleep = timestamps.sleep;
+  if (timestamps.bloodwork) domainTs.bloodwork = timestamps.bloodwork;
+  if (timestamps.strength) domainTs.strength = timestamps.strength;
+
+  var picked;
+  if (window.HealixInsights && window.HealixInsights.runInsightRules) {
+    picked = window.HealixInsights.runInsightRules(rules, ctx, seen, domainTs);
+  } else {
+    // Fallback: simple evaluate + severity sort
+    var all = [];
+    for (var i = 0; i < rules.length; i++) {
+      try {
+        var data = rules[i].detect(ctx);
+        if (data) {
+          var tpl = rules[i].template(data);
+          all.push({ id: rules[i].id, domain: rules[i].domain, severity: tpl._severity || rules[i].severity, headline: tpl.headline, body: tpl.body, action: tpl.action, _score: 0 });
+        }
+      } catch(e) {}
     }
-    // Positive insights (wins) get a boost to ensure they surface
-    var winBoost = ins.severity === 'positive' ? 30 : 0;
-    ins._score = base + freshBonus + winBoost - stalePenalty;
-  });
-
-  all.sort(function(a, b) { return b._score - a._score; });
-
-  // Domain diversity: max 2 per domain, max 1 unlock teaser
-  var picked = [];
-  var domainCount = {};
-  var unlockCount = 0;
-  for (var j = 0; j < all.length && picked.length < 8; j++) {
-    var ins = all[j];
-    var dom = ins.domain;
-    if (dom === 'unlock') {
-      if (unlockCount >= 1) continue;
-      unlockCount++;
-    } else {
-      if ((domainCount[dom] || 0) >= 3) continue;
-      domainCount[dom] = (domainCount[dom] || 0) + 1;
-    }
-    picked.push(ins);
+    all.sort(function(a, b) { var o = { alert: 0, attention: 1, positive: 2, neutral: 3 }; return (o[a.severity] || 3) - (o[b.severity] || 3); });
+    picked = all.slice(0, 10);
   }
 
-  // Record what we showed
+  // Record what we showed + prune old entries
+  var now = Date.now();
   picked.forEach(function(ins) { seen[ins.id] = now; });
-  // Prune seen entries older than 30 days
-  Object.keys(seen).forEach(function(k) { if (now - seen[k] > 30 * DAY_MS) delete seen[k]; });
+  Object.keys(seen).forEach(function(k) { if (now - seen[k] > 30 * 86400000) delete seen[k]; });
   safeLSSet(seenKey, JSON.stringify(seen));
 
   return picked;
