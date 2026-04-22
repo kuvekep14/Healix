@@ -7894,12 +7894,8 @@ var onboardingStep = 1;
 var ONBOARDING_TOTAL_STEPS = hasQuizData ? 7 : 9;
 
 function checkOnboarding() {
-  // An empty profile row is auto-created for every auth user by the
-  // on_auth_user_created DB trigger. Presence of first_name (filled by
-  // either Healix web or HealthBite mobile onboarding) is the signal
-  // that onboarding was actually completed.
-  var p = window.userProfileData;
-  if (p && p.first_name && String(p.first_name).trim() !== '') return;
+  // Profile exists in DB = onboarding was completed (either here or in HealthBite)
+  if (window.userProfileData) return;
   showOnboardingWizard();
 }
 
@@ -8420,17 +8416,14 @@ async function completeOnboarding() {
   if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
 
   try {
-    // Upsert on auth_user_id because the on_auth_user_created DB trigger
-    // pre-creates an empty profile row at signup. Without merge-duplicates,
-    // this POST would fail with a 23505 unique-constraint violation.
     var insertResult = await supabaseRequest(
-      '/rest/v1/profiles?on_conflict=auth_user_id', 'POST', profileData, getToken(),
-      { 'Prefer': 'return=representation,resolution=merge-duplicates' }
+      '/rest/v1/profiles', 'POST', profileData, getToken(),
+      { 'Prefer': 'return=representation' }
     );
-    console.log('[Healix] Onboarding UPSERT result:', JSON.stringify(insertResult));
+    console.log('[Healix] Onboarding INSERT result:', JSON.stringify(insertResult));
 
     if (insertResult && insertResult.code) {
-      // PostgREST error (e.g. constraint violation other than duplicate key)
+      // PostgREST error (e.g. duplicate key, constraint violation)
       throw new Error(insertResult.message || insertResult.code);
     }
 
